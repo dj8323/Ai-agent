@@ -1,0 +1,13 @@
+{
+  "name": "telemune-smart-ai",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TelemuneSmartAi: multilingual AI voice agent with playbooks, call history and summaries",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env server.js"
+  },
+  "dependencies": {
+    "openai": "^7.57.0"
+  }
+}

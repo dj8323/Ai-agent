@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Admin dashboard · TelemuneSmartAi</title>
+<link rel="icon" type="image/svg+xml" href="telemune-logo.svg" />
+<script>
+  try { const t = localStorage.getItem("va-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
+</script>
+<style>
+  :root { --c1: #7c3aed; --c2: #ec4899; --c3: #06b6d4; --grad: linear-gradient(135deg, var(--c1), var(--c2) 55%, var(--c3)); }
+  :root {
+    --bg: #faf7ff; --panel: #ffffffe0; --panel-2: #f4f0ff; --text: #1b1433; --muted: #6b6488; --border: #e7e0fb;
+    --green: #10b981; --red: #f43f5e; --amber: #f59e0b; --shadow: 0 12px 40px color-mix(in srgb, var(--c1) 12%, transparent);
+    --glow-1: color-mix(in srgb, var(--c1) 20%, transparent); --glow-2: color-mix(in srgb, var(--c3) 18%, transparent); --overlay: #1b143380;
+    --summary-bg: color-mix(in srgb, var(--c3) 8%, white); --summary-border: color-mix(in srgb, var(--c3) 30%, white);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0c0718; --panel: #160f2be0; --panel-2: #20173d; --text: #f3efff; --muted: #a79fc7; --border: #2f2552;
+      --green: #34d399; --red: #fb7185; --amber: #fbbf24; --shadow: 0 12px 40px #00000066;
+      --glow-1: color-mix(in srgb, var(--c1) 34%, transparent); --glow-2: color-mix(in srgb, var(--c3) 20%, transparent); --overlay: #000000a8;
+      --summary-bg: color-mix(in srgb, var(--c3) 12%, #0c0718); --summary-border: color-mix(in srgb, var(--c3) 35%, #0c0718);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0c0718; --panel: #160f2be0; --panel-2: #20173d; --text: #f3efff; --muted: #a79fc7; --border: #2f2552;
+    --green: #34d399; --red: #fb7185; --amber: #fbbf24; --shadow: 0 12px 40px #00000066;
+    --glow-1: color-mix(in srgb, var(--c1) 34%, transparent); --glow-2: color-mix(in srgb, var(--c3) 20%, transparent); --overlay: #000000a8;
+    --summary-bg: color-mix(in srgb, var(--c3) 12%, #0c0718); --summary-border: color-mix(in srgb, var(--c3) 35%, #0c0718);
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; min-height: 100vh; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text);
+    background: radial-gradient(900px 520px at 10% -10%, var(--glow-1), transparent 70%), radial-gradient(800px 600px at 100% 110%, var(--glow-2), transparent 70%), var(--bg);
+    background-attachment: fixed; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 22px 16px; display: flex; flex-direction: column; gap: 18px; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo { width: 42px; height: 44px; background: var(--grad); -webkit-mask: url("telemune-mark.png") center / contain no-repeat; mask: url("telemune-mark.png") center / contain no-repeat; }
+  h1 { margin: 0; font-size: 22px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .sub { color: var(--muted); font-size: 13px; }
+  .head-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .btn { border: none; cursor: pointer; font: inherit; font-weight: 650; border-radius: 10px; }
+  .btn-grad { padding: 9px 14px; background: var(--grad); color: #fff; font-size: 14px; box-shadow: 0 6px 16px color-mix(in srgb, var(--c2) 30%, transparent); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; }
+  .btn-ghost { padding: 8px 12px; background: var(--panel-2); border: 1px solid var(--border); color: var(--text); font-size: 13px; }
+  .btn-ghost.danger { color: var(--red); }
+  .icon-btn { width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; font-size: 17px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 20px; padding: 18px; box-shadow: var(--shadow); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); min-width: 0; }
+  .card h2 { margin: 0; font-size: 16px; }
+
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 14px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+  .kpi::after { content: ""; position: absolute; inset: 0 0 auto 0; height: 3px; background: var(--grad); }
+  .kpi .k { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 700; }
+  .kpi .v { font-size: 26px; font-weight: 800; margin-top: 4px; background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .kpi .s { font-size: 12px; color: var(--muted); }
+
+  .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+  .search { padding: 9px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; font-size: 14px; min-width: 220px; }
+  .users { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 12px; }
+  .ucard { border: 1px solid var(--border); border-radius: 16px; background: var(--panel-2); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+  .ucard.off { opacity: .6; }
+  .u-top { display: flex; align-items: center; gap: 10px; }
+  .av { width: 42px; height: 42px; border-radius: 50%; display: grid; place-items: center; background: var(--grad); color: #fff; font-weight: 800; font-size: 17px; flex: none; }
+  .u-name { font-weight: 700; } .u-handle { font-size: 12px; color: var(--muted); }
+  .badge { margin-left: auto; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: color-mix(in srgb, var(--c1) 14%, transparent); color: var(--c1); white-space: nowrap; }
+  .badge.user { background: color-mix(in srgb, var(--c3) 16%, transparent); color: color-mix(in srgb, var(--c3) 75%, var(--text)); }
+  .badge.off { background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); }
+  .agent-line { font-size: 13px; display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border); white-space: nowrap; }
+  .chip.on { border-color: color-mix(in srgb, var(--green) 50%, transparent); color: var(--green); }
+  .u-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .u-stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; }
+  .u-stat .k { font-size: 10px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); font-weight: 700; }
+  .u-stat .v { font-size: 15px; font-weight: 750; }
+  .u-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .u-actions .btn-ghost { padding: 6px 10px; font-size: 12px; }
+  .last { font-size: 12px; color: var(--muted); }
+
+  /* dialogs */
+  .overlay { position: fixed; inset: 0; background: var(--overlay); display: none; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+  .overlay.open { display: flex; }
+  .dialog { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; width: min(560px, 100%); max-height: 92vh; overflow-y: auto; padding: 20px; box-shadow: var(--shadow); backdrop-filter: blur(16px); }
+  .dialog.wide { width: min(980px, 100%); }
+  .dialog-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .dialog-head h3 { margin: 0; font-size: 18px; flex: 1; }
+  label { display: block; font-size: 11px; color: var(--muted); margin: 12px 0 5px; text-transform: uppercase; letter-spacing: .06em; font-weight: 700; }
+  input[type=text], input[type=password], select { width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; font-size: 14px; }
+  .pw-row { display: flex; gap: 6px; } .pw-row input { flex: 1; }
+  .form-error { color: var(--red); font-size: 13px; min-height: 18px; margin-top: 8px; }
+  .form-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .detail-grid { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 16px; }
+  @media (max-width: 820px) { .detail-grid { grid-template-columns: 1fr; } }
+  .box { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: var(--panel-2); }
+  .box h4 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  .kv { display: grid; grid-template-columns: 90px minmax(0, 1fr); gap: 4px 8px; font-size: 13px; }
+  .kv span:nth-child(odd) { color: var(--muted); }
+  .list { display: flex; flex-direction: column; gap: 6px; }
+  .row { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); cursor: pointer; text-align: left; font: inherit; color: var(--text); width: 100%; }
+  .row:hover { border-color: var(--c1); }
+  .row .t { font-weight: 650; font-size: 13px; } .row .s { font-size: 12px; color: var(--muted); }
+  .row .grow { flex: 1; min-width: 0; }
+  .ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pager { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 8px; font-size: 13px; color: var(--muted); }
+  pre.summary { white-space: pre-wrap; font-family: inherit; margin: 0; font-size: 14px; line-height: 1.55; background: var(--summary-bg); border: 1px solid var(--summary-border); border-radius: 12px; padding: 12px 14px; }
+  .tline { padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 14px; }
+  .tline b { margin-right: 6px; }
+  .tline .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .empty { color: var(--muted); text-align: center; font-size: 13px; padding: 12px; }
+  .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); padding: 10px 16px; border-radius: 12px; background: var(--text); color: var(--bg); font-size: 14px; font-weight: 600; z-index: 70; box-shadow: var(--shadow); }
+  .user-menu { position: relative; }
+  .user-btn { display: flex; align-items: center; gap: 8px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--text); cursor: pointer; font: inherit; font-size: 13px; }
+  .user-btn .av { width: 30px; height: 30px; font-size: 13px; }
+  .menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 200px; padding: 6px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel); box-shadow: var(--shadow); z-index: 40; display: flex; flex-direction: column; backdrop-filter: blur(14px); }
+  .menu a, .menu button { text-align: left; padding: 9px 10px; border-radius: 8px; border: none; background: none; color: var(--text); font: inherit; font-size: 14px; text-decoration: none; cursor: pointer; }
+  .menu a:hover, .menu button:hover { background: var(--panel-2); }
+  .note-banner { padding: 9px 16px; font-size: 14px; text-align: center; color: #fff; background: var(--grad); }
+  .note-banner button { margin-left: 10px; padding: 5px 12px; border-radius: 8px; border: none; background: #fff; color: var(--c1); font-weight: 700; cursor: pointer; }
+  footer { text-align: center; color: var(--muted); font-size: 13px; padding: 4px 0 8px; }
+  footer b { color: var(--text); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <span class="logo" aria-hidden="true"></span>
+      <div><h1>Admin dashboard</h1><div class="sub">TelemuneSmartAi · every user, agent and call in one place</div></div>
+    </div>
+    <div class="head-right">
+      <a class="btn btn-grad" href="/">🎙 Open my agent</a>
+      <button class="icon-btn" id="themeBtn" type="button" aria-label="Switch theme">🌙</button>
+      <div class="user-menu">
+        <button class="user-btn" id="userBtn" type="button" aria-haspopup="menu" aria-expanded="false"><span class="av" id="uAv"></span><b id="uName"></b> ▾</button>
+        <div class="menu" id="userDrop" role="menu" hidden>
+          <button id="mPw" type="button" role="menuitem">🔑 Change password</button>
+          <button id="mOut" type="button" role="menuitem">↪ Sign out</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <section class="kpis" id="kpis" aria-label="Totals across all users"></section>
+
+  <section class="card">
+    <div class="toolbar">
+      <h2>👥 Users &amp; their agents</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <input class="search" id="search" type="search" placeholder="Search name, username, agent…" aria-label="Search users" />
+        <button class="btn btn-grad" id="addUserBtn" type="button">＋ Add user</button>
+      </div>
+    </div>
+    <div class="users" id="users"><div class="empty">Loading…</div></div>
+  </section>
+
+  <footer>Powered by <b>Telemune</b> © 2027 · Designed by <b>DJ</b></footer>
+</div>
+
+<!-- add user -->
+<div class="overlay" id="addDialog" role="dialog" aria-modal="true" aria-labelledby="addTitle">
+  <div class="dialog">
+    <div class="dialog-head"><h3 id="addTitle">＋ Add user</h3><button class="icon-btn" data-close type="button" aria-label="Close">✕</button></div>
+    <form id="addForm">
+      <label for="aName">Full name</label><input type="text" id="aName" maxlength="60" required />
+      <label for="aUser">Username</label><input type="text" id="aUser" maxlength="32" autocomplete="off" required placeholder="letters, numbers, . - _" />
+      <label for="aPass">Temporary password</label>
+      <div class="pw-row"><input type="text" id="aPass" minlength="6" required autocomplete="off" /><button class="btn btn-ghost" type="button" id="aGen">Generate</button></div>
+      <label for="aRole">Role</label>
+      <select id="aRole"><option value="2">👤 User: own agents &amp; calls</option><option value="1">👑 Admin: this dashboard + everything</option></select>
+      <div class="form-error" id="aErr"></div>
+      <div class="form-actions"><button class="btn btn-ghost" type="button" data-close>Cancel</button><button class="btn btn-grad" type="submit">Create user</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- reset password -->
+<div class="overlay" id="resetDialog" role="dialog" aria-modal="true" aria-labelledby="resetTitle">
+  <div class="dialog">
+    <div class="dialog-head"><h3 id="resetTitle">🔑 Reset password</h3><button class="icon-btn" data-close type="button" aria-label="Close">✕</button></div>
+    <form id="resetForm">
+      <p class="sub" id="resetWho"></p>
+      <label for="rPass">New temporary password</label>
+      <div class="pw-row"><input type="text" id="rPass" minlength="6" required autocomplete="off" /><button class="btn btn-ghost" type="button" id="rGen">Generate</button></div>
+      <p class="sub">They'll be signed out and asked to choose their own password next time.</p>
+      <div class="form-error" id="rErr"></div>
+      <div class="form-actions"><button class="btn btn-ghost" type="button" data-close>Cancel</button><button class="btn btn-grad" type="submit">Reset password</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- my password -->
+<div class="overlay" id="pwDialog" role="dialog" aria-modal="true" aria-labelledby="pwTitle">
+  <div class="dialog">
+    <div class="dialog-head"><h3 id="pwTitle">🔑 Change my password</h3><button class="icon-btn" data-close type="button" aria-label="Close">✕</button></div>
+    <form id="pwForm">
+      <label for="pwCur">Current password</label><input type="password" id="pwCur" autocomplete="current-password" required />
+      <label for="pwNew">New password (at least 6 characters)</label><input type="password" id="pwNew" autocomplete="new-password" minlength="6" required />
+      <label for="pwNew2">Repeat new password</label><input type="password" id="pwNew2" autocomplete="new-password" minlength="6" required />
+      <div class="form-error" id="pwErr"></div>
+      <div class="form-actions"><button class="btn btn-grad" type="submit">Save password</button></div>
+    </form>
+  </div>
+</div>
+
+<!-- user detail -->
+<div class="overlay" id="userDialog" role="dialog" aria-modal="true" aria-labelledby="udTitle">
+  <div class="dialog wide">
+    <div class="dialog-head"><h3 id="udTitle">User</h3><button class="icon-btn" data-close type="button" aria-label="Close">✕</button></div>
+    <div id="udBody"></div>
+  </div>
+</div>
+
+<!-- call detail -->
+<div class="overlay" id="callDialog" role="dialog" aria-modal="true" aria-labelledby="cdTitle">
+  <div class="dialog wide">
+    <div class="dialog-head"><h3 id="cdTitle">Call</h3><button class="icon-btn" data-close type="button" aria-label="Close">✕</button></div>
+    <div id="cdBody"></div>
+  </div>
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>
