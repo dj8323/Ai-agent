@@ -8,6 +8,7 @@
     "start": "node --env-file-if-exists=.env server.js"
   },
   "dependencies": {
+    "mysql2": "^3.24.6",
     "openai": "^7.57.0"
   }
 }

@@ -1,10 +1,9 @@
 // Agent types, ready-made playbook templates for each type, and storage for the playbooks a user adds.
 // With no playbook selected, the agent runs in default mode (a general helpful voice agent).
 // Demo note: agents have no live systems, so they collect details, confirm them back, and say they're noted.
-import fs from "node:fs/promises";
-import path from "node:path";
 import crypto from "node:crypto";
-import { userDataDir } from "./context.js";
+import { query, one, exec, iso } from "./db.js";
+import { currentDataUserId } from "./context.js";
 
 export const AGENT_TYPES = {
   personal: {
@@ -53,6 +52,40 @@ export const AGENT_TYPES = {
       { name: "Network complaint", goal: "Log and help with call drops, no signal or slow data.",
         steps: ["Get number, location and device.", "Ask what exactly happens and since when.", "Suggest a restart or network reset.", "Log a complaint with a reference and timeline."],
         rules: ["Don't promise exact fix times."], summary: "Number, location, issue, steps tried, complaint reference." },
+    ],
+  },
+  hospital: {
+    name: "Hospital & Healthcare", icon: "🏥",
+    description: "Appointments, doctor availability, reports, visiting hours, patient follow-ups.",
+    role: "a calm, caring hospital front-desk and patient-care executive",
+    templates: [
+      { name: "OPD appointment", goal: "Book an outpatient appointment with the right department or doctor.",
+        steps: ["Ask the patient's name and age.", "Ask the problem or which doctor/department they need.", "Offer two available slots.", "Confirm the slot and give a token number like OPD-215."],
+        rules: ["Never diagnose or prescribe; suggest seeing the doctor.", "For chest pain, breathing trouble or heavy bleeding, tell them to come to emergency or call an ambulance now."],
+        summary: "Patient name, age, complaint, department/doctor, slot booked, token number." },
+      { name: "Lab report status", goal: "Tell the patient whether their lab report is ready and how to collect it.",
+        steps: ["Get the patient name and registration or bill number.", "Ask which test it was and when it was done.", "Say whether it's ready (make it realistic) and how to get it.", "Offer to book a doctor review."],
+        rules: ["Never read out or interpret medical results on the call."], summary: "Patient, registration number, test, report status, next step." },
+      { name: "Discharge follow-up", goal: "Check on a recently discharged patient and remind them of follow-up care.",
+        steps: ["Confirm you're speaking with the patient or family.", "Ask how they're feeling.", "Remind them of medicines and the follow-up visit.", "Book the follow-up if needed."],
+        rules: ["Any worrying symptom → advise visiting the hospital or emergency right away."], summary: "Patient condition, concerns, follow-up booked, escalations." },
+    ],
+  },
+  banking: {
+    name: "Banking & Finance", icon: "🏦",
+    description: "Account and card help, balance and transactions, loans, card blocking, KYC.",
+    role: "a trustworthy, precise bank customer service officer",
+    templates: [
+      { name: "Card block & dispute", goal: "Block a lost or misused card and log a dispute for unknown transactions.",
+        steps: ["Verify the caller with name and the last four digits of the card only.", "Ask what happened.", "Block the card after they confirm.", "Log a dispute with a reference like DSP-7731 and the timeline."],
+        rules: ["NEVER ask for full card number, CVV, PIN, OTP or passwords.", "Stay calm and reassuring."],
+        summary: "Customer, card last four, issue, card blocked, dispute reference." },
+      { name: "Loan enquiry", goal: "Understand the loan the caller wants and book a call with a loan officer.",
+        steps: ["Ask the loan type and amount.", "Ask their monthly income range and job type.", "Give an indicative interest range.", "Book a callback with a loan officer."],
+        rules: ["Rates are indicative only; never promise approval."], summary: "Loan type, amount, income range, callback time." },
+      { name: "Account & KYC help", goal: "Help with balance, statements, address change or KYC update.",
+        steps: ["Ask what they need.", "Verify with name and registered mobile number.", "Explain the steps or documents simply.", "Give a service request number."],
+        rules: ["Never ask for passwords, PIN or OTP."], summary: "Request type, verification done, steps given, request number." },
     ],
   },
   sales: {
@@ -161,36 +194,26 @@ export const AGENT_TYPES = {
   },
 };
 
-// ---------- saved playbooks (data/playbooks.json) ----------
-// Each user's playbooks live in data/users/<userId>/playbooks.json (user taken from the request context).
-const DATA_FILE_FOR = () => path.join(userDataDir(), "playbooks.json");
-
-async function readSaved() {
-  try {
-    return JSON.parse(await fs.readFile(DATA_FILE_FOR(), "utf8"));
-  } catch {
-    return [];
-  }
-}
-
-async function writeSaved(list) {
-  const file = DATA_FILE_FOR();
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, JSON.stringify(list, null, 2));
-}
-
+// ---------- saved playbooks (MySQL table: playbooks) ----------
+// Each user's playbooks; any of their agents can pick one.
 const clean = (v, max) => String(v ?? "").trim().slice(0, max);
 const cleanList = (v) => (Array.isArray(v) ? v : String(v ?? "").split("\n")).map((x) => clean(x, 300)).filter(Boolean).slice(0, 12);
+const fromRow = (r) => ({
+  id: r.id, type: r.agent_type, name: r.name, role: r.role, goal: r.goal, steps: r.steps || [], rules: r.rules || [],
+  summary: r.summary_focus, createdAt: iso(r.created_at),
+});
 
-export async function listPlaybooks() {
-  return readSaved();
+export async function listPlaybooks(userId = currentDataUserId()) {
+  return (await query("SELECT * FROM playbooks WHERE user_id = ? ORDER BY created_at", [userId])).map(fromRow);
 }
 
-export async function getPlaybook(id) {
-  return id ? (await readSaved()).find((p) => p.id === id) || null : null;
+export async function getPlaybook(id, userId = currentDataUserId()) {
+  if (!id) return null;
+  const r = await one("SELECT * FROM playbooks WHERE id = ? AND user_id = ?", [String(id).slice(0, 16), userId]);
+  return r ? fromRow(r) : null;
 }
 
-export async function addPlaybook(input) {
+export async function addPlaybook(input, userId = currentDataUserId()) {
   const type = AGENT_TYPES[input.type] ? input.type : "other";
   const pb = {
     id: crypto.randomUUID().slice(0, 8),
@@ -204,22 +227,30 @@ export async function addPlaybook(input) {
     createdAt: new Date().toISOString(),
   };
   if (!pb.name || !pb.goal) throw new Error("Name and goal are required.");
-  const list = await readSaved();
-  list.push(pb);
-  await writeSaved(list);
+  await exec(
+    "INSERT INTO playbooks (id, user_id, agent_type, name, role, goal, steps, rules, summary_focus) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [pb.id, userId, pb.type, pb.name, pb.role, pb.goal, JSON.stringify(pb.steps), JSON.stringify(pb.rules), pb.summary],
+  );
   return pb;
 }
 
-export async function removePlaybook(id) {
-  const list = await readSaved();
-  const next = list.filter((p) => p.id !== id);
-  await writeSaved(next);
-  return list.length !== next.length;
+export async function removePlaybook(id, userId = currentDataUserId()) {
+  const pb = await getPlaybook(id, userId);
+  if (!pb) return null;
+  await exec("UPDATE agents SET playbook_id = NULL WHERE playbook_id = ? AND user_id = ?", [id, userId]);
+  await exec("DELETE FROM playbooks WHERE id = ? AND user_id = ?", [id, userId]);
+  return pb;
 }
 
-export function playbookPrompt(pb) {
+export function playbookPrompt(pb, agent = null) {
   if (!pb) {
-    return `Your role: a friendly, capable voice agent. There's no special script: help with whatever the caller needs, like a smart friend on the phone.`;
+    const t = agent && agent.agent_type !== "personal" ? AGENT_TYPES[agent.agent_type] : null;
+    const about = agent?.description ? ` What this agent is for: ${agent.description}` : "";
+    if (t && t.templates.length) {
+      return `Your role: ${t.role} (${t.name}).${about} There's no fixed script: help with whatever the caller needs in that role, collect the details that matter and confirm them back.
+This is a demo with no live systems: say things are noted or done.`;
+    }
+    return `Your role: a friendly, capable voice agent. There's no special script: help with whatever the caller needs, like a smart friend on the phone.${about}`;
   }
   const lines = [`Your role: ${pb.role}.`, `Playbook: ${pb.name}.`, `Your goal: ${pb.goal}`];
   if (pb.steps.length) lines.push("How to run the call (follow naturally, not robotically):", ...pb.steps.map((s, i) => `${i + 1}. ${s}`));

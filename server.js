@@ -2,33 +2,40 @@
 // - Streams OpenAI chat replies over Server-Sent Events, tagged with caller intent, mood, language and per-sentence emotion.
 // - Speaks each sentence with OpenAI TTS in the matching emotion.
 // - Stores user-added playbooks; with none selected the agent runs in default mode.
-// Speech-to-text runs in the browser (Web Speech API).
+// - Everything is stored in MySQL (database ai-agent): users, roles, sessions, app settings, agents, playbooks,
+//   calls + summaries, calendar, activity and API logs. Each user can have many agents, each with its own setup.
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import OpenAI, { toFile } from "openai";
 import { AGENT_TYPES, listPlaybooks, getPlaybook, addPlaybook, removePlaybook, playbookPrompt } from "./playbooks.js";
-import { getConfig, publicConfig, saveAgentSettings, CONFIG_PATH } from "./config.js";
-import { requestContext, asUser } from "./context.js";
+import { getConfig, publicConfig, bootPort, seedAppConfig, appConfig, saveAppSection, DB_SECTIONS } from "./config.js";
+import { requestContext, asUser, currentAgent } from "./context.js";
 import {
-  ensureSetup, login, logout, sessionFrom, sessionCookie, clearCookie, listUsers, getUser, createUser, updateUser,
-  deleteUser, changeOwnPassword, publicUser, ROLE_ADMIN,
+  ensureAdmin, login, logout, sessionFrom, sessionCookie, clearCookie, listUsers, getUser, createUser, updateUser,
+  deleteUser, changeOwnPassword, publicUser, startSession, ROLE_ADMIN,
 } from "./auth.js";
+import { initDb } from "./db.js";
+import { importJsonData } from "./migrate.js";
+import { logActivity, logRequest, listActivity, apiStats } from "./logs.js";
+import {
+  listAgents, getAgent, createAgent, updateAgentInfo, deleteAgent, resolveAgent, ensureDefaultAgent, saveAgentSettings, agentCard,
+} from "./agents.js";
 import { listEvents, addEvent, removeEvent, toIcs } from "./calendar.js";
 import { listCalls, getCall, saveCall, saveRecording, readRecording, deleteCall, callStats, readSummaryFile } from "./calls.js";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(here, "public");
-// All tunable settings (port, models, timings, branding...) come from config.json via getConfig().
-const PORT = getConfig().server.port; // read once at startup
+// Shared settings live in MySQL (app_config); the port comes from config.json / PORT and is read once at start-up.
+const PORT = bootPort();
 
 // Detect "server is older than its code": the page files are read fresh from disk, but server code only loads at
 // start. If any server file changed since start, /api/config reports stale=true and the page asks for a restart.
-const SERVER_FILES = ["server.js", "config.js", "calls.js", "calendar.js", "playbooks.js", "auth.js", "context.js"].map((f) => path.join(here, f));
+const SERVER_FILES = ["server.js", "config.js", "calls.js", "calendar.js", "playbooks.js", "auth.js", "context.js", "db.js", "agents.js", "logs.js", "migrate.js"].map((f) => path.join(here, f));
 const codeStamp = async () => (await Promise.all(SERVER_FILES.map((f) => fs.stat(f).then((st) => st.mtimeMs, () => 0)))).join(",");
 const BOOT_STAMP = await codeStamp();
-const BRAND = () => getConfig().branding.appName;
+const BRAND = async () => (await appConfig()).branding.appName;
 
 // Reads OPENAI_API_KEY from the environment. Created lazily so the server still starts without a key.
 let client;
@@ -113,7 +120,7 @@ function systemPrompt(lang, name, pb, cfg) {
   const language = LANGUAGE_NAMES[lang] || "English";
   return `You are ${name || "Aria"}, talking to someone on a live phone call. You sound like a real person, not a bot.
 
-${playbookPrompt(pb)}
+${playbookPrompt(pb, currentAgent())}
 
 How to talk:
 - ${LANGUAGE_STYLE[lang]?.reply || `Reply in ${language}, in its native script. If the caller clearly speaks a different language or mixes (like Hinglish), match how they speak.`}
@@ -185,23 +192,23 @@ function friendlyError(err) {
   return "Something went wrong talking to the agent.";
 }
 
-function cleanTurns(raw) {
+function cleanTurns(raw, cfg) {
   const messages = (Array.isArray(raw) ? raw : [])
     .filter((m) => (m.role === "user" || m.role === "assistant") && typeof m.content === "string" && m.content.trim())
-    .slice(-(Number(getConfig().conversation.historyTurnsSentToModel) || 30));
+    .slice(-(Number(cfg.conversation.historyTurnsSentToModel) || 30));
   if (messages.length && messages[0].role === "assistant") messages.unshift({ role: "user", content: "[call connected]" });
   return messages;
 }
 
 async function handleChat(req, res) {
-  const cfg = getConfig();
+  const cfg = await getConfig();
   let body;
   try {
     body = await readBody(req);
   } catch {
     return res.writeHead(400).end("Bad JSON");
   }
-  const messages = cleanTurns(body.messages);
+  const messages = cleanTurns(body.messages, cfg);
   if (!messages.length || messages.at(-1).role !== "user") return res.writeHead(400).end("Last message must be from the user");
   const pb = await getPlaybook(body.playbookId);
 
@@ -243,14 +250,14 @@ async function handleChat(req, res) {
 }
 
 async function handleSummary(req, res) {
-  const cfg = getConfig();
+  const cfg = await getConfig();
   let body;
   try {
     body = await readBody(req);
   } catch {
     return res.writeHead(400).end("Bad JSON");
   }
-  const turns = cleanTurns(body.messages)
+  const turns = cleanTurns(body.messages, cfg)
     .filter((m) => m.content !== "[call connected]")
     .map((m) => `${m.role === "user" ? "Caller" : "Agent"}: ${m.content.replace(/<[a-z]+:[^>]*>|\[[a-z]+\]/gi, "").trim()}`)
     .join("\n");
@@ -295,7 +302,7 @@ async function handleTts(req, res) {
   const voice = VOICES[body.voice] ? body.voice : "marin";
   const emotion = EMOTIONS[body.emotion] ? body.emotion : "neutral";
   const language = LANGUAGE_NAMES[body.lang] || "English";
-  const ttsModel = getConfig().models.tts;
+  const ttsModel = (await getConfig()).models.tts;
   const legacy = /^tts-1/.test(ttsModel); // tts-1 / tts-1-hd: no emotion instructions, older voice set
   const LEGACY_VOICES = ["alloy", "ash", "coral", "echo", "fable", "onyx", "nova", "sage", "shimmer"];
   try {
@@ -318,7 +325,7 @@ async function handleTts(req, res) {
 // Speech-to-text for one caller utterance. Body: { audio: base64, mime, lang, context }.
 // The context (agent's last line) and language hint help the model hear names, numbers and mixed languages right.
 async function handleTranscribe(req, res) {
-  const cfg = getConfig();
+  const cfg = await getConfig();
   let body;
   try {
     body = JSON.parse((await readRaw(req, 25 * 1024 * 1024)).toString("utf8") || "{}");
@@ -376,10 +383,14 @@ async function handleModels(req, res) {
   }
 }
 
+// Saves the Agent setup card into the active agent only (other agents and other users are untouched).
 async function handleSettings(req, res) {
   try {
-    const cfg = await saveAgentSettings(await readBody(req));
-    json(res, 200, { ok: true, settings: publicConfig(cfg) });
+    const body = await readBody(req);
+    const agent = await saveAgentSettings(body);
+    requestContext.getStore().agent = agent;
+    logActivity("agent.settings", agent.name, { agentId: agent.id, changed: Object.keys(body) });
+    json(res, 200, { ok: true, settings: publicConfig(await getConfig(agent), agent) });
   } catch (err) {
     json(res, 400, { error: err.message });
   }
@@ -399,10 +410,16 @@ async function handleCalendar(req, res, url) {
     }
     if (req.method === "GET" && !id) return json(res, 200, await listEvents());
     if (req.method === "POST" && !id) {
-      if (!getConfig().calendar.enabled) return json(res, 403, { error: "Calendar is switched off in Agent setup." });
-      return json(res, 201, await addEvent(await readBody(req)));
+      if (!(await getConfig()).calendar.enabled) return json(res, 403, { error: "Calendar is switched off in Agent setup." });
+      const ev = await addEvent(await readBody(req));
+      logActivity("calendar.add", ev.title, { id: ev.id, start: ev.start, agentId: ev.agentId });
+      return json(res, 201, ev);
     }
-    if (req.method === "DELETE" && id) return json(res, (await removeEvent(id)) ? 200 : 404, { ok: true });
+    if (req.method === "DELETE" && id) {
+      const ev = await removeEvent(id);
+      if (ev) logActivity("calendar.delete", ev.title, { id });
+      return json(res, ev ? 200 : 404, { ok: !!ev });
+    }
   } catch (err) {
     return json(res, 400, { error: err.message });
   }
@@ -414,23 +431,35 @@ async function handlePlaybooks(req, res, url) {
   if (req.method === "GET" && !id) return json(res, 200, { types: AGENT_TYPES, saved: await listPlaybooks() });
   if (req.method === "POST" && !id) {
     try {
-      return json(res, 201, await addPlaybook(await readBody(req)));
+      const pb = await addPlaybook(await readBody(req));
+      logActivity("playbook.add", pb.name, { id: pb.id, type: pb.type });
+      return json(res, 201, pb);
     } catch (err) {
       return json(res, 400, { error: err.message });
     }
   }
-  if (req.method === "DELETE" && id) return json(res, (await removePlaybook(id)) ? 200 : 404, { ok: true });
+  if (req.method === "DELETE" && id) {
+    const pb = await removePlaybook(id);
+    if (pb) logActivity("playbook.delete", pb.name, { id });
+    return json(res, pb ? 200 : 404, { ok: !!pb });
+  }
   res.writeHead(405).end();
 }
 
 async function handleCalls(req, res, url) {
   const [, , , id, sub] = url.pathname.split("/"); // /api/calls/:id/recording
   try {
+    const cfg = await getConfig();
     if (req.method === "GET" && !id) {
-      return json(res, 200, await listCalls(Number(url.searchParams.get("page")) || 1, Number(getConfig().history.pageSize) || 5));
+      const agentId = url.searchParams.get("agent") || null;
+      return json(res, 200, await listCalls(Number(url.searchParams.get("page")) || 1, Number(url.searchParams.get("pageSize")) || Number(cfg.history.pageSize) || 5, { agentId }));
     }
     if (req.method === "GET" && id === "stats") return json(res, 200, await callStats());
-    if (req.method === "POST" && !id) return json(res, 201, await saveCall(await readBody(req)));
+    if (req.method === "POST" && !id) {
+      const call = await saveCall(await readBody(req));
+      logActivity("call.save", call.agentName, { id: call.id, duration: call.duration, tokens: call.stats?.tokens?.total || 0 });
+      return json(res, 201, call);
+    }
     if (sub === "summary" && req.method === "GET") {
       const file = await readSummaryFile(id);
       if (!file) return res.writeHead(404).end("No summary");
@@ -441,9 +470,13 @@ async function handleCalls(req, res, url) {
       const call = await getCall(id);
       return call ? json(res, 200, call) : json(res, 404, { error: "Not found" });
     }
-    if (req.method === "DELETE" && id && !sub) return json(res, (await deleteCall(id)) ? 200 : 404, { ok: true });
+    if (req.method === "DELETE" && id && !sub) {
+      const call = await deleteCall(id);
+      if (call) logActivity("call.delete", call.agentName, { id, startedAt: call.startedAt });
+      return json(res, call ? 200 : 404, { ok: !!call });
+    }
     if (sub === "recording" && req.method === "PUT") {
-      const rec = await saveRecording(id, req.headers["content-type"], await readRaw(req, getConfig().history.maxRecordingMB * 1024 * 1024));
+      const rec = await saveRecording(id, req.headers["content-type"], await readRaw(req, cfg.history.maxRecordingMB * 1024 * 1024));
       return rec ? json(res, 200, rec) : json(res, 404, { error: "Not found" });
     }
     if (sub === "recording" && req.method === "GET") {
@@ -459,16 +492,43 @@ async function handleCalls(req, res, url) {
   res.writeHead(405).end();
 }
 
-// ---------- sign-in ----------
+// ---------- sign-in / sign-up ----------
+const clientIp = (req) => req.socket.remoteAddress || "";
+
 async function handleLogin(req, res) {
+  let body = {};
   try {
-    const body = await readBody(req);
-    const ip = req.socket.remoteAddress || "";
-    const { token, maxAge, user } = await login(body.username, body.password, !!body.remember, ip);
+    body = await readBody(req);
+    const { token, maxAge, user } = await login(body.username, body.password, !!body.remember, clientIp(req), req.headers["user-agent"]);
+    logActivity("auth.login", user.username, { remember: !!body.remember }, user);
     res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": sessionCookie(token, maxAge) });
     res.end(JSON.stringify({ ok: true, user, next: user.role === ROLE_ADMIN ? "/admin.html" : "/" }));
   } catch (err) {
+    logActivity("auth.login_failed", String(body.username || "").slice(0, 64), { reason: err.message }, { id: null, username: String(body.username || "").slice(0, 64) });
     json(res, err.status || 400, { error: err.message });
+  }
+}
+
+// Self sign-up (role 2). Limited to 5 new accounts per IP per hour. Can be switched off: app_config.auth.allowSignup.
+const signups = new Map();
+async function handleSignup(req, res) {
+  try {
+    const cfg = await appConfig();
+    if (!cfg.auth?.allowSignup) return json(res, 403, { error: "Sign-up is closed. Ask your admin for an account." });
+    const ip = clientIp(req);
+    const recent = (signups.get(ip) || []).filter((t) => Date.now() - t < 3600_000);
+    if (recent.length >= 5) return json(res, 429, { error: "Too many new accounts from here. Try again later." });
+    const body = await readBody(req);
+    if (body.password !== body.confirm) return json(res, 400, { error: "The passwords don't match." });
+    const user = await createUser({ username: body.username, name: body.name, email: body.email, password: body.password }, "self");
+    signups.set(ip, [...recent, Date.now()]);
+    await ensureDefaultAgent(user.id); // every new account starts with a personal assistant
+    const { token, maxAge } = await startSession(user, !!body.remember, ip, req.headers["user-agent"]);
+    logActivity("auth.signup", user.username, { name: user.name, email: user.email || null }, user);
+    res.writeHead(201, { "Content-Type": "application/json", "Set-Cookie": sessionCookie(token, maxAge) });
+    res.end(JSON.stringify({ ok: true, user, next: "/" }));
+  } catch (err) {
+    json(res, 400, { error: err.message });
   }
 }
 
@@ -478,6 +538,7 @@ async function handleMe(req, res, session) {
     try {
       const body = await readBody(req);
       await changeOwnPassword(session.user.id, body.current, body.next);
+      logActivity("auth.password_change", session.user.username);
       return json(res, 200, { ok: true });
     } catch (err) {
       return json(res, 400, { error: err.message });
@@ -486,24 +547,61 @@ async function handleMe(req, res, session) {
   res.writeHead(405).end();
 }
 
-// ---------- admin (role 1) ----------
-const toSeconds = (d) => String(d || "0:0").split(":").reduce((a, n) => a * 60 + (Number(n) || 0), 0);
+// ---------- agents (each user's own) ----------
+async function handleAgents(req, res, url) {
+  const id = url.pathname.split("/")[3];
+  try {
+    if (req.method === "GET" && !id) {
+      const agents = await listAgents();
+      return json(res, 200, {
+        agents: agents.map(agentCard),
+        currentId: currentAgent()?.id || null,
+        types: Object.fromEntries(Object.entries(AGENT_TYPES).map(([k, t]) => [k, { name: t.name, icon: t.icon, description: t.description }])),
+      });
+    }
+    if (req.method === "POST" && !id) {
+      const a = await createAgent(await readBody(req));
+      logActivity("agent.create", a.name, { id: a.id, type: a.agent_type });
+      return json(res, 201, agentCard(a));
+    }
+    if (req.method === "PATCH" && id) {
+      const a = await updateAgentInfo(id, await readBody(req));
+      logActivity("agent.update", a.name, { id });
+      return json(res, 200, agentCard(a));
+    }
+    if (req.method === "DELETE" && id) {
+      const a = await deleteAgent(id);
+      logActivity("agent.delete", a.name, { id });
+      return json(res, 200, { ok: true });
+    }
+  } catch (err) {
+    return json(res, 400, { error: err.message });
+  }
+  res.writeHead(405).end();
+}
 
+// ---------- admin (role 1) ----------
 async function userSnapshot(u) {
   return asUser(u.id, async () => {
-    const cfg = getConfig();
-    const [stats, playbooks, events, recent] = await Promise.all([
-      callStats(), listPlaybooks(), listEvents().catch(() => []), listCalls(1, 1),
+    const [stats, playbooks, events, recent, agents] = await Promise.all([
+      callStats(), listPlaybooks(), listEvents().catch(() => []), listCalls(1, 1), listAgents(),
     ]);
-    const pb = playbooks.find((p) => p.id === cfg.agent.defaultPlaybookId);
+    const cards = await Promise.all(agents.map(async (a) => {
+      const cfg = await getConfig(await getAgent(a.id, u.id));
+      const pb = playbooks.find((p) => p.id === a.playbook_id);
+      return {
+        ...agentCard(a),
+        playbook: pb ? pb.name : null, llm: cfg.models.chat, tts: cfg.models.tts,
+        stt: cfg.speechToText.engine === "openai" ? cfg.speechToText.model : "browser",
+        emergencyNumbers: cfg.emergency.rules.length,
+      };
+    }));
+    const main = cards.find((a) => a.isDefault) || cards[0] || null;
     return {
       ...u,
-      agent: {
-        name: cfg.agent.defaultName, language: cfg.agent.defaultLanguage, voice: cfg.agent.defaultVoice,
-        playbook: pb ? pb.name : null, llm: cfg.models.chat,
-        stt: cfg.speechToText.engine === "openai" ? cfg.speechToText.model : "browser", tts: cfg.models.tts,
-        calendar: !!cfg.calendar?.enabled, emergency: !!cfg.emergency?.enabled, emergencyNumbers: cfg.emergency?.rules?.length || 0,
-      },
+      agents: cards,
+      // The default agent, in the shape the dashboard cards already use.
+      agent: main && { name: main.name, language: main.language, voice: main.voice, playbook: main.playbook, llm: main.llm, stt: main.stt, tts: main.tts, calendar: main.calendar, emergency: main.emergency, emergencyNumbers: main.emergencyNumbers },
       playbooks: playbooks.map((p) => ({ id: p.id, name: p.name, type: p.type, goal: p.goal })),
       events: events.length,
       stats,
@@ -522,21 +620,48 @@ async function handleAdmin(req, res, url, session) {
       return json(res, 200, {
         totals: {
           users: users.length, admins: users.filter((u) => u.role === ROLE_ADMIN).length, active: users.filter((u) => !u.disabled).length,
+          agents: sum((u) => u.agents.length),
           calls: sum((u) => u.stats.calls), seconds: sum((u) => u.stats.totalSeconds), turns: sum((u) => u.stats.turns),
           tokens: sum((u) => u.stats.tokens.total), recordings: sum((u) => u.stats.recordings), playbooks: sum((u) => u.playbooks.length),
           events: sum((u) => u.events), avgResponseMs: replies.length ? Math.round(replies.reduce((a, b) => a + b, 0) / replies.length) : null,
         },
+        api: await apiStats(),
         users,
       });
     }
+    if (req.method === "GET" && what === "logs") {
+      return json(res, 200, await listActivity({ page: Number(url.searchParams.get("page")) || 1, pageSize: 15, userId: url.searchParams.get("user") || null }));
+    }
+    if (what === "config") {
+      if (req.method === "GET") return json(res, 200, { sections: DB_SECTIONS, config: await appConfig() });
+      if (req.method === "PUT" && id) {
+        const value = await saveAppSection(id, await readBody(req), session.user.id);
+        logActivity("config.update", id, value);
+        return json(res, 200, { ok: true, value });
+      }
+    }
     if (what === "users") {
-      if (req.method === "POST" && !id) return json(res, 201, await createUser(await readBody(req)));
+      if (req.method === "POST" && !id) {
+        const u = await createUser(await readBody(req), "admin");
+        await ensureDefaultAgent(u.id);
+        logActivity("user.create", u.username, { role: u.role });
+        return json(res, 201, u);
+      }
       if (req.method === "GET" && id) {
         const u = await getUser(id);
         return u ? json(res, 200, await userSnapshot(publicUser(u))) : json(res, 404, { error: "User not found." });
       }
-      if (req.method === "PATCH" && id) return json(res, 200, await updateUser(id, await readBody(req), session.user.id));
-      if (req.method === "DELETE" && id) return json(res, 200, { ok: await deleteUser(id, session.user.id) });
+      if (req.method === "PATCH" && id) {
+        const body = await readBody(req);
+        const u = await updateUser(id, body, session.user.id);
+        logActivity("user.update", u.username, { ...body, password: body.password !== undefined ? "(reset)" : undefined });
+        return json(res, 200, u);
+      }
+      if (req.method === "DELETE" && id) {
+        const u = await deleteUser(id, session.user.id);
+        logActivity("user.delete", u.username, { id });
+        return json(res, 200, { ok: true });
+      }
     }
   } catch (err) {
     return json(res, 400, { error: err.message });
@@ -554,6 +679,7 @@ async function routeApi(req, res, url) {
   if (url.pathname.startsWith("/api/calls")) return handleCalls(req, res, url);
   if (url.pathname.startsWith("/api/playbooks")) return handlePlaybooks(req, res, url);
   if (url.pathname.startsWith("/api/calendar")) return handleCalendar(req, res, url);
+  if (url.pathname === "/api/agents" || url.pathname.startsWith("/api/agents/")) return handleAgents(req, res, url);
   if (req.method === "GET" && url.pathname === "/api/models") return handleModels(req, res);
   if (req.method === "POST" && url.pathname === "/api/settings") return handleSettings(req, res);
   if (req.method === "POST" && url.pathname === "/api/chat") return handleChat(req, res);
@@ -561,7 +687,7 @@ async function routeApi(req, res, url) {
   if (req.method === "POST" && url.pathname === "/api/transcribe") return handleTranscribe(req, res);
   if (req.method === "POST" && url.pathname === "/api/summary") return handleSummary(req, res);
   if (req.method === "GET" && url.pathname === "/api/config") {
-    const cfg = getConfig();
+    const cfg = await getConfig();
     return json(res, 200, { stale: (await codeStamp()) !== BOOT_STAMP, me: requestContext.getStore()?.user, model: cfg.models.chat, ttsModel: cfg.models.tts, sttModel: publicConfig(cfg).models.stt, languages: LANGUAGE_NAMES, voices: VOICES, emotions: Object.keys(EMOTIONS), settings: publicConfig(cfg) });
   }
   return json(res, 404, { error: `Unknown API route ${url.pathname}` });
@@ -572,73 +698,106 @@ const PROTECTED_PAGES = new Set(["/", "/index.html", "/admin.html"]);
 async function handle(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
   const p = url.pathname;
-
-  // Public: sign in / out.
-  if (p === "/api/login" && req.method === "POST") return handleLogin(req, res);
-  if (p === "/api/logout" && req.method === "POST") {
-    const s = await sessionFrom(req);
-    if (s) await logout(s.token);
-    res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": clearCookie() });
-    return res.end(JSON.stringify({ ok: true }));
-  }
-
-  const session = await sessionFrom(req);
-
-  if (p.startsWith("/api/")) {
-    if (!session) return json(res, 401, { error: "Please sign in." });
-    // Block cross-site requests that change data.
-    const origin = req.headers.origin;
-    if (req.method !== "GET" && origin && new URL(origin).host !== req.headers.host) return json(res, 403, { error: "Cross-site request blocked." });
-    if (p === "/api/me" || p === "/api/me/password") return handleMe(req, res, session);
-    if (p.startsWith("/api/admin/")) {
-      if (session.user.role !== ROLE_ADMIN) return json(res, 403, { error: "Admins only." });
-      return requestContext.run({ user: session.user, dataUserId: session.user.id }, () => handleAdmin(req, res, url, session));
+  {
+    // Public: sign in / sign up / sign out, and whether sign-up is open (for the login page).
+    if (p === "/api/login" && req.method === "POST") return handleLogin(req, res);
+    if (p === "/api/signup" && req.method === "POST") return handleSignup(req, res);
+    if (p === "/api/auth-options" && req.method === "GET") {
+      const cfg = await appConfig();
+      return json(res, 200, { allowSignup: !!cfg.auth?.allowSignup, appName: cfg.branding.appName, tagline: cfg.branding.tagline });
     }
-    // Admin may read (GET only) another user's data with ?as=<userId>.
-    let dataUserId = session.user.id;
-    const as = url.searchParams.get("as");
-    if (as && session.user.role === ROLE_ADMIN && req.method === "GET") {
-      if (!(await getUser(as))) return json(res, 404, { error: "User not found." });
-      dataUserId = as;
+    if (p === "/api/logout" && req.method === "POST") {
+      const s = await sessionFrom(req);
+      if (s) {
+        await logout(s.token);
+        logActivity("auth.logout", s.user.username, null, s.user);
+      }
+      res.writeHead(200, { "Content-Type": "application/json", "Set-Cookie": clearCookie() });
+      return res.end(JSON.stringify({ ok: true }));
     }
-    return requestContext.run({ user: session.user, dataUserId }, () => routeApi(req, res, url));
-  }
 
-  // Pages
-  if (p === "/login.html" && session) return redirect(res, session.user.role === ROLE_ADMIN ? "/admin.html" : "/");
-  if (PROTECTED_PAGES.has(p)) {
-    if (!session) return redirect(res, "/login.html");
-    if (p === "/admin.html" && session.user.role !== ROLE_ADMIN) return redirect(res, "/");
-  }
-  if (req.method !== "GET") return res.writeHead(405).end();
+    const session = await sessionFrom(req);
 
-  const file = path.normalize(path.join(PUBLIC_DIR, p === "/" ? "index.html" : p));
-  if (!file.startsWith(PUBLIC_DIR)) return res.writeHead(403).end();
-  try {
-    const content = await fs.readFile(file);
-    const headers = { "Content-Type": MIME[path.extname(file)] || "application/octet-stream" };
-    if (file.endsWith(".html")) headers["Cache-Control"] = "no-store"; // pages depend on who is signed in
-    res.writeHead(200, headers);
-    res.end(content);
-  } catch {
-    res.writeHead(404).end("Not found");
+    if (p.startsWith("/api/")) {
+      if (!session) return json(res, 401, { error: "Please sign in." });
+      // Block cross-site requests that change data.
+      const origin = req.headers.origin;
+      if (req.method !== "GET" && origin && new URL(origin).host !== req.headers.host) return json(res, 403, { error: "Cross-site request blocked." });
+      const store = requestContext.getStore();
+      store.user = session.user;
+      store.dataUserId = session.user.id;
+      if (p === "/api/me" || p === "/api/me/password") return handleMe(req, res, session);
+      if (p.startsWith("/api/admin/")) {
+        if (session.user.role !== ROLE_ADMIN) return json(res, 403, { error: "Admins only." });
+        return handleAdmin(req, res, url, session);
+      }
+      // Admin may read (GET only) another user's data with ?as=<userId>.
+      const as = url.searchParams.get("as");
+      if (as && session.user.role === ROLE_ADMIN && req.method === "GET") {
+        if (!(await getUser(as))) return json(res, 404, { error: "User not found." });
+        store.dataUserId = as;
+      }
+      // Which of the user's agents this request is for: X-Agent-Id header (sent by the page), else their default agent.
+      store.agent = await resolveAgent(store.dataUserId, req.headers["x-agent-id"] || url.searchParams.get("agentId"));
+      return routeApi(req, res, url);
+    }
+
+    // Pages
+    if (p === "/login.html" && session) return redirect(res, session.user.role === ROLE_ADMIN ? "/admin.html" : "/");
+    if (PROTECTED_PAGES.has(p)) {
+      if (!session) return redirect(res, "/login.html");
+      if (p === "/admin.html" && session.user.role !== ROLE_ADMIN) return redirect(res, "/");
+    }
+    if (req.method !== "GET") return res.writeHead(405).end();
+
+    const file = path.normalize(path.join(PUBLIC_DIR, p === "/" ? "index.html" : p));
+    if (!file.startsWith(PUBLIC_DIR)) return res.writeHead(403).end();
+    try {
+      const content = await fs.readFile(file);
+      const headers = { "Content-Type": MIME[path.extname(file)] || "application/octet-stream" };
+      if (file.endsWith(".html")) headers["Cache-Control"] = "no-store"; // pages depend on who is signed in
+      res.writeHead(200, headers);
+      res.end(content);
+    } catch {
+      res.writeHead(404).end("Not found");
+    }
   }
 }
 
 const server = http.createServer((req, res) => {
-  handle(req, res).catch((err) => {
+  const t0 = performance.now();
+  const store = { ip: clientIp(req) }; // filled in by handle(): user, dataUserId, agent
+  // Every API call goes into api_logs (method, path, status, time).
+  if (req.url.startsWith("/api/")) {
+    res.on("finish", () => {
+      logRequest({ userId: store.user?.id, agentId: store.agent?.id, method: req.method, path: req.url.split("?")[0], status: res.statusCode, ms: performance.now() - t0, ip: store.ip });
+    });
+  }
+  requestContext.run(store, () => handle(req, res)).catch((err) => {
     console.error(err);
     if (!res.headersSent) json(res, 500, { error: "Server error" });
     else res.end();
   });
 });
 
-// First start with accounts: create admin/admin@123 and move existing data into the admin's account.
-const setup = await ensureSetup(CONFIG_PATH);
-if (setup) console.log(`Created admin account "admin" (password admin@123, change it after signing in). Moved into it: ${setup.moved.join(", ") || "nothing"}.`);
+// ---------- start-up: database, settings, old JSON data, admin account ----------
+try {
+  await initDb();
+} catch (err) {
+  console.error(`\nCan't connect to MySQL (${err.code || err.message}). Check MYSQL_* in .env and that MySQL is running.\n`);
+  process.exit(1);
+}
+await seedAppConfig();
+const imported = await importJsonData();
+if (imported) console.log(`Moved the old JSON data into MySQL: ${imported.users} users, ${imported.agents} agents, ${imported.playbooks} playbooks, ${imported.calls} calls, ${imported.events} events. Copy kept in ${imported.backup}.`);
+const admin = await ensureAdmin();
+if (admin) {
+  await ensureDefaultAgent(admin.id);
+  console.log(`Created admin account "admin" (password admin@123, change it after signing in).`);
+}
 
-server.listen(PORT, () => {
-  const cfg = getConfig();
-  console.log(`${BRAND()} running at http://localhost:${PORT}  (chat: ${cfg.models.chat}, voice: ${cfg.models.tts})`);
+server.listen(PORT, async () => {
+  const cfg = await appConfig();
+  console.log(`${await BRAND()} running at http://localhost:${PORT}  (MySQL: ${process.env.MYSQL_DATABASE || "ai-agent"}, chat: ${cfg.models.chat}, voice: ${cfg.models.tts})`);
   if (!process.env.OPENAI_API_KEY) console.warn("Warning: OPENAI_API_KEY is not set — calls will fail until you add it to .env");
 });

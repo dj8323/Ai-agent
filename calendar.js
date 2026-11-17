@@ -1,55 +1,36 @@
-// Local calendar: events the agent adds during calls (when calendar is switched on), in data/calendar.json.
+// Calendar events the agents add during calls (when Calendar is on for that agent). MySQL table: calendar_events.
 // Exported as a standard .ics file that Google Calendar, Outlook and Apple Calendar can import.
-import fs from "node:fs/promises";
-import path from "node:path";
 import crypto from "node:crypto";
-import { userDataDir } from "./context.js";
+import { query, one, exec, iso } from "./db.js";
+import { currentDataUserId, currentAgent } from "./context.js";
 
-// Each user's calendar lives in data/users/<userId>/calendar.json (user taken from the request context).
-const FILE_FOR = () => path.join(userDataDir(), "calendar.json");
+const fromRow = (r) => ({
+  id: r.id, agentId: r.agent_id, title: r.title, start: iso(r.start_at), durationMin: r.duration_min,
+  notes: r.notes, source: r.source, createdAt: iso(r.created_at),
+});
 
-async function readAll() {
-  try {
-    return JSON.parse(await fs.readFile(FILE_FOR(), "utf8"));
-  } catch {
-    return [];
-  }
+export async function listEvents(userId = currentDataUserId()) {
+  return (await query("SELECT * FROM calendar_events WHERE user_id = ? ORDER BY start_at", [userId])).map(fromRow);
 }
 
-async function writeAll(list) {
-  const file = FILE_FOR();
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, JSON.stringify(list, null, 2));
-}
-
-export async function listEvents() {
-  return (await readAll()).sort((a, b) => a.start.localeCompare(b.start));
-}
-
-export async function addEvent(input) {
+export async function addEvent(input, userId = currentDataUserId(), agent = currentAgent()) {
   const title = String(input.title || "").trim().slice(0, 120);
   const start = new Date(input.start);
   if (!title || Number.isNaN(start.getTime())) throw new Error("An event needs a title and a valid start time.");
-  const ev = {
-    id: crypto.randomUUID().slice(0, 8),
-    title,
-    start: start.toISOString(),
-    durationMin: Math.min(Math.max(Number(input.durationMin) || 30, 5), 24 * 60),
-    notes: String(input.notes || "").slice(0, 500),
-    source: String(input.source || "agent").slice(0, 40),
-    createdAt: new Date().toISOString(),
-  };
-  const all = await readAll();
-  all.push(ev);
-  await writeAll(all);
-  return ev;
+  const id = crypto.randomUUID().slice(0, 8);
+  await exec(
+    "INSERT INTO calendar_events (id, user_id, agent_id, title, start_at, duration_min, notes, source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    [id, userId, agent?.id || null, title, start, Math.min(Math.max(Number(input.durationMin) || 30, 5), 24 * 60),
+      String(input.notes || "").slice(0, 500), String(input.source || "agent").slice(0, 40)],
+  );
+  return fromRow(await one("SELECT * FROM calendar_events WHERE id = ?", [id]));
 }
 
-export async function removeEvent(id) {
-  const all = await readAll();
-  const next = all.filter((e) => e.id !== id);
-  await writeAll(next);
-  return next.length !== all.length;
+export async function removeEvent(id, userId = currentDataUserId()) {
+  const ev = await one("SELECT * FROM calendar_events WHERE id = ? AND user_id = ?", [String(id).slice(0, 16), userId]);
+  if (!ev) return null;
+  await exec("DELETE FROM calendar_events WHERE id = ?", [ev.id]);
+  return fromRow(ev);
 }
 
 const icsDate = (d) => new Date(d).toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");

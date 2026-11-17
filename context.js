@@ -1,25 +1,31 @@
-// Per-request context: which signed-in user is making the request, and whose data it works on.
-// Data modules (playbooks, calls, calendar, per-user settings) read the user from here, so every request
-// only ever touches that user's folder: data/users/<userId>/.
+// Per-request context: who is signed in, whose data the request works on, and which of their agents is active.
+// Data modules (agents, playbooks, calls, calendar, config) read it from here, so a request only ever touches the
+// signed-in user's rows (the admin can read another user's data, GET only, with ?as=<userId>).
 import { AsyncLocalStorage } from "node:async_hooks";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "data");
 export const requestContext = new AsyncLocalStorage();
+const store = () => requestContext.getStore() || {};
 
-/** The user whose data this request reads/writes (the admin can look at another user's data, read-only). */
+/** The user whose data this request reads/writes. */
 export function currentDataUserId() {
-  return requestContext.getStore()?.dataUserId || null;
+  const id = store().dataUserId || null;
+  if (!id) throw new Error("No signed-in user for this request.");
+  return id;
 }
 
+/** The agent this request is for (row from the agents table), or null. */
+export const currentAgent = () => store().agent || null;
+
+/** Folder for files that stay on disk (call recordings): data/users/<userId>/. */
 export function userDataDir(id = currentDataUserId()) {
   if (!id || !/^[a-z0-9-]+$/i.test(id)) throw new Error("No signed-in user for this request.");
   return path.join(DATA_DIR, "users", id);
 }
 
-/** Run fn with another user's data selected (used by the admin dashboard to gather per-user stats). */
-export function asUser(userId, fn) {
-  const store = requestContext.getStore() || {};
-  return requestContext.run({ ...store, dataUserId: userId }, fn);
+/** Run fn with another user's data (and optionally agent) selected. */
+export function asUser(userId, fn, agent = null) {
+  return requestContext.run({ ...store(), dataUserId: userId, agent }, fn);
 }
