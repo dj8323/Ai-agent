@@ -46,9 +46,18 @@ const $ = (id) => document.getElementById(id);
 
 // Any API call that comes back "not signed in" (session expired, signed out elsewhere) goes to the login page.
 const _fetch = window.fetch.bind(window);
+// Every API call says which of the user's agents it is for (X-Agent-Id), so settings, chat, voice and saved calls
+// all belong to the agent picked in "My agents".
 window.fetch = async (...args) => {
-  const res = await _fetch(...args);
   const url = String(args[0]?.url || args[0] || "");
+  if (url.startsWith("/api/") && state.agentId) {
+    const opts = { ...(args[1] || {}) };
+    const headers = new Headers(opts.headers || {});
+    if (!headers.has("X-Agent-Id")) headers.set("X-Agent-Id", state.agentId);
+    opts.headers = headers;
+    args[1] = opts;
+  }
+  const res = await _fetch(...args);
   if (res.status === 401 && url.startsWith("/api/")) location.href = "/login.html";
   return res;
 };
@@ -72,6 +81,7 @@ const state = {
   emotion: "neutral",
   pendingCalendar: [], utter: null, vadTimer: null, micAnalyser: null, srDisabled: false, pendingHangup: false, historyPage: 1,
   callTokens: { input: 0, output: 0, total: 0 },
+  agents: [], agentId: "", agentTypes: {}, me: null,
 };
 
 // ---------- theme ----------
@@ -827,7 +837,7 @@ async function startCall() {
   clearChat();
   state.pendingHangup = false;
   state.srFallback = 0;
-  state.inCall = true;
+  state.inCall = true; renderAgents();
   state.muted = false;
   state.history = [];
   state.turns = [];
@@ -850,7 +860,7 @@ async function startCall() {
 
 async function endCall(endedBy = "ended by you") {
   if (!state.inCall) return;
-  state.inCall = false;
+  state.inCall = false; renderAgents();
   state.pendingHangup = false;
   if (state.abort) state.abort.abort();
   stopSpeaking();
@@ -942,7 +952,7 @@ async function summarizeCall(duration, recording, endedBy) {
       body: JSON.stringify({
         startedAt: state.callStartedAt?.toISOString(), duration, endedBy,
         playbook: pb ? { name: pb.name, icon: t?.icon, type: t?.name } : null,
-        language: $("lang").selectedOptions[0]?.text, voice: $("voice").value,
+        language: $("lang").selectedOptions[0]?.text, voice: $("voice").value, agentName: agentName(),
         stats: {
           turns: callerTurns.length, avgResponse: avg, languages: langs, moodPath,
           avgResponseMs: times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null,
@@ -1218,7 +1228,9 @@ async function loadHistory() {
     row.type = "button"; row.className = "call-row";
     row.innerHTML = `<div class="c-icon"></div><div><div class="c-title"></div><div class="c-sub"></div></div><div class="c-outcome"></div><div class="c-meta"></div>`;
     row.querySelector(".c-icon").textContent = c.playbook?.icon || "💬";
-    row.querySelector(".c-title").textContent = c.playbook?.name || "Default agent";
+    const title = row.querySelector(".c-title");
+    if (c.agentName) { const a = document.createElement("span"); a.className = "call-agent"; a.textContent = c.agentName; title.appendChild(a); }
+    title.append(c.playbook?.name || "Default agent");
     row.querySelector(".c-sub").textContent = `${fmtDate(c.startedAt)} · ${c.duration} · ${c.stats?.turns ?? 0} turns`;
     row.querySelector(".c-outcome").textContent = outcomeOf(c.summary);
     const meta = row.querySelector(".c-meta");
@@ -1250,7 +1262,7 @@ async function loadHistory() {
 
 async function openCall(id) {
   const c = await fetch(`/api/calls/${id}`).then((r) => r.json());
-  $("callTitle").textContent = `${c.playbook?.icon || "💬"} ${c.playbook?.name || "Default agent"} · ${fmtDate(c.startedAt)}`;
+  $("callTitle").textContent = `${c.playbook?.icon || "💬"} ${c.agentName ? c.agentName + " · " : ""}${c.playbook?.name || "Default agent"} · ${fmtDate(c.startedAt)}`;
   const body = $("callBody");
   body.innerHTML = `<div class="stats"></div><pre></pre><div class="rec"></div><h4>Transcript</h4><div class="lines"></div><div class="actions"></div>`;
   const st = c.stats || {};
@@ -1523,6 +1535,8 @@ async function autoSave() {
     Object.assign(CONFIG, data.settings.conversation || {});
     $("modelInfo").textContent = `${SETTINGS.models.chat} · ${SETTINGS.models.stt} · ${SETTINGS.models.tts}`;
     state.savedSnapshot = snapshot;
+    const cur = state.agents.find((a) => a.id === SETTINGS.currentAgent?.id);
+    if (cur && cur.name !== SETTINGS.currentAgent.name) { cur.name = SETTINGS.currentAgent.name; renderAgents(); }
     const calWasHidden = $("calendarCard").hidden;
     $("calendarCard").hidden = !SETTINGS.calendar?.enabled;
     if (calWasHidden && SETTINGS.calendar?.enabled) loadCalendar();
@@ -1666,10 +1680,156 @@ $("pwForm").addEventListener("submit", async (e) => {
   setTimeout(() => setSaveStatus(""), 2500);
 });
 
+// ---------- My agents: each user can have many agents, each with its own setup ----------
+const agentKey = () => `tsa-agent-${state.me?.id || ""}`;
+const currentAgentCard = () => state.agents.find((a) => a.id === state.agentId) || null;
+
+async function loadAgents() {
+  const data = await fetch("/api/agents").then((r) => r.json());
+  state.agents = data.agents;
+  state.agentTypes = data.types;
+  if (!state.agents.some((a) => a.id === state.agentId)) state.agentId = data.currentId;
+  renderAgents();
+}
+
+function renderAgents() {
+  const box = $("agentChips");
+  box.innerHTML = "";
+  for (const a of state.agents) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "agent-chip";
+    b.setAttribute("aria-pressed", String(a.id === state.agentId));
+    b.title = `${a.typeName}${a.description ? " · " + a.description : ""}${a.isDefault ? " · opens first" : ""}`;
+    b.disabled = state.inCall && a.id !== state.agentId;
+    b.innerHTML = `<span aria-hidden="true"></span><span class="n"></span>`;
+    b.firstChild.textContent = a.icon;
+    b.querySelector(".n").textContent = a.name;
+    if (a.isDefault) b.insertAdjacentHTML("beforeend", '<span class="star" aria-label="default">★</span>');
+    b.addEventListener("click", () => switchAgent(a.id));
+    box.appendChild(b);
+  }
+  const add = document.createElement("button");
+  add.type = "button"; add.className = "agent-chip add"; add.textContent = "＋ New agent";
+  add.disabled = state.inCall;
+  add.addEventListener("click", openAgentDialog);
+  box.appendChild(add);
+  $("agentCount").textContent = state.agents.length > 1 ? `${state.agents.length} agents` : "";
+  const cur = currentAgentCard();
+  $("agentDesc").textContent = cur ? `${cur.icon} ${cur.typeName}${cur.description ? " · " + cur.description : ""}` : "";
+  $("agentDesc").title = $("agentDesc").textContent;
+  $("agentDefault").textContent = cur?.isDefault ? "★ Default" : "☆ Default";
+  $("agentDefault").disabled = !!cur?.isDefault;
+  $("agentDelete").hidden = state.agents.length <= 1;
+}
+
+async function switchAgent(id) {
+  if (id === state.agentId || state.inCall) return;
+  // Save any unsaved change to the agent we're leaving first.
+  if (state.savedSnapshot && formSnapshot() !== state.savedSnapshot) { clearTimeout(state.saveTimer); await autoSave(); }
+  state.agentId = id;
+  store.set(agentKey(), id);
+  state.savedSnapshot = "";
+  renderAgents();
+  await loadConfig();
+  fillForm();
+  setSaveStatus(`Switched to ${agentName()}`);
+  clearTimeout(state.saveFade);
+  state.saveFade = setTimeout(() => setSaveStatus(""), 2000);
+  if (SETTINGS.calendar?.enabled) loadCalendar().catch(() => {});
+}
+
+async function agentRequest(url, method, body) {
+  const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Something went wrong.");
+  return data;
+}
+
+$("agentEdit").addEventListener("click", async () => {
+  const cur = currentAgentCard();
+  if (!cur) return;
+  const desc = prompt(`What is "${cur.name}" for? (e.g. Front desk for City Hospital)`, cur.description || "");
+  if (desc === null) return;
+  try {
+    Object.assign(cur, await agentRequest(`/api/agents/${cur.id}`, "PATCH", { description: desc }));
+    renderAgents();
+  } catch (e) { setSaveStatus("⚠ " + e.message, "err"); }
+});
+$("agentDefault").addEventListener("click", async () => {
+  const cur = currentAgentCard();
+  if (!cur) return;
+  try {
+    await agentRequest(`/api/agents/${cur.id}`, "PATCH", { isDefault: true });
+    for (const a of state.agents) a.isDefault = a.id === cur.id;
+    renderAgents();
+  } catch (e) { setSaveStatus("⚠ " + e.message, "err"); }
+});
+$("agentDelete").addEventListener("click", async () => {
+  const cur = currentAgentCard();
+  if (!cur || state.inCall) return;
+  if (!confirm(`Delete the agent "${cur.name}"? Its setup and emergency numbers are removed; its past calls stay in Call summaries.`)) return;
+  try {
+    await agentRequest(`/api/agents/${cur.id}`, "DELETE");
+    state.agents = state.agents.filter((a) => a.id !== cur.id);
+    state.agentId = "";
+    await loadAgents(); // picks the default agent
+    const next = state.agents.find((a) => a.isDefault) || state.agents[0];
+    state.agentId = "";
+    await switchAgent(next.id);
+  } catch (e) { setSaveStatus("⚠ " + e.message, "err"); }
+});
+
+// New agent dialog: pick a type (hospital, banking, HR …), give it a name.
+const na = { type: "personal" };
+function openAgentDialog() {
+  if (state.inCall) return;
+  na.type = "personal";
+  $("naForm").reset();
+  $("naErr").textContent = "";
+  renderAgentTypes();
+  $("agentDialog").classList.add("open");
+  setTimeout(() => $("naName").focus(), 30);
+}
+function closeAgentDialog() { $("agentDialog").classList.remove("open"); }
+function renderAgentTypes() {
+  const grid = $("naTypes");
+  grid.innerHTML = "";
+  for (const [id, t] of Object.entries(state.agentTypes)) {
+    const b = tile(t.icon, t.name, t.description, () => { na.type = id; renderAgentTypes(); $("naName").focus(); });
+    b.classList.toggle("picked", id === na.type);
+    b.setAttribute("aria-pressed", String(id === na.type));
+    grid.appendChild(b);
+  }
+}
+$("naClose").addEventListener("click", closeAgentDialog);
+$("naCancel").addEventListener("click", closeAgentDialog);
+$("agentDialog").addEventListener("click", (e) => { if (e.target === $("agentDialog")) closeAgentDialog(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAgentDialog(); });
+$("naForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const name = $("naName").value.trim();
+  if (!name) { $("naErr").textContent = "Give your agent a name."; return; }
+  $("naCreate").disabled = true;
+  try {
+    const a = await agentRequest("/api/agents", "POST", { name, type: na.type, description: $("naDesc").value.trim() });
+    state.agents.push(a);
+    closeAgentDialog();
+    await switchAgent(a.id);
+  } catch (err) {
+    $("naErr").textContent = err.message;
+  } finally {
+    $("naCreate").disabled = false;
+  }
+});
+
 // ---------- start-up ----------
 (async () => {
   try {
+    state.me = (await fetch("/api/me").then((r) => r.json())).user;
+    state.agentId = store.get(agentKey()) || ""; // the agent this user had open last time
+    await loadAgents();
     await loadConfig();
+    if (SETTINGS.currentAgent && SETTINGS.currentAgent.id !== state.agentId) { state.agentId = SETTINGS.currentAgent.id; renderAgents(); }
     await loadPlaybooks();
     fillForm(); // show the saved settings right away
     // The model list comes from OpenAI and can take a few seconds; fill the dropdowns when it arrives.

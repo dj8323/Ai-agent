@@ -220,6 +220,29 @@
   .autosave { font-size: 11px; font-weight: 700; padding: 4px 9px; border-radius: 999px; background: #ffffff2e; white-space: nowrap; }
   .autosave:empty { display: none; }
   .autosave.err { background: #ffffffe6; color: var(--red); }
+  /* My agents: switch between the user's agents (each has its own setup) */
+  .agents-bar { padding: 10px 12px 8px; background: var(--panel-2); border-bottom: 1px solid var(--border); }
+  .agents-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 4px 7px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+  .agents-top button { border: none; background: none; color: var(--c1); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; text-transform: none; letter-spacing: 0; padding: 2px 4px; }
+  .agent-chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: thin; }
+  .agent-chip { flex: none; display: inline-flex; align-items: center; gap: 6px; max-width: 170px; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: border-color .15s; }
+  .agent-chip span.n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent-chip:hover { border-color: var(--c1); }
+  .agent-chip[aria-pressed="true"] { border-color: transparent; color: #fff; background: var(--grad); box-shadow: 0 4px 12px color-mix(in srgb, var(--c1) 30%, transparent); }
+  .agent-chip.add { border-style: dashed; color: var(--c1); background: transparent; }
+  .agent-chip:disabled { opacity: .5; cursor: default; }
+  .agent-chip .star { font-size: 10px; }
+  .agent-about { display: flex; align-items: center; gap: 6px; margin: 8px 4px 0; font-size: 12px; color: var(--muted); min-width: 0; }
+  .agent-about .d { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .agent-about button { flex: none; border: 1px solid var(--border); background: var(--panel); color: var(--muted); border-radius: 8px; font: inherit; font-size: 11px; font-weight: 700; padding: 3px 8px; cursor: pointer; }
+  .agent-about button:hover { color: var(--c1); border-color: var(--c1); }
+  .agent-about button.danger:hover { color: var(--red); border-color: var(--red); }
+  .tile.picked { border-color: var(--c1); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c1) 22%, transparent); }
+  .na-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+  .na-grid .tile { padding: 11px; } .na-grid .tile .t-icon { font-size: 20px; } .na-grid .tile .t-desc { font-size: 11px; }
+  .na-fields { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; margin-top: 14px; }
+  @media (max-width: 560px) { .na-fields { grid-template-columns: 1fr; } }
+  .call-agent { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: color-mix(in srgb, var(--c1) 12%, transparent); color: var(--c1); margin-right: 4px; }
   .block { padding: 10px 16px; border-top: 1px solid var(--border); }
   .agent-hero + .block { border-top: none; }
   .block-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 12px; font-weight: 700; letter-spacing: .02em; margin-bottom: 7px; }
@@ -374,6 +397,16 @@
   </section>
 
   <section class="card setup agent-card" id="setupCard" aria-label="Agent setup">
+    <div class="agents-bar">
+      <div class="agents-top"><span>🤖 My agents</span><span id="agentCount"></span></div>
+      <div class="agent-chips" id="agentChips" role="group" aria-label="Choose an agent"></div>
+      <div class="agent-about" id="agentAbout">
+        <span class="d" id="agentDesc"></span>
+        <button type="button" id="agentEdit" title="Edit what this agent is for">✎ About</button>
+        <button type="button" id="agentDefault" title="Open this agent first next time">☆ Default</button>
+        <button type="button" id="agentDelete" class="danger" title="Delete this agent">🗑</button>
+      </div>
+    </div>
     <div class="agent-hero">
       <div class="mini-avatar" id="miniAvatar" aria-hidden="true">A</div>
       <div class="hero-text">
@@ -526,6 +559,28 @@
       <button class="icon-btn" id="dlgClose" title="Close" aria-label="Close">✕</button>
     </div>
     <div id="dlgBody"></div>
+  </div>
+</div>
+
+<div class="overlay" id="agentDialog" role="dialog" aria-modal="true" aria-labelledby="naTitle">
+  <div class="dialog">
+    <div class="dialog-head">
+      <h3 id="naTitle">＋ New agent</h3>
+      <button class="icon-btn" id="naClose" type="button" title="Close" aria-label="Close">✕</button>
+    </div>
+    <p class="lead">What will this agent do? Each agent has its own name, voice, language, models, playbook, calendar and emergency numbers.</p>
+    <form id="naForm">
+      <div class="grid na-grid" id="naTypes"></div>
+      <div class="na-fields">
+        <div><label for="naName">Agent name</label><input type="text" id="naName" maxlength="24" placeholder="e.g. Asha" required /></div>
+        <div><label for="naDesc">What it's for (optional)</label><input type="text" id="naDesc" maxlength="300" placeholder="e.g. Front desk for City Hospital, Pune" /></div>
+      </div>
+      <div class="form-error" id="naErr"></div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-ghost" id="naCancel">Cancel</button>
+        <button type="submit" class="btn btn-primary" id="naCreate">Create agent</button>
+      </div>
+    </form>
   </div>
 </div>
 

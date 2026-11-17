@@ -81,6 +81,15 @@
   .submit:disabled { opacity: .7; cursor: default; transform: none; }
   .roles { display: flex; gap: 8px; margin-top: 22px; font-size: 12px; color: var(--muted); align-items: center; flex-wrap: wrap; }
   .roles span { padding: 4px 10px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); font-weight: 600; }
+  .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; border-radius: 12px; background: var(--panel-2); border: 1px solid var(--border); margin: 0 0 22px; }
+  .tabs button { border: none; background: none; padding: 9px; border-radius: 9px; font: inherit; font-size: 14px; font-weight: 700; color: var(--muted); cursor: pointer; }
+  .tabs button[aria-selected="true"] { background: var(--panel); color: var(--text); box-shadow: 0 2px 8px color-mix(in srgb, var(--c1) 18%, transparent); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 420px) { .two { grid-template-columns: 1fr; } }
+  input[type=email] { width: 100%; padding: 13px 14px 13px 40px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; font-size: 15px; }
+  .field small { display: block; color: var(--muted); font-size: 12px; margin-top: 5px; }
+  .switch-line { margin-top: 16px; text-align: center; font-size: 14px; color: var(--muted); }
+  .switch-line a { color: var(--c1); font-weight: 700; text-decoration: none; }
   .preview-note { margin-top: 18px; font-size: 12px; color: var(--muted); text-align: center; }
   footer { text-align: center; color: var(--muted); font-size: 13px; padding: 0 16px 20px; }
   footer b { color: var(--text); }
@@ -113,8 +122,14 @@
 
     <section class="form-side">
       <div class="mobile-brand"><span class="mark"></span><b>TelemuneSmartAi</b></div>
-      <h1>Welcome back 👋</h1>
-      <p class="sub">Sign in to your TelemuneSmartAi account</p>
+      <div class="tabs" role="tablist" id="tabs" hidden>
+        <button type="button" role="tab" id="tabIn" aria-selected="true">Sign in</button>
+        <button type="button" role="tab" id="tabUp" aria-selected="false">Create account</button>
+      </div>
+      <div id="inHead"><h1>Welcome back 👋</h1>
+      <p class="sub">Sign in to your TelemuneSmartAi account</p></div>
+      <div id="upHead" hidden><h1>Create your account ✨</h1>
+      <p class="sub">Set up your own AI voice agents in a minute.</p></div>
 
       <form id="loginForm" novalidate>
         <div class="error" id="err" role="alert" hidden>⚠ <span id="errText"></span></div>
@@ -134,9 +149,45 @@
           <a href="#" id="forgot">Forgot password?</a>
         </div>
         <button class="submit" id="submit" type="submit">Sign in →</button>
+        <p class="switch-line" id="toUpLine" hidden>New here? <a href="#" id="toUp">Create an account</a></p>
       </form>
 
-      <div class="roles">Access levels: <span>👑 Admin · dashboard for all users &amp; agents</span><span>👤 User · own agents &amp; calls</span></div>
+      <form id="signupForm" novalidate hidden>
+        <div class="error" id="suErr" role="alert" hidden>⚠ <span id="suErrText"></span></div>
+        <div class="field">
+          <label for="suName">Full name</label>
+          <div class="inp"><span class="ico">🙂</span>
+          <input type="text" id="suName" autocomplete="name" placeholder="Your name" maxlength="60" required /></div>
+        </div>
+        <div class="two">
+          <div class="field">
+            <label for="suUser">Username</label>
+            <div class="inp"><span class="ico">👤</span>
+            <input type="text" id="suUser" autocomplete="username" placeholder="e.g. riya.s" maxlength="32" required /></div>
+          </div>
+          <div class="field">
+            <label for="suEmail">Email <span style="text-transform:none;font-weight:500">(optional)</span></label>
+            <div class="inp"><span class="ico">✉️</span>
+            <input type="email" id="suEmail" autocomplete="email" placeholder="you@company.com" maxlength="120" /></div>
+          </div>
+        </div>
+        <div class="two">
+          <div class="field">
+            <label for="suPw">Password</label>
+            <div class="inp"><span class="ico">🔑</span>
+            <input type="password" id="suPw" autocomplete="new-password" placeholder="At least 6 characters" required /></div>
+          </div>
+          <div class="field">
+            <label for="suPw2">Confirm</label>
+            <div class="inp"><span class="ico">🔑</span>
+            <input type="password" id="suPw2" autocomplete="new-password" placeholder="Type it again" required /></div>
+          </div>
+        </div>
+        <button class="submit" id="suSubmit" type="submit">Create account →</button>
+        <p class="switch-line">Already have an account? <a href="#" id="toIn">Sign in</a></p>
+      </form>
+
+      <div class="roles" id="rolesLine">Access levels: <span>👑 Admin · dashboard for all users &amp; agents</span><span>👤 User · own agents &amp; calls</span></div>
     </section>
   </div>
 </main>
@@ -178,6 +229,52 @@
       $("submit").disabled = false; $("submit").textContent = "Sign in →";
     }
   };
+  // ---------- self sign-up (shown only when the admin allows it: app_config.auth.allowSignup) ----------
+  function showMode(up) {
+    $("loginForm").hidden = up; $("signupForm").hidden = !up;
+    $("inHead").hidden = up; $("upHead").hidden = !up;
+    $("tabIn").setAttribute("aria-selected", String(!up)); $("tabUp").setAttribute("aria-selected", String(up));
+    $("rolesLine").hidden = up;
+    (up ? $("suName") : $("username")).focus();
+    history.replaceState(null, "", up ? "#signup" : location.pathname);
+  }
+  $("tabIn").onclick = () => showMode(false);
+  $("tabUp").onclick = () => showMode(true);
+  $("toUp").onclick = (e) => { e.preventDefault(); showMode(true); };
+  $("toIn").onclick = (e) => { e.preventDefault(); showMode(false); };
+  // Suggest a username from the name.
+  $("suName").addEventListener("input", () => {
+    if ($("suUser").dataset.touched) return;
+    $("suUser").value = $("suName").value.trim().toLowerCase().replace(/\s+/g, ".").replace(/[^a-z0-9._-]/g, "").slice(0, 32);
+  });
+  $("suUser").addEventListener("input", () => { $("suUser").dataset.touched = "1"; });
+  function suError(t) { $("suErrText").textContent = t; $("suErr").hidden = false; }
+  $("signupForm").onsubmit = async (e) => {
+    e.preventDefault();
+    $("suErr").hidden = true;
+    const body = { name: $("suName").value.trim(), username: $("suUser").value.trim(), email: $("suEmail").value.trim(), password: $("suPw").value, confirm: $("suPw2").value, remember: true };
+    if (!body.name || !body.username || !body.password) return suError("Fill in your name, a username and a password.");
+    if (!/^[a-z0-9._-]{3,32}$/i.test(body.username)) return suError("Username: 3–32 letters, numbers, dot, dash or underscore.");
+    if (body.password.length < 6) return suError("Password must be at least 6 characters.");
+    if (body.password !== body.confirm) return suError("The passwords don't match.");
+    $("suSubmit").disabled = true; $("suSubmit").textContent = "Creating your account…";
+    try {
+      const res = await fetch("/api/signup", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Couldn't create the account.");
+      $("suSubmit").textContent = "✓ Welcome, " + data.user.name;
+      location.replace(data.next || "/");
+    } catch (err) {
+      suError(err.message);
+      $("suSubmit").disabled = false; $("suSubmit").textContent = "Create account →";
+    }
+  };
+  fetch("/api/auth-options").then((r) => r.json()).then((o) => {
+    if (!o.allowSignup) return;
+    $("tabs").hidden = false; $("toUpLine").hidden = false;
+    if (location.hash === "#signup") showMode(true);
+  }).catch(() => {});
+
   $("username").focus();
 </script>
 </body>
