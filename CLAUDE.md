@@ -4,27 +4,49 @@ A multilingual **AI voice agent** you talk to from the browser with a call butto
 answers out loud with an emotional voice, and every call gets a summary, stats and an optional recording.
 Branding: "TelemuneSmartAi", footer "Powered by Telemune © 2027 · Designed by DJ".
 
-## Accounts & roles (read this first)
+## Storage = MySQL (read this first)
+
+- Everything lives in MySQL, database **`ai-agent`** (connection in `.env`: `MYSQL_HOST/PORT/USER/PASSWORD/DATABASE`).
+  `db/schema.sql` creates the database and all tables; `db.js` runs it on every start (all `IF NOT EXISTS`).
+  Connections use `time_zone = '+00:00'`: every DATETIME is UTC.
+- Tables: `roles` (1 admin, 2 user) · `users` · `sessions` · `app_config` (shared settings, one JSON per section) ·
+  `agents` + `emergency_rules` (each agent's own setup) · `playbooks` · `calls` + `call_summaries` ·
+  `calendar_events` · `activity_logs` (who did what) · `api_logs` (every API request: path, status, ms).
+- Only call recordings stay on disk: `data/users/<userId>/recordings/<file>` (file name in `calls.recording_file`).
+- `migrate.js` imported the old JSON storage once (2026-11-17); a full copy is in `backups/pre-mysql-2026-11-17/`.
+  Older copy (before accounts): `backups/pre-login-2026-11-17/`.
+- No Spring Boot or other backend: Node talks to MySQL directly with `mysql2` (the only other dependency).
+
+## Accounts & roles
 
 - Sign-in is required for everything. `/login.html` → POST `/api/login` → HttpOnly `tsa_session` cookie
-  (12 h, or 30 days with "Keep me signed in"). Signed-out visits to `/`, `/index.html`, `/admin.html` redirect to login;
-  `/api/*` returns 401 (the pages then go to the login page).
-- Roles: **1 = admin** (lands on `/admin.html`: every user, their agents, calls, summaries, recordings; add / reset
-  password / make admin / disable / delete users) and **2 = user** (only their own agent and data).
-- Default account created on first start: **admin / admin@123** (flagged `mustChangePassword`; a banner asks to change it).
+  (`app_config.auth.sessionHours`, or `rememberDays` with "Keep me signed in"). Signed-out visits to `/`, `/index.html`,
+  `/admin.html` redirect to login; `/api/*` returns 401 (the pages then go to the login page).
+- **Self sign-up**: "Create account" tab on the login page → POST `/api/signup` (name, username, optional email,
+  password, confirm) → role 2, signed in straight away, gets a starter Personal Assistant agent. Shown only while
+  `app_config.auth.allowSignup` is true (switch in the admin dashboard → ⚙️ App settings). 5 sign-ups per IP per hour.
+- Roles: **1 = admin** (lands on `/admin.html`: every user, all their agents, calls, summaries, recordings, the activity
+  log and app settings; add / reset password / make admin / disable / delete users) and **2 = user** (own agents and data).
+- Default account created when `users` is empty: **admin / admin@123** (flagged `must_change_password`).
   Users created by the admin also get a temporary password they must change.
-- Passwords: scrypt hashes in `data/users.json`. Sessions: SHA-256 of the token in `data/sessions.json`.
-  5 wrong passwords per username+IP → 5-minute lockout. Non-GET requests from another origin are rejected.
-- **Per-user data**: `data/users/<userId>/` holds `settings.json` (that user's agent, models, speechToText, calendar,
-  emergency), `playbooks.json`, `calls.json`, `summaries/`, `recordings/`, `calendar.json`.
-  `config.json` is now the shared default for every user (plus server/branding/history settings).
-- How code finds the user: `context.js` keeps the request's user in AsyncLocalStorage; `config.js`, `playbooks.js`,
-  `calls.js`, `calendar.js` resolve paths with `userDataDir()`. Never read `data/*.json` directly for user data.
+- Passwords: scrypt hashes. Sessions: SHA-256 of the token. 5 wrong passwords per username+IP → 5-minute lockout.
+  Non-GET requests from another origin are rejected.
+- Deleting a user is a soft delete (`deleted_at` set, username freed as `name~deleted-<id>`); their rows stay.
+  The last active admin can't be demoted, disabled or deleted, and admins can't remove their own access.
 - Admin read-only access to another user's data: any GET `/api/...?as=<userId>` (ignored for non-admins).
-- Deleted users' folders are moved to `data/deleted-users/` (not erased). The last active admin can't be demoted,
-  disabled or deleted, and admins can't remove their own access.
-- The original single-user data was moved into the admin account on first start; a copy is in
-  `backups/pre-login-2026-11-17/`.
+
+## Agents (many per user)
+
+- Each user can create agents for different jobs (**＋ New agent**: Personal, Customer Support, Telecom, Hospital &
+  Healthcare, Banking & Finance, Sales, Appointment, Payment Reminder, Survey, HR, Tutor, Wellness, Other). The type
+  sets the agent's role when no playbook is picked (`playbookPrompt(pb, agent)`); "What it's for" is added to the prompt.
+- Each agent has its own name, language, voice, LLM/STT/TTS, playbook, calendar switch and emergency numbers.
+  Saving one agent never touches another agent or another user. Playbooks belong to the user; any agent can pick one.
+- The page sends **`X-Agent-Id`** on every `/api/` request (fetch wrapper in app.js). `server.js` resolves it with
+  `resolveAgent()` (must belong to the user, else their default agent) into the request context; `getConfig()` then
+  layers DEFAULTS ← `app_config` ← that agent's row. Calls and calendar events record `agent_id` + agent name.
+- Last-opened agent per user is kept in localStorage (`tsa-agent-<userId>`); ★ Default opens first otherwise.
+- How code finds the user/agent: `context.js` (AsyncLocalStorage) → `currentDataUserId()`, `currentAgent()`.
 
 ## Run
 
@@ -50,32 +72,37 @@ Front end is static HTML/CSS/JS in `public/` (no bundler, no framework).
 | Thinking | OpenAI Chat Completions, streamed over SSE (`/api/chat`) |
 | Text → speech | OpenAI TTS (`gpt-4o-mini-tts`), one request per sentence, with emotion `instructions` (`/api/tts`) |
 | Summary | OpenAI Chat Completions, non-streamed (`/api/summary`) |
-| Storage | JSON + files under `data/` |
+| Storage | MySQL `ai-agent` via `mysql2` (recordings as files under `data/users/<id>/recordings/`) |
 
 ## File map
 
 ```
-config.json        Shared settings + the DEFAULT agent setup for every user (each user's own setup is in their folder).
-auth.js            Users, roles, scrypt passwords, sessions, login lockout, first-start admin + data migration.
-context.js         Per-request user (AsyncLocalStorage) → userDataDir(); asUser() for admin roll-ups.
-config.js          Loads config.json over defaults; env overrides; publicConfig() = what the browser may see;
-                   saveAgentSettings() = the whitelisted write-back used by the 💾 Save agent button.
-calendar.js        Local calendar (data/calendar.json) + .ics export.
+config.json        Seed for app_config on first start + server.port (read before the DB connects). Not read after that.
+db/schema.sql      All tables (run by db.js on start, or by hand: mysql -uroot -p < db/schema.sql).
+db.js              MySQL pool (UTC), initDb(), query/one/exec/tx helpers.
+migrate.js         One-time import of the old JSON files into MySQL (+ backup).
+auth.js            Users, roles, scrypt passwords, sessions, login lockout, sign-up, first-start admin.
+agents.js          Agents CRUD, resolveAgent(), saveAgentSettings() (the auto-save target), emergency rules.
+logs.js            logActivity(), logRequest(), listActivity(), apiStats().
+context.js         Per-request user, data user and agent (AsyncLocalStorage); asUser() for admin roll-ups.
+config.js          DEFAULTS ← app_config ← active agent ← env; publicConfig() = what the browser may see;
+                   seedAppConfig(), saveAppSection() (admin), bootPort().
+calendar.js        Calendar events (calendar_events) + .ics export.
 server.js          HTTP server + API routes, system prompt, voices (10), emotions (20), languages (15).
-playbooks.js       AGENT_TYPES (11 types, each with ready-made templates) + saved playbooks CRUD + playbookPrompt().
-calls.js           Call history CRUD, per-call summary .txt files, recordings, totals (callStats).
-public/login.html  Sign-in page (split brand panel + form).
-public/admin.html  Admin dashboard (+ public/admin.js): KPIs, user cards, add/reset/role/disable/delete, user drawer
-                   with agent setup, playbooks, paginated calls and full call view (summary, transcript, recording).
-public/index.html  Layout + all CSS (theme tokens for light/dark), dialogs, user menu (dashboard / password / sign out).
-public/app.js      Everything in the browser: call flow, speech in/out, tag parsing, visualizer, recording,
-                   playbook manager, call summaries panel + pagination.
+playbooks.js       AGENT_TYPES (13 types, each with ready-made templates) + saved playbooks CRUD + playbookPrompt().
+calls.js           Call history CRUD (calls + call_summaries), recordings on disk, totals (callStats).
+public/login.html  Sign-in + Create account (split brand panel + form).
+public/admin.html  Admin dashboard (+ public/admin.js): KPIs, user cards with all their agents, add/reset/role/disable/
+                   delete, user drawer (agents, playbooks, calls, call view), ⚙️ App settings, 📜 Activity log.
+public/index.html  Layout + all CSS (theme tokens for light/dark), dialogs (incl. New agent), user menu.
+public/app.js      Everything in the browser: My agents switcher, call flow, speech in/out, tag parsing, visualizer,
+                   recording, playbook manager, call summaries panel + pagination.
 public/telemune-mark.png   Official Telemune snowflake (from telemune.com). Used as a CSS mask filled with the theme
                            gradient (`.logo` in index.html), so it always matches branding.theme.
 public/telemune-logo.svg   Same mark, gradient baked in — the browser-tab icon (favicon).
 public/logo.svg            Old waveform logo, no longer used.
 runScript.sh       One-command start.
-data/              USER DATA — users.json, sessions.json, users/<userId>/…, deleted-users/. Never wipe it.
+data/              Call recordings only (data/users/<userId>/recordings/). Never wipe it.
 ```
 
 ## API
@@ -83,9 +110,14 @@ data/              USER DATA — users.json, sessions.json, users/<userId>/…, 
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/login`, `/api/logout` | sign in (body: username, password, remember) / out |
+| POST | `/api/signup` | self sign-up {name, username, email?, password, confirm, remember} (when allowed) |
+| GET | `/api/auth-options` | public: {allowSignup, appName, tagline} for the login page |
+| GET / POST / PATCH / DELETE | `/api/agents[/:id]` | list {agents, currentId, types} / create {name, type, description} / {name, description, type, isDefault} / delete |
 | GET / POST | `/api/me`, `/api/me/password` | who is signed in / change own password {current, next} |
 | GET | `/api/admin/overview` | admin: totals + every user with agent summary and stats |
 | POST / GET / PATCH / DELETE | `/api/admin/users[/:id]` | admin: create / detail / {name, role, password, disabled} / delete |
+| GET | `/api/admin/logs?page=N&user=ID` | admin: activity log (15 per page) |
+| GET / PUT | `/api/admin/config[/:section]` | admin: all app_config sections / replace one section (JSON object) |
 | GET | `/api/config` | models, voices, languages, emotions, `settings` (= `publicConfig`) |
 | POST | `/api/chat` | SSE stream: `delta` {text}, `usage` {input,output,total}, `error`, `done` |
 | POST | `/api/tts` | mp3 for {text, emotion, voice, lang} |
@@ -93,14 +125,14 @@ data/              USER DATA — users.json, sessions.json, users/<userId>/…, 
 | POST | `/api/summary` | {summary, usage} |
 | GET/POST/DELETE | `/api/playbooks[/:id]` | agent types + saved playbooks |
 | GET | `/api/models` | models on the OpenAI account, grouped `{chat, stt, tts}` (cached 10 min; fallback list offline) |
-| POST | `/api/settings` | Save agent: writes agent/models/speechToText/calendar/emergency into `config.json` |
+| POST | `/api/settings` | Save the active agent (X-Agent-Id): name/language/voice/playbook/models/calendar/emergency |
 | GET/POST/DELETE | `/api/calendar[/:id]` | list / add (only when calendar is on) / delete events |
 | GET | `/api/calendar/calendar.ics`, `/api/calendar/:id.ics` | export all / one event |
-| GET | `/api/calls?page=N` | paginated call list (no transcripts) |
+| GET | `/api/calls?page=N&agent=ID` | paginated call list (no transcripts), optionally one agent's |
 | GET | `/api/calls/stats` | totals: calls, seconds, tokens, avg reply, recordings |
-| GET/DELETE | `/api/calls/:id` | full call / delete call + its summary file + recording |
-| POST | `/api/calls` | save a finished call (writes `data/summaries/<id>.txt`) |
-| GET | `/api/calls/:id/summary` | the summary .txt |
+| GET/DELETE | `/api/calls/:id` | full call / delete call + its summary + recording |
+| POST | `/api/calls` | save a finished call (calls + call_summaries rows) |
+| GET | `/api/calls/:id/summary` | the summary as a .txt download (call_summaries.full_text) |
 | GET/PUT | `/api/calls/:id/recording` | recording download / upload (raw body) |
 
 ## The reply tag protocol (important)
@@ -136,7 +168,8 @@ The model must start every reply with metadata tags and prefix every sentence wi
 
 ## Agent setup card (auto-saves)
 
-- Compact "agent profile" card on the left, top to bottom: **AI name** (gradient header with mini avatar) →
+- Compact "agent profile" card on the left, top to bottom: **🤖 My agents** (chips to switch, ＋ New agent, ✎ About,
+  ☆ Default, 🗑; switching is locked during a call) → **AI name** (gradient header with mini avatar) →
   **AI models** (LLM · STT · TTS in one row) → **Voice & language** (one row + ▶ preview) → **Playbook** →
   **📅 Calendar** section (switch + the calendar's events and .ics export live inside it) →
   **🚨 Emergency** section (collapsed). Switching it on shows only the **＋ Add emergency number** form:
@@ -180,7 +213,11 @@ the mixer) → `afterAgentTurn` (listen again or hang up) → `endCall` → stop
 Per-turn timing: `firstText` (first words on screen), `firstVoice` (first audio starts), `total` (stream done).
 Tokens: summed from the chat `usage` events + summary usage (TTS isn't counted — OpenAI doesn't report it).
 
-## config.json reference
+## Settings reference (MySQL `app_config`; `config.json` only seeds it)
+
+Edit with the admin dashboard (⚙️ App settings), `PUT /api/admin/config/<section>`, or SQL
+(`UPDATE app_config SET value = JSON_SET(value, '$.pageSize', 8) WHERE section = 'history'`). Per-agent values
+(name, language, voice, models, calendar, emergency) live in `agents` / `emergency_rules`.
 
 | Key | Meaning |
 |---|---|
@@ -202,13 +239,21 @@ Tokens: summed from the chat `usage` events + summary usage (TTS isn't counted �
 | `conversation.historyTurnsSentToModel` | How many recent messages go to the model |
 | `history.pageSize / maxRecordingMB` | Call summaries per page, upload limit |
 | `agent.defaultPlaybookId` | Playbook selected when the page loads ("" = default agent) |
-| `calendar.enabled / defaultDurationMin` | Let the agent add events / default length |
+| `calendar.enabled / defaultDurationMin` | Calendar default for new agents / default event length |
+| `auth.allowSignup` | Show "Create account" on the login page (self sign-up) |
+| `auth.sessionHours / rememberDays` | Sign-in length without / with "Keep me signed in" |
+| `agent.maxAgentsPerUser` | Most agents one user can create (20) |
 | `emergency.enabled / rules[]` | Emergency detection and the numbers + keywords (India defaults: 112, 108, 100, 101, 1091, 14416) |
 
 Env overrides (optional): `PORT`, `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT`.
 New tunables go in `config.json` + `DEFAULTS` in `config.js` (+ `publicConfig()` if the browser needs it).
 
 ## Conventions & preferences (from the project owner)
+
+- **Git: commit the current state before every change, then commit the change** — everything must be recoverable.
+  Never commit `.env`, `data/` or `backups/`.
+- Settings and data go in MySQL, not JSON files. New tables/columns go in `db/schema.sql` (keep it `IF NOT EXISTS`;
+  for a new column on an existing table add an idempotent migration in `db.js`).
 
 - Agent replies must sound **human and short**: 1–2 sentences, one question at a time, no bot phrases, no lists.
 - Provider is **OpenAI** (owner's choice). Don't switch to another provider unless asked.

@@ -70,6 +70,31 @@
   .badge.off { background: color-mix(in srgb, var(--red) 14%, transparent); color: var(--red); }
   .agent-line { font-size: 13px; display: flex; flex-wrap: wrap; gap: 5px; }
   .chip { font-size: 11px; padding: 3px 8px; border-radius: 999px; background: var(--panel); border: 1px solid var(--border); white-space: nowrap; }
+  .two-col { display: grid; grid-template-columns: 1fr 2fr; gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+  .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border-top: 1px solid var(--border); font-size: 14px; }
+  .set-row:first-of-type { border-top: none; }
+  .set-row small { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+  .sw { position: relative; flex: none; width: 44px; height: 24px; }
+  .sw input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .sw span { position: absolute; inset: 0; border-radius: 999px; background: var(--border); transition: background .15s; pointer-events: none; }
+  .sw span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px #0003; }
+  .sw input:checked + span { background: var(--grad); } .sw input:checked + span::after { transform: translateX(20px); }
+  .sw input:focus-visible + span { outline: 2px solid var(--c1); outline-offset: 2px; }
+  .set-row input[type=number] { width: 80px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; }
+  .log { display: grid; gap: 2px; font-size: 13px; }
+  .log-row { display: grid; grid-template-columns: 112px 110px 150px 1fr; gap: 10px; padding: 7px 8px; border-radius: 8px; align-items: baseline; }
+  .log-row:nth-child(odd) { background: var(--panel-2); }
+  .log-row .when { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .log-row .who { font-weight: 650; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .log-row .act { font-family: ui-monospace, Menlo, monospace; font-size: 12px; }
+  .log-row .what { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .act.fail { color: var(--red); }
+  @media (max-width: 640px) { .log-row { grid-template-columns: 1fr 1fr; } }
+  .agent-box { padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel-2); }
+  .agent-box + .agent-box { margin-top: 8px; }
+  .agent-box .t { font-weight: 700; display: flex; gap: 6px; align-items: center; }
+  .agent-box .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
   .chip.on { border-color: color-mix(in srgb, var(--green) 50%, transparent); color: var(--green); }
   .u-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
   .u-stat { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 6px 8px; }
@@ -154,6 +179,26 @@
     </div>
     <div class="users" id="users"><div class="empty">Loading…</div></div>
   </section>
+
+  <div class="two-col">
+    <section class="card" aria-labelledby="setTitle">
+      <div class="toolbar"><h2 id="setTitle">⚙️ App settings</h2></div>
+      <div class="set-row"><div>Self sign-up<small>Show “Create account” on the login page. New accounts are users (role 2).</small></div>
+        <label class="sw" title="Allow self sign-up"><input type="checkbox" id="setSignup" aria-label="Allow self sign-up" /><span></span></label></div>
+      <div class="set-row"><div>Session length<small>Hours a sign-in lasts (without “Keep me signed in”).</small></div>
+        <input type="number" id="setHours" min="1" max="168" aria-label="Session hours" /></div>
+      <div class="set-row"><div>“Keep me signed in”<small>Days the remembered sign-in lasts.</small></div>
+        <input type="number" id="setDays" min="1" max="365" aria-label="Remember days" /></div>
+      <div class="set-row"><div>Agents per user<small>Most agents one user can create.</small></div>
+        <input type="number" id="setAgents" min="1" max="200" aria-label="Agents per user" /></div>
+      <p class="sub" style="margin:8px 0 0">Stored in MySQL (<code>app_config</code>). Changes apply straight away.</p>
+    </section>
+    <section class="card" aria-labelledby="logTitle">
+      <div class="toolbar"><h2 id="logTitle">📜 Activity log</h2><span class="sub" id="apiLine" style="margin:0"></span></div>
+      <div class="log" id="log"><div class="empty">Loading…</div></div>
+      <div class="pager" id="logPager"></div>
+    </section>
+  </div>
 
   <footer>Powered by <b>Telemune</b> © 2027 · Designed by <b>DJ</b></footer>
 </div>

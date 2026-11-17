@@ -34,6 +34,10 @@ if ! grep -Eq '^OPENAI_API_KEY=.+' .env; then
   warn "OPENAI_API_KEY is empty in .env. The page will load, but the agent can't reply until you add it."
 fi
 
+if ! grep -Eq '^MYSQL_USER=.+' .env; then
+  warn "MYSQL_* settings are missing in .env (see .env.example). The app stores everything in MySQL (database ai-agent)."
+fi
+
 # 4. Port from config.json
 PORT="${PORT:-$(node -p 'try { require("./config.json").server.port } catch { 8323 }')}"
 URL="http://localhost:${PORT}"

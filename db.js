@@ -30,6 +30,8 @@ export async function initDb() {
     await conn.end();
   }
   pool = mysql.createPool({ ...base, database: DB_NAME, connectionLimit: 10, waitForConnections: true });
+  // DEFAULT CURRENT_TIMESTAMP columns must be UTC too, like the dates the app writes.
+  pool.pool.on("connection", (c) => c.query("SET time_zone = '+00:00'"));
   return pool;
 }
 

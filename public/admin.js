@@ -1,7 +1,7 @@
 // TelemuneSmartAi admin dashboard (role 1 only; the server refuses everyone else).
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const state = { me: null, users: [], viewing: null, callPage: 1 };
+const state = { me: null, users: [], viewing: null, callPage: 1, logPage: 1, config: null };
 
 const _fetch = window.fetch.bind(window);
 window.fetch = async (...args) => {
@@ -83,11 +83,12 @@ async function loadMe() {
 
 // ---------- overview ----------
 async function loadOverview() {
-  const { totals: t, users } = await api("/api/admin/overview");
+  const { totals: t, users, api: apiNow } = await api("/api/admin/overview");
   state.users = users;
   const kpi = (k, v, s) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
   $("kpis").innerHTML = [
     kpi("👥 Users", t.users, `${t.active} active · ${t.admins} admin${t.admins === 1 ? "" : "s"}`),
+    kpi("🤖 Agents", t.agents, `${(t.agents / Math.max(1, t.users)).toFixed(1)} per user`),
     kpi("📞 Calls", fmtNum(t.calls), `${fmtNum(t.turns)} turns`),
     kpi("⏱ Talk time", fmtDur(t.seconds), t.calls ? `avg ${fmtDur(t.seconds / t.calls)} / call` : "—"),
     kpi("🔢 Tokens", fmtNum(t.tokens), "chat + summaries"),
@@ -95,12 +96,13 @@ async function loadOverview() {
     kpi("📘 Playbooks", t.playbooks, `${t.events} calendar events`),
     kpi("🎙 Recordings", t.recordings, "saved"),
   ].join("");
+  $("apiLine").textContent = apiNow ? `API last 24h: ${fmtNum(apiNow.requests)} requests · ${apiNow.errors} errors · avg ${apiNow.avgMs ?? "—"} ms` : "";
   renderUsers();
 }
 
 function renderUsers() {
   const q = $("search").value.trim().toLowerCase();
-  const list = state.users.filter((u) => !q || [u.name, u.username, u.agent.name, u.agent.llm, u.agent.playbook].join(" ").toLowerCase().includes(q));
+  const list = state.users.filter((u) => !q || [u.name, u.username, u.email, ...u.agents.map((a) => `${a.name} ${a.typeName} ${a.llm} ${a.description}`)].join(" ").toLowerCase().includes(q));
   const box = $("users");
   if (!list.length) { box.innerHTML = `<div class="empty">${q ? "No users match your search." : "No users yet."}</div>`; return; }
   box.innerHTML = "";
@@ -115,18 +117,15 @@ function renderUsers() {
         <span class="badge ${u.disabled ? "off" : u.role === 1 ? "" : "user"}">${u.disabled ? "⛔ Disabled" : u.role === 1 ? "👑 Admin" : "👤 User"}</span>
       </div>
       <div class="agent-line">
-        <span class="chip">🤖 ${esc(u.agent.name)}</span>
-        <span class="chip">🧠 ${esc(u.agent.llm)}</span>
-        <span class="chip">🌐 ${esc(LANG[u.agent.language] || u.agent.language)}</span>
-        <span class="chip">📘 ${esc(u.agent.playbook || "Default")}</span>
-        <span class="chip ${u.agent.calendar ? "on" : ""}">📅 ${u.agent.calendar ? "On" : "Off"}</span>
-        <span class="chip ${u.agent.emergency ? "on" : ""}">🚨 ${u.agent.emergency ? `${u.agent.emergencyNumbers} numbers` : "Off"}</span>
+        ${u.agents.map((a) => `<span class="chip" title="${esc(a.typeName)} · ${esc(a.llm)} · ${esc(LANG[a.language] || a.language)}">${esc(a.icon)} ${esc(a.name)}${a.isDefault ? " ★" : ""}</span>`).join("")}
+        ${u.agent ? `<span class="chip">🧠 ${esc(u.agent.llm)}</span>` : ""}
+        ${u.signupSource === "self" ? '<span class="chip">✍️ signed up</span>' : ""}
       </div>
       <div class="u-stats">
         <div class="u-stat"><div class="k">Calls</div><div class="v">${fmtNum(u.stats.calls)}</div></div>
         <div class="u-stat"><div class="k">Time</div><div class="v">${fmtDur(u.stats.totalSeconds)}</div></div>
         <div class="u-stat"><div class="k">Tokens</div><div class="v">${fmtNum(u.stats.tokens.total)}</div></div>
-        <div class="u-stat"><div class="k">Playbooks</div><div class="v">${u.playbooks.length}</div></div>
+        <div class="u-stat"><div class="k">Agents</div><div class="v">${u.agents.length}</div></div>
       </div>
       <div class="last">Last call: ${fmtDate(u.lastCallAt)} · Last sign-in: ${fmtDate(u.lastLoginAt)}</div>
       <div class="u-actions">
@@ -209,21 +208,21 @@ async function openUser(id) {
   const u = await api(`/api/admin/users/${id}`);
   state.viewing = u; state.callPage = 1;
   $("udTitle").textContent = `${u.name} · @${u.username}`;
-  const a = u.agent;
+  const agentBox = (a) => `<div class="agent-box">
+      <div class="t">${esc(a.icon)} ${esc(a.name)}${a.isDefault ? ' <span class="chip">★ default</span>' : ""}</div>
+      <div class="s ellipsis" style="color:var(--muted);font-size:12px">${esc(a.typeName)}${a.description ? " · " + esc(a.description) : ""}</div>
+      <div class="chips">
+        <span class="chip">🌐 ${esc(LANG[a.language] || a.language)}</span><span class="chip">🗣 ${esc(a.voice)}</span>
+        <span class="chip">🧠 ${esc(a.llm)}</span><span class="chip">👂 ${esc(a.stt)}</span><span class="chip">🔊 ${esc(a.tts)}</span>
+        <span class="chip">📘 ${esc(a.playbook || "Default")}</span>
+        <span class="chip ${a.calendar ? "on" : ""}">📅 ${a.calendar ? "On" : "Off"}</span>
+        <span class="chip ${a.emergency ? "on" : ""}">🚨 ${a.emergency ? `${a.emergencyNumbers} numbers` : "Off"}</span>
+      </div></div>`;
   $("udBody").innerHTML = `
     <div class="detail-grid">
       <div style="display:flex;flex-direction:column;gap:12px">
-        <div class="box"><h4>🤖 Agent</h4><div class="kv">
-          <span>Name</span><span>${esc(a.name)}</span>
-          <span>Language</span><span>${esc(LANG[a.language] || a.language)}</span>
-          <span>Voice</span><span>${esc(a.voice)}</span>
-          <span>LLM</span><span class="ellipsis">${esc(a.llm)}</span>
-          <span>STT</span><span class="ellipsis">${esc(a.stt)}</span>
-          <span>TTS</span><span class="ellipsis">${esc(a.tts)}</span>
-          <span>Playbook</span><span>${esc(a.playbook || "Default")}</span>
-          <span>Calendar</span><span>${a.calendar ? `On · ${u.events} events` : "Off"}</span>
-          <span>Emergency</span><span>${a.emergency ? `On · ${a.emergencyNumbers} numbers` : "Off"}</span>
-        </div></div>
+        <div class="box"><h4>🤖 Agents (${u.agents.length})</h4>${u.agents.map(agentBox).join("") || '<div class="empty">No agents</div>'}
+          <div class="s" style="color:var(--muted);font-size:12px;margin-top:8px">📅 ${u.events} calendar events${u.email ? ` · ✉️ ${esc(u.email)}` : ""}</div></div>
         <div class="box"><h4>📘 Playbooks (${u.playbooks.length})</h4><div class="list">${
           u.playbooks.length ? u.playbooks.map((p) => `<div class="row" style="cursor:default"><div class="grow"><div class="t">${esc(p.name)}</div><div class="s ellipsis">${esc(p.goal)}</div></div></div>`).join("") : '<div class="empty">No playbooks</div>'
         }</div></div>
@@ -250,7 +249,7 @@ async function loadUserCalls() {
     const b = document.createElement("button");
     b.type = "button"; b.className = "row";
     const outcome = /Outcome:\s*(.+)/i.exec(c.summary || "")?.[1] || (c.summary || "No summary").split("\n")[0];
-    b.innerHTML = `<div>${esc(c.playbook?.icon || "💬")}</div><div class="grow"><div class="t">${esc(c.playbook?.name || "Default agent")} · ${fmtDate(c.startedAt)}</div><div class="s ellipsis">${esc(outcome)}</div></div><div class="s">${esc(c.duration)}${c.recording ? " · 🎙" : ""}</div>`;
+    b.innerHTML = `<div>${esc(c.playbook?.icon || "💬")}</div><div class="grow"><div class="t">${c.agentName ? esc(c.agentName) + " · " : ""}${esc(c.playbook?.name || "Default agent")} · ${fmtDate(c.startedAt)}</div><div class="s ellipsis">${esc(outcome)}</div></div><div class="s">${esc(c.duration)}${c.recording ? " · 🎙" : ""}</div>`;
     b.onclick = () => openCall(c.id);
     box.appendChild(b);
   }
@@ -289,10 +288,67 @@ async function openCall(callId) {
   openD("callDialog");
 }
 
+// ---------- app settings (MySQL app_config) ----------
+async function loadSettings() {
+  const { config } = await api("/api/admin/config");
+  state.config = config;
+  $("setSignup").checked = !!config.auth.allowSignup;
+  $("setHours").value = config.auth.sessionHours;
+  $("setDays").value = config.auth.rememberDays;
+  $("setAgents").value = config.agent.maxAgentsPerUser;
+}
+async function saveSection(section, patch, label) {
+  try {
+    const { value } = await api(`/api/admin/config/${section}`, { method: "PUT", body: JSON.stringify({ ...state.config[section], ...patch }) });
+    state.config[section] = value;
+    toast(`✓ ${label} saved`);
+    loadLog();
+  } catch (err) {
+    toast("⚠ " + err.message);
+    loadSettings();
+  }
+}
+const num = (id, min, max) => Math.min(max, Math.max(min, Math.round(Number($(id).value) || min)));
+$("setSignup").onchange = () => saveSection("auth", { allowSignup: $("setSignup").checked }, $("setSignup").checked ? "Sign-up opened" : "Sign-up closed");
+$("setHours").onchange = () => saveSection("auth", { sessionHours: num("setHours", 1, 168) }, "Session length");
+$("setDays").onchange = () => saveSection("auth", { rememberDays: num("setDays", 1, 365) }, "Keep me signed in");
+$("setAgents").onchange = () => saveSection("agent", { maxAgentsPerUser: num("setAgents", 1, 200) }, "Agents per user");
+
+// ---------- activity log ----------
+const ACTIONS = {
+  "auth.login": "🔓 signed in", "auth.logout": "🔒 signed out", "auth.login_failed": "⚠ sign-in failed", "auth.signup": "✍️ signed up",
+  "auth.password_change": "🔑 changed password", "user.create": "👤 added user", "user.update": "👤 updated user", "user.delete": "🗑 deleted user",
+  "agent.create": "🤖 created agent", "agent.update": "🤖 edited agent", "agent.delete": "🗑 deleted agent", "agent.settings": "⚙️ agent setup",
+  "playbook.add": "📘 added playbook", "playbook.delete": "📘 removed playbook", "call.save": "📞 call saved", "call.delete": "🗑 call deleted",
+  "calendar.add": "📅 event added", "calendar.delete": "📅 event removed", "config.update": "⚙️ app settings",
+};
+async function loadLog() {
+  const data = await api(`/api/admin/logs?page=${state.logPage}`);
+  $("log").innerHTML = data.items.length ? data.items.map((l) => `
+    <div class="log-row">
+      <span class="when">${esc(fmtDate(l.at))}</span>
+      <span class="who">${esc(l.username || "—")}</span>
+      <span class="act ${l.action.endsWith("failed") ? "fail" : ""}" title="${esc(l.action)}">${esc(ACTIONS[l.action] || l.action)}</span>
+      <span class="what" title="${esc(l.target)}${l.details ? " " + esc(JSON.stringify(l.details)) : ""}">${esc(l.target)}${l.ip && !/^(::1|127\.0\.0\.1|::ffff:127\.0\.0\.1)$/.test(l.ip) ? ` · ${esc(l.ip.replace("::ffff:", ""))}` : ""}</span>
+    </div>`).join("") : '<div class="empty">Nothing logged yet.</div>';
+  const pager = $("logPager");
+  pager.innerHTML = "";
+  if (data.pages > 1) {
+    const prev = document.createElement("button"); prev.className = "btn btn-ghost"; prev.textContent = "← Newer"; prev.disabled = data.page <= 1;
+    const next = document.createElement("button"); next.className = "btn btn-ghost"; next.textContent = "Older →"; next.disabled = data.page >= data.pages;
+    const label = document.createElement("span"); label.textContent = `Page ${data.page} of ${data.pages}`;
+    prev.onclick = () => { state.logPage--; loadLog(); };
+    next.onclick = () => { state.logPage++; loadLog(); };
+    pager.append(prev, label, next);
+  }
+}
+
 // ---------- start ----------
 (async () => {
   try {
     await loadMe();
+    loadSettings().catch(() => {});
+    loadLog().catch(() => {});
     await loadOverview();
   } catch (err) {
     $("users").innerHTML = `<div class="empty">Couldn't load the dashboard: ${esc(err.message)}</div>`;
