@@ -3,6 +3,8 @@
 Talk to an AI voice agent through a web call button. Speech recognition runs in the browser; replies come from
 OpenAI (streamed), and every sentence is spoken by OpenAI TTS in the emotion the agent chose for it.
 
+Full guide: [docs/TelemuneSmartAi-Guide.md](docs/TelemuneSmartAi-Guide.md) (features, how it works, admin, database, settings, troubleshooting).
+
 ## Run
 
 ```bash
