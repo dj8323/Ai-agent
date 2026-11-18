@@ -166,7 +166,8 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 - Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,
   organization, availability, language · voice, AI models, playbook picker `#pbPick`, feature chips). ✎ Edit agent →
   `#agents/profile`. Keep it simple: anything that edits an agent belongs in My agents.
-- My agents = agent list (`#agentChips`, ＋ New agent) + the setup card with tabs: Profile (template, works for,
+- My agents = agent list (`#agentChips`, ＋ New agent) + the setup card with tabs: Profile (agent type `#pType` →
+  PATCH `/api/agents/:id {type}` right away, then the form reloads; template, works for,
   organization, what it's for, greeting + preview) · Voice & AI · Availability (day buttons, from/to, time zone, note) ·
   Calendar (switch, meeting length, events) · Emergency · Playbooks. Hero: name, 🎙 Call, ☆ Default, 🗑.
 - Everything auto-saves (no Save button; `markDirty()` → `autoSave()` → POST `/api/settings`; persona payload carries

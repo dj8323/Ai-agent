@@ -159,6 +159,7 @@ Safety rules travel with the types: the hospital agent never diagnoses and sends
     - A preview shows the first line the agent will say. **Create agent** saves it and opens it in My agents, where you set its availability, calendar, emergency contacts and voice.
 3. Switching loads that agent's settings everywhere. Switching is locked during a call.
 4. In My agents, **☆ Default** makes the agent open first next time and **🗑** deletes it (its past calls stay in Call summaries).
+5. To change what an agent is, pick a new **Agent type** in **My agents → 👤 Profile**. It is saved in the database straight away: the agent gets the new type's usual template, its description follows if it was still the old type's default text, and the calendar switches on for types that book meetings. Name, voice, models, availability and emergency contacts stay. If the new type works for a person, fill in **Works for**.
 
 The app remembers the last agent each user had open. A new account starts with one Personal Assistant agent.
 
@@ -197,7 +198,7 @@ Every change saves itself within a second: there is no Save button. A small pill
 
 | Tab | What you set |
 | --- | --- |
-| 👤 Profile | Template; **Works for** (required for a Call Assistant); Organization; what it's for; the first line of every call, with a live preview. Text can use `{agent}`, `{owner}` and `{org}` |
+| 👤 Profile | **Agent type** (change it any time, for example Personal Assistant → Call Assistant); Template; **Works for** (required for a Call Assistant); Organization; what it's for; the first line of every call, with a live preview. Text can use `{agent}`, `{owner}` and `{org}` |
 | 🧠 Voice & AI | Language (16) and voice (10, ▶ plays a sample); LLM, speech-to-text and text-to-speech models (lists come live from your OpenAI account) |
 | 🕒 Availability | Days (tap Mon … Sun, or Weekdays / Every day), From and To time, time zone and an optional note. The agent only offers meeting times inside these hours, and says when the person is back |
 | 📅 Calendar | Switch on to let the agent book confirmed meetings; meeting length (15 minutes to 2 hours); upcoming events with .ics export |
