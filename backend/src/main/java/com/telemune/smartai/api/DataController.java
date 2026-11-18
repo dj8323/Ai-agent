@@ -1,0 +1,203 @@
+package com.telemune.smartai.api;
+
+import com.telemune.smartai.service.AppConfigService;
+import com.telemune.smartai.service.CalendarService;
+import com.telemune.smartai.service.CallService;
+import com.telemune.smartai.service.LogService;
+import com.telemune.smartai.service.MessageService;
+import com.telemune.smartai.service.PlaybookService;
+import com.telemune.smartai.service.TemplateService;
+import com.telemune.smartai.util.J;
+import com.telemune.smartai.web.ApiException;
+import com.telemune.smartai.web.Ctx;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestAttribute;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.List;
+import java.util.Map;
+
+/** A user's own data: playbooks, calls (+ summaries, recordings), calendar events, caller messages. */
+@RestController
+public class DataController {
+  private final AppConfigService config;
+  private final TemplateService templates;
+  private final PlaybookService playbooks;
+  private final CallService calls;
+  private final CalendarService calendar;
+  private final MessageService messages;
+  private final LogService logs;
+
+  public DataController(AppConfigService config, TemplateService templates, PlaybookService playbooks, CallService calls,
+                        CalendarService calendar, MessageService messages, LogService logs) {
+    this.config = config;
+    this.templates = templates;
+    this.playbooks = playbooks;
+    this.calls = calls;
+    this.calendar = calendar;
+    this.messages = messages;
+    this.logs = logs;
+  }
+
+  // ---------- playbooks ----------
+  @GetMapping("/api/playbooks")
+  Map<String, Object> playbooks(@RequestAttribute("ctx") Ctx ctx) {
+    return J.map("types", templates.catalog(false), "saved", playbooks.list(ctx.dataUserId));
+  }
+
+  @PostMapping("/api/playbooks")
+  ResponseEntity<Map<String, Object>> addPlaybook(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    Map<String, Object> pb = playbooks.add(body, ctx.dataUserId);
+    logs.activity(ctx, "playbook.add", (String) pb.get("name"), J.map("id", pb.get("id"), "type", pb.get("type")));
+    return ResponseEntity.status(201).body(pb);
+  }
+
+  @DeleteMapping("/api/playbooks/{id}")
+  ResponseEntity<Map<String, Object>> deletePlaybook(@PathVariable String id, @RequestAttribute("ctx") Ctx ctx) {
+    Map<String, Object> pb = playbooks.remove(id, ctx.dataUserId);
+    if (pb != null) logs.activity(ctx, "playbook.delete", (String) pb.get("name"), J.map("id", id));
+    return ResponseEntity.status(pb != null ? 200 : 404).body(J.map("ok", pb != null));
+  }
+
+  // ---------- calls ----------
+  @GetMapping("/api/calls")
+  Map<String, Object> calls(@RequestParam(defaultValue = "1") int page, @RequestParam(required = false) Integer pageSize,
+                            @RequestParam(required = false) String agent, @RequestAttribute("ctx") Ctx ctx) {
+    int size = pageSize != null && pageSize > 0 ? pageSize : (int) Math.max(1, J.num(J.get(config.forAgent(ctx.agent), "history.pageSize")));
+    return calls.list(page, Math.min(size, 100), J.blank(agent) ? null : agent, ctx.dataUserId);
+  }
+
+  @GetMapping("/api/calls/stats")
+  Map<String, Object> callStats(@RequestAttribute("ctx") Ctx ctx) {
+    return calls.stats(ctx.dataUserId);
+  }
+
+  @PostMapping("/api/calls")
+  ResponseEntity<Map<String, Object>> saveCall(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    Map<String, Object> call = calls.save(body, ctx.dataUserId, ctx.agent);
+    logs.activity(ctx, "call.save", (String) call.get("agentName"), J.map("id", call.get("id"), "duration", call.get("duration"),
+        "tokens", J.num(J.get(J.obj(call.get("stats")), "tokens.total"))));
+    return ResponseEntity.status(201).body(call);
+  }
+
+  @GetMapping("/api/calls/{id}")
+  ResponseEntity<Map<String, Object>> call(@PathVariable String id, @RequestAttribute("ctx") Ctx ctx) {
+    Map<String, Object> c = calls.get(id, ctx.dataUserId);
+    return c == null ? ResponseEntity.status(404).body(J.map("error", "Not found")) : ResponseEntity.ok(c);
+  }
+
+  @DeleteMapping("/api/calls/{id}")
+  ResponseEntity<Map<String, Object>> deleteCall(@PathVariable String id, @RequestAttribute("ctx") Ctx ctx) throws IOException {
+    Map<String, Object> c = calls.delete(id, ctx.dataUserId);
+    if (c != null) logs.activity(ctx, "call.delete", (String) c.get("agentName"), J.map("id", id, "startedAt", c.get("startedAt")));
+    return ResponseEntity.status(c != null ? 200 : 404).body(J.map("ok", c != null));
+  }
+
+  @GetMapping("/api/calls/{id}/summary")
+  ResponseEntity<String> summaryFile(@PathVariable String id, @RequestAttribute("ctx") Ctx ctx) {
+    String text = calls.summaryFile(id, ctx.dataUserId);
+    if (text == null) return ResponseEntity.status(404).contentType(MediaType.TEXT_PLAIN).body("No summary");
+    return ResponseEntity.ok().contentType(MediaType.parseMediaType("text/plain; charset=utf-8"))
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"call-summary-" + id.replaceAll("[^\\w-]", "") + ".txt\"").body(text);
+  }
+
+  @PutMapping("/api/calls/{id}/recording")
+  ResponseEntity<Map<String, Object>> putRecording(@PathVariable String id, @RequestAttribute("ctx") Ctx ctx, HttpServletRequest req) throws IOException {
+    long limit = Math.max(1, J.num(J.get(config.forAgent(ctx.agent), "history.maxRecordingMB"))) * 1024 * 1024;
+    ByteArrayOutputStream buf = new ByteArrayOutputStream();
+    try (InputStream in = req.getInputStream()) {
+      byte[] chunk = new byte[64 * 1024];
+      int n;
+      while ((n = in.read(chunk)) > 0) {
+        if (buf.size() + n > limit) throw ApiException.bad("Recording too large");
+        buf.write(chunk, 0, n);
+      }
+    }
+    Map<String, Object> rec = calls.saveRecording(id, req.getContentType(), buf.toByteArray(), ctx.dataUserId);
+    return rec == null ? ResponseEntity.status(404).body(J.map("error", "Not found")) : ResponseEntity.ok(rec);
+  }
+
+  @GetMapping("/api/calls/{id}/recording")
+  ResponseEntity<byte[]> getRecording(@PathVariable String id, @RequestAttribute("ctx") Ctx ctx) throws IOException {
+    CallService.Recording r = calls.readRecording(id, ctx.dataUserId);
+    if (r == null) return ResponseEntity.status(404).contentType(MediaType.TEXT_PLAIN).body("No recording".getBytes());
+    String ext = r.file().contains(".") ? r.file().substring(r.file().lastIndexOf('.') + 1) : "webm";
+    return ResponseEntity.ok().contentType(MediaType.parseMediaType(r.type()))
+        .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"call-" + id.replaceAll("[^\\w-]", "") + "." + ext + "\"").body(r.data());
+  }
+
+  // ---------- calendar ----------
+  @GetMapping("/api/calendar")
+  List<Map<String, Object>> events(@RequestAttribute("ctx") Ctx ctx) {
+    return calendar.list(ctx.dataUserId);
+  }
+
+  /** /api/calendar/calendar.ics (all events) or /api/calendar/<id>.ics (one). */
+  @GetMapping("/api/calendar/{file}")
+  ResponseEntity<String> ics(@PathVariable String file, @RequestAttribute("ctx") Ctx ctx) {
+    if (!file.endsWith(".ics")) throw ApiException.notFound("Not found");
+    String id = file.equals("calendar.ics") ? null : file.substring(0, file.length() - 4);
+    String name = id == null ? "telemunesmartai-calendar.ics" : "event-" + id.replaceAll("[^\\w-]", "") + ".ics";
+    return ResponseEntity.ok().contentType(MediaType.parseMediaType("text/calendar; charset=utf-8"))
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + name + "\"").body(calendar.toIcs(ctx.dataUserId, id));
+  }
+
+  @PostMapping("/api/calendar")
+  ResponseEntity<Map<String, Object>> addEvent(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    if (!J.bool(J.get(config.forAgent(ctx.agent), "calendar.enabled"))) throw ApiException.forbidden("Calendar is switched off in Agent setup.");
+    Map<String, Object> ev = calendar.add(body, ctx.dataUserId, ctx.agent);
+    logs.activity(ctx, "calendar.add", (String) ev.get("title"), J.map("id", ev.get("id"), "start", ev.get("start"), "agentId", ev.get("agentId")));
+    return ResponseEntity.status(201).body(ev);
+  }
+
+  @DeleteMapping("/api/calendar/{id}")
+  ResponseEntity<Map<String, Object>> deleteEvent(@PathVariable String id, @RequestAttribute("ctx") Ctx ctx) {
+    Map<String, Object> ev = calendar.remove(id, ctx.dataUserId);
+    if (ev != null) logs.activity(ctx, "calendar.delete", (String) ev.get("title"), J.map("id", id));
+    return ResponseEntity.status(ev != null ? 200 : 404).body(J.map("ok", ev != null));
+  }
+
+  // ---------- messages callers left ----------
+  /** ?scope=all → every agent's; otherwise the current agent's. ?status=new|done filters. */
+  @GetMapping("/api/messages")
+  Map<String, Object> messages(@RequestParam(required = false) String scope, @RequestParam(required = false) String status,
+                               @RequestParam(defaultValue = "50") int limit, @RequestAttribute("ctx") Ctx ctx) {
+    String st = "new".equals(status) || "done".equals(status) ? status : null;
+    return messages.list(ctx.dataUserId, "all".equals(scope) ? null : ctx.agentId(), st, Math.min(Math.max(limit, 1), 200));
+  }
+
+  @PostMapping("/api/messages")
+  ResponseEntity<Map<String, Object>> addMessage(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    Map<String, Object> m = messages.add(body, ctx.dataUserId, ctx.agent);
+    logs.activity(ctx, "message.add", J.str(m.get("callerName"), 60), J.map("id", m.get("id"), "urgency", m.get("urgency"), "agentId", m.get("agentId")));
+    return ResponseEntity.status(201).body(m);
+  }
+
+  @PatchMapping("/api/messages/{id}")
+  Map<String, Object> updateMessage(@PathVariable String id, @RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    Map<String, Object> m = messages.setStatus(id, body.get("status"), ctx.dataUserId);
+    logs.activity(ctx, "message." + m.get("status"), J.str(m.get("callerName"), 60), J.map("id", id));
+    return m;
+  }
+
+  @DeleteMapping("/api/messages/{id}")
+  ResponseEntity<Map<String, Object>> deleteMessage(@PathVariable String id, @RequestAttribute("ctx") Ctx ctx) {
+    Map<String, Object> m = messages.delete(id, ctx.dataUserId);
+    if (m != null) logs.activity(ctx, "message.delete", J.str(m.get("callerName"), 60), J.map("id", id));
+    return ResponseEntity.status(m != null ? 200 : 404).body(J.map("ok", m != null));
+  }
+}

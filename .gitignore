@@ -11,3 +11,5 @@ data/calendar.json
 backups/
 .DS_Store
 *.tmp
+backend/target/
+logs/

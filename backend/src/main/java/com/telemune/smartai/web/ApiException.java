@@ -1,0 +1,23 @@
+package com.telemune.smartai.web;
+
+/** An error with an HTTP status and a message that is safe to show the user ({ "error": message }). */
+public class ApiException extends RuntimeException {
+  public final int status;
+
+  public ApiException(int status, String message) {
+    super(message);
+    this.status = status;
+  }
+
+  public static ApiException bad(String message) {
+    return new ApiException(400, message);
+  }
+
+  public static ApiException notFound(String message) {
+    return new ApiException(404, message);
+  }
+
+  public static ApiException forbidden(String message) {
+    return new ApiException(403, message);
+  }
+}

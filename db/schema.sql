@@ -1,5 +1,6 @@
--- TelemuneSmartAi database (MySQL 8). Run automatically by db.js on every start (everything is IF NOT EXISTS),
--- or by hand:  mysql -uroot -p < db/schema.sql
+-- TelemuneSmartAi database (MySQL 8). Run automatically by the Spring Boot backend on every start (everything is
+-- IF NOT EXISTS; new columns on old tables are added by backend/.../db/Db.java), or by hand:  mysql -uroot -p < db/schema.sql
+-- Ready-made agent types and templates are in db/seed.sql (INSERT IGNORE, so edits made in the app are kept).
 -- All times are stored in UTC.
 
 CREATE DATABASE IF NOT EXISTS `ai-agent` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -73,6 +74,11 @@ CREATE TABLE IF NOT EXISTS agents (
   calendar_enabled  TINYINT(1)   NOT NULL DEFAULT 0,
   emergency_enabled TINYINT(1)   NOT NULL DEFAULT 0,
   is_default        TINYINT(1)   NOT NULL DEFAULT 0,
+  template_id       VARCHAR(40)  NULL,                    -- agent_templates.id (the script/persona it runs)
+  owner_name        VARCHAR(60)  NOT NULL DEFAULT '',     -- who the agent works for, e.g. "DJ"
+  organization      VARCHAR(80)  NOT NULL DEFAULT '',     -- e.g. "City Hospital"
+  owner_availability VARCHAR(300) NOT NULL DEFAULT '',    -- e.g. "Weekdays 3 to 6 pm"
+  greeting          VARCHAR(400) NOT NULL DEFAULT '',     -- own first line; empty = the template's greeting
   created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   INDEX idx_agents_user (user_id),
@@ -190,4 +196,77 @@ CREATE TABLE IF NOT EXISTS api_logs (
   created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   INDEX idx_api_created (created_at),
   INDEX idx_api_user (user_id, created_at)
+);
+
+-- Agent types (Personal, Call assistant, Hospital, Banking …). Admins edit them in the dashboard (🧩 Agent templates).
+-- Text fields may use {agent}, {owner}, {org}; [[ … ]] is dropped when a value inside it is empty.
+CREATE TABLE IF NOT EXISTS agent_types (
+  type_key         VARCHAR(30)  NOT NULL PRIMARY KEY,
+  name             VARCHAR(60)  NOT NULL,
+  icon             VARCHAR(16)  NOT NULL DEFAULT '✨',
+  description      VARCHAR(300) NOT NULL DEFAULT '',
+  role             VARCHAR(300) NOT NULL DEFAULT '',     -- persona used when the agent has no template
+  greeting         VARCHAR(400) NOT NULL DEFAULT '',     -- first line of every call
+  needs_owner      TINYINT(1)   NOT NULL DEFAULT 0,      -- 1 = asks "works for whom?" when creating the agent
+  default_calendar TINYINT(1)   NOT NULL DEFAULT 0,      -- 1 = calendar on for new agents of this type
+  sort_order       INT          NOT NULL DEFAULT 0,
+  active           TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at       DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at       DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  updated_by       VARCHAR(16)  NULL
+);
+
+-- Ready-made scripts (persona + goal + steps + rules) for each type. Agents point at one (agents.template_id),
+-- so a change here reaches every agent using it on its next call.
+CREATE TABLE IF NOT EXISTS agent_templates (
+  id            VARCHAR(40)  NOT NULL PRIMARY KEY,
+  type_key      VARCHAR(30)  NOT NULL,
+  name          VARCHAR(60)  NOT NULL,
+  role          VARCHAR(300) NOT NULL DEFAULT '',        -- persona: who the agent is
+  greeting      VARCHAR(400) NOT NULL DEFAULT '',        -- empty = the type's greeting
+  goal          VARCHAR(400) NOT NULL DEFAULT '',
+  steps         JSON         NOT NULL,
+  rules         JSON         NOT NULL,
+  summary_focus VARCHAR(300) NOT NULL DEFAULT '',
+  is_default    TINYINT(1)   NOT NULL DEFAULT 0,         -- pre-selected when creating an agent of this type
+  sort_order    INT          NOT NULL DEFAULT 0,
+  active        TINYINT(1)   NOT NULL DEFAULT 1,
+  created_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at    DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  updated_by    VARCHAR(16)  NULL,
+  INDEX idx_templates_type (type_key, sort_order),
+  CONSTRAINT fk_templates_type FOREIGN KEY (type_key) REFERENCES agent_types (type_key) ON DELETE CASCADE
+);
+
+-- Messages callers leave with an agent ("tell DJ I called about the contract").
+CREATE TABLE IF NOT EXISTS messages (
+  id            VARCHAR(16)   NOT NULL PRIMARY KEY,
+  user_id       VARCHAR(16)   NOT NULL,
+  agent_id      VARCHAR(16)   NULL,
+  agent_name    VARCHAR(40)   NOT NULL DEFAULT '',
+  for_name      VARCHAR(60)   NOT NULL DEFAULT '',       -- who the message is for (the agent's owner)
+  caller_name   VARCHAR(80)   NOT NULL DEFAULT '',
+  caller_number VARCHAR(30)   NOT NULL DEFAULT '',
+  urgency       VARCHAR(10)   NOT NULL DEFAULT 'normal', -- normal | urgent
+  message       VARCHAR(1000) NOT NULL,
+  status        VARCHAR(10)   NOT NULL DEFAULT 'new',    -- new | done
+  created_at    DATETIME(3)   NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  done_at       DATETIME(3)   NULL,
+  INDEX idx_messages_user (user_id, created_at),
+  INDEX idx_messages_agent (agent_id, created_at),
+  CONSTRAINT fk_messages_user  FOREIGN KEY (user_id)  REFERENCES users (id)  ON DELETE CASCADE,
+  CONSTRAINT fk_messages_agent FOREIGN KEY (agent_id) REFERENCES agents (id) ON DELETE SET NULL
+);
+
+-- Every sign-in attempt (ok or not). Also drives the lockout: 5 failures per username+IP in 5 minutes.
+CREATE TABLE IF NOT EXISTS login_attempts (
+  id         BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  username   VARCHAR(64)  NOT NULL,
+  user_id    VARCHAR(16)  NULL,
+  ip         VARCHAR(64)  NOT NULL DEFAULT '',
+  user_agent VARCHAR(255) NOT NULL DEFAULT '',
+  success    TINYINT(1)   NOT NULL,
+  reason     VARCHAR(80)  NOT NULL DEFAULT '',
+  created_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  INDEX idx_login_user_ip (username, ip, created_at)
 );
