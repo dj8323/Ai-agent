@@ -2198,106 +2198,268 @@ $("sumEdit").addEventListener("click", () => (location.hash = "agents/profile"))
 $("agentCallBtn").addEventListener("click", () => (location.hash = "call"));
 
 
-// ---------- 📚 Tutorials: short step-by-step guides for everything on the site ----------
-// Each topic: steps (plain text; **bold** allowed), tips, and buttons that open the right place ("go" = a page/tab,
-// "do" = an action). adminOnly topics show for admins only.
-const TUTORIALS = [
-  { id: "welcome", icon: "👋", title: "Welcome", intro: "TelemuneSmartAi lets you talk to AI voice agents from your browser. An agent is a voice assistant with a job: answering calls for you while you're busy, a hospital front desk, a property advisor, a support desk and more. Here is how to get going in three steps.",
-    steps: ["**Create an agent**: choose what it's for and give it a name.", "**Check its profile**: who it works for, its organization, and the first thing it says.", "**Press Start call** and talk to it like you would on the phone."],
-    tips: ["Use **Chrome** or **Edge** and allow the microphone when asked.", "Headphones give the best results: the agent can't hear its own voice.", "You can open these tutorials any time from **📚 Tutorials** in the top menu."],
-    actions: [{ label: "＋ Create my first agent", do: "newAgent", primary: true }] },
-  { id: "first-agent", icon: "＋", title: "Create your first agent", intro: "It takes about a minute. You can change everything later.",
-    steps: ["Click **＋** next to \"Agent for this call\" (or **🤖 My agents → ＋ New agent**).", "Pick a **type**: for example *Call Assistant (for a person)* to answer calls for someone who is busy, or *Hospital*, *Real Estate*, *Banking*, *HR*.", "Pick a **template** (the usual one is already selected). It is the agent's script: what it asks and in which order.", "Type a **name** for the agent, for example *Brown*.", "Fill in **Works for** (the person it answers for, for example *DJ*) and the **Organization** if it has one.", "Read the preview of what it will say first, then press **Create agent**."],
-    tips: ["After creating it, **My agents** opens so you can set its availability, calendar, voice and emergency contacts.", "You can create up to 20 agents and switch between them with the dropdown on the main page."],
-    actions: [{ label: "＋ Create an agent now", do: "newAgent", primary: true }] },
-  { id: "call", icon: "🎙", title: "Make a call", intro: "Calls happen right in the browser: you speak, the agent answers out loud.",
-    steps: ["Choose the agent in **Agent for this call**.", "Press the green **Start call** button. The first time, allow the microphone.", "The agent greets you straight away. Talk normally: it answers after you pause for about a second.", "To interrupt, just start talking while it speaks: it stops and listens. Tapping the avatar works too.", "Use **🎙** to mute, **●** to record the call, and **End call** when you're done. You can also type in the box under the conversation.", "Say goodbye (\"bye\", \"that's all\") and the agent ends the call by itself."],
-    tips: ["If you say nothing for 8 seconds, the agent checks you're still there; after 2 tries it says goodbye and hangs up.", "Each of your messages shows what you wanted (intent), your mood and language; each reply shows how fast it came."],
-    actions: [{ label: "🎙 Go to the call page", go: "call" }] },
-  { id: "persona", icon: "👤", title: "Profile, persona & greeting", intro: "The profile decides who the agent is and how it opens every call.",
-    steps: ["Open **🤖 My agents** and pick the agent; the **👤 Profile** tab opens.", "**Agent type** and **Template**: the job and the script. Changing the type asks first, because it resets the agent's setup.", "**Works for** and **Organization**: the agent introduces itself as, for example, \"DJ's assistant\" or \"City Hospital front desk\".", "**What it's for**: a short note added to the agent's instructions.", "**First line of every call**: leave it empty to use the template's greeting, or write your own. {agent}, {owner} and {org} are filled in for you."],
-    tips: ["Everything saves by itself within a second. Watch for **✓ Saved** next to the agent's name."],
-    actions: [{ label: "👤 Open the Profile tab", go: "agents/profile" }] },
-  { id: "availability", icon: "🕒", title: "Availability, calendar & meetings", intro: "Let the agent book meetings only when the person it works for is free.",
-    steps: ["In **My agents → 🕒 Availability**, tap the days (or *Weekdays*), set **From**, **To** and the **time zone**, and add a note if needed.", "In **📅 Calendar**, switch on **Book into the calendar** and pick the **meeting length**.", "During a call, when a caller confirms a time, the agent adds the meeting with their name in the title. A 📅 chip shows on its reply.", "Your upcoming events are listed in the Calendar tab. **⬇ Export all (.ics)** adds them to Google, Outlook or Apple Calendar."],
-    tips: ["With no availability set, the agent asks the caller for a time and takes it as a request."],
-    actions: [{ label: "🕒 Open Availability", go: "agents/availability" }, { label: "📅 Open Calendar", go: "agents/calendar" }] },
-  { id: "voice", icon: "🧠", title: "Voice, language, speed & AI", intro: "Choose how the agent sounds and which AI models it uses.",
-    steps: ["Open **My agents → 🧠 Voice & AI**.", "Pick the **language** and a **voice**; press **▶** to hear a sample.", "Set the **speaking speed**: 🐢 Slow, Normal, Fast or 🚀 Faster, or fine-tune it with the slider.", "**LLM** thinks and writes the replies, **STT** hears the caller, **TTS** speaks."],
-    tips: ["**gpt-4.1-mini** answers fastest. Bigger models think more but take a little longer.", "The agent matches the caller's language, including mixes like Hinglish."],
-    actions: [{ label: "🧠 Open Voice & AI", go: "agents/voice" }] },
-  { id: "emergency", icon: "🚨", title: "Emergency contacts", intro: "If a caller says something like \"chest pain\" or \"fire\", the agent gives the right number or email straight away.",
-    steps: ["Open **My agents → 🚨 Emergency** and switch on **Emergency detection**.", "In **Add emergency contact**, choose what it's **related to** (Ambulance, Police, Fire, helplines…).", "Choose **Contact by**: 📞 Phone or ✉️ Email, and check the number or address.", "Tap the suggested **keywords** or type your own, then press **＋ Add**."],
-    tips: ["During a call, a red 🚨 banner shows the contact with a tap-to-call (or email) link."],
-    actions: [{ label: "🚨 Open Emergency", go: "agents/emergency" }] },
-  { id: "playbooks", icon: "📘", title: "Playbooks (your own scripts)", intro: "A playbook is your own call script. It takes the place of the agent's template.",
-    steps: ["Open **My agents → 📘 Playbooks** and press **＋ Add playbook**.", "Pick an agent type, then a ready-made script or *Custom*.", "Edit the role, goal, steps and rules, then save.", "Choose it for a call from the **Playbook** dropdown on the main page."],
-    tips: ["Playbooks are shared by all your agents. \"Default\" means the agent uses its own template."],
-    actions: [{ label: "📘 Open Playbooks", go: "agents/playbooks" }] },
-  { id: "summaries", icon: "📚", title: "Call summaries & recordings", intro: "Every call is saved with an AI summary, so you never lose what was said.",
-    steps: ["When a call ends, a summary appears in the conversation: what happened, what the caller wanted, their mood, key details and next steps.", "**📚 Call summaries** under the conversation shows your totals. Click **Show calls** to see every call.", "Click a call to read the summary and the full transcript, play the recording, or download them.", "Messages callers leave (\"tell DJ I called\") are saved with the call and shown in its transcript."],
-    tips: ["Press **●** during a call to record both sides. 🗑 deletes a call with its summary and recording."],
-    actions: [{ label: "📚 Go to Call summaries", go: "call" }] },
-  { id: "manage", icon: "🤖", title: "Manage your agents", intro: "Keep as many agents as you need, each with its own setup.",
-    steps: ["Switch agents with the dropdown on the main page, or pick one in **🤖 My agents**.", "**☆ Default** makes an agent open first next time.", "**🗑** deletes an agent; its past calls stay in Call summaries.", "Changing an agent's **type** (Profile tab) resets its setup to the new type's defaults, after you approve."],
-    tips: ["Switching agents is locked during a call."],
-    actions: [{ label: "🤖 Open My agents", go: "agents" }] },
-  { id: "account", icon: "🔑", title: "Your account", intro: "Your account keeps your agents, calls and calendar private to you.",
-    steps: ["Click your name at the top right for **🔑 Change password** and **↪ Sign out**.", "Use **🌙 / ☀️** to switch between light and dark theme.", "Tick **Keep me signed in** on the login page to stay signed in for 30 days."],
-    tips: ["After 5 wrong passwords, sign-in is paused for 5 minutes."], actions: [] },
-  { id: "tips", icon: "💡", title: "Tips & troubleshooting", intro: "Quick fixes for the most common questions.",
-    steps: ["**No sound or the mic doesn't work**: use Chrome or Edge, allow the microphone for this site, and check your input device.", "**The agent stops talking by itself**: it is hearing its own voice from the speakers. Use headphones.", "**It answers before I finish**: pause less in the middle of a sentence, or ask an admin to raise the reply wait.", "**It misheard a word**: just correct it (\"no, I meant Friday\"); the agent uses the correction.", "**A template I need is missing**: ask your admin; they manage agent types and templates."],
-    tips: [], actions: [] },
-  { id: "admin", icon: "👑", title: "For admins", adminOnly: true, intro: "The admin dashboard manages users, agent templates and app settings.",
-    steps: ["Open **📊 Admin dashboard** from your name menu.", "**Users**: add users, reset passwords, make admin, disable or delete. New users start with no agents and see these tutorials.", "**🧩 Agent types & templates**: edit personas, greetings and scripts, or add new types; agents pick up changes on their next call.", "**⚙️ App settings**: sign-up, session length, agents per user, and how long the agent waits on a silent caller.", "**🔐 Sign-ins** and **📜 Activity log** show who did what and when."],
-    tips: [], actions: [{ label: "📊 Open the admin dashboard", do: "admin" }] },
+// ---------- 📚 Tutorials: guided tours you do yourself, step by step, on the real page ----------
+// A step points at an element (target: selector, list of selectors, or a function returning one) and says what to do.
+//   done()  → the tour moves on by itself as soon as it returns true (you clicked / switched on / created it).
+//   ready() → for typing steps: Next is enabled once it returns true.
+//   next    → an explanation step: just press Next.
+//   before() opens what the step needs (a tab, the call page); "Show me again" runs it again.
+// Each tour: needsAgent (start "Create your first agent" first if there is none).
+const goTab = (tab) => () => { if (location.hash !== `#agents/${tab}`) location.hash = `agents/${tab}`; };
+const goCall = () => { if (!/^#?(call)?$/.test(location.hash)) location.hash = "call"; };
+const isOpen = (id) => $(id).classList.contains("open");
+
+const TOURS = [
+  { id: "first-agent", icon: "＋", title: "Create your first agent", desc: "Choose what the agent is for, name it, and say who it works for.",
+    steps: [
+      { target: () => (state.agents.length ? "#sumNew" : "#firstAgentBtn"), before: goCall, title: "Open the new agent form",
+        text: () => (state.agents.length ? "👉 Click **＋** next to \"Agent for this call\"." : "👉 Click **＋ Create my first agent**."), done: () => isOpen("agentDialog") },
+      { target: "#naTypes", title: "What is it for?", text: "👉 Pick a type. To answer calls for someone who is busy, choose **Call Assistant (for a person)**. Hospital, Real Estate, Banking, HR and more are here too.",
+        clickIn: "#naTypes .tile" },
+      { target: "#naTemplate", title: "Its script", text: "This is the template the agent follows: what it asks and in which order. Keep the suggested one or pick another.", next: true },
+      { target: "#naName", title: "Give it a name", text: "👉 Type a name for your agent, for example **Brown**.", ready: () => !!$("naName").value.trim() },
+      { target: "#naOwner", title: "Who does it work for?", text: "Type the person it answers for, for example **DJ**. A Call Assistant needs this; for other types it's optional.",
+        ready: () => !typeOf(na.type).needsOwner || !!$("naOwner").value.trim() },
+      { target: "#naOrg", title: "Organization", text: "Optional: the company or place, for example **Telemune** or **City Hospital**.", next: true },
+      { target: ["#naPreview:not(:empty)", "#naForm"], title: "Its first line", text: "This is what the agent will say at the start of every call.", next: true },
+      { target: "#naCreate", title: "Create it", text: "👉 Click **Create agent**.", done: () => !isOpen("agentDialog") && state.agents.length > tourCtx.agents,
+        warn: () => $("naErr").textContent },
+      { target: "#setupCard .agent-hero", title: "🎉 Your agent is ready", text: "This window is where you fine-tune it: profile, voice, availability, calendar and emergency contacts. Next, try a call!", next: true },
+    ], then: "call" },
+  { id: "call", icon: "🎙", title: "Make a call", needsAgent: true, desc: "Start a call, talk to your agent, and end it.",
+    steps: [
+      { target: "#agentPick", before: goCall, title: "Pick the agent", text: "This is the agent you'll talk to. You can change it here any time.", next: true },
+      { target: "#callBtn", before: goCall, title: "Start the call", text: "👉 Click **Start call**. The first time, allow the microphone.", done: () => state.inCall },
+      { target: ".phone .stage", title: "Talk to it", text: "The agent greets you. 👉 Say something, like **\"Hi, what can you do?\"** It answers after you pause for a second. To interrupt, just start talking.",
+        done: () => state.turns.some((t) => !t.hidden), next: true, nextLabel: "Skip" },
+      { target: "#msgs", title: "Follow the conversation", text: "Your words and the agent's replies appear here, with what you wanted, your mood, your language and how fast it answered.", next: true },
+      { target: "#callBtn", title: "End the call", text: "👉 Click **End call** when you're done (or say goodbye and the agent hangs up).", done: () => !state.inCall },
+      { target: ".card.history", title: "Your call is saved", text: "Every call is saved with an AI summary, its transcript and the recording (if you pressed ●).", next: true },
+    ] },
+  { id: "persona", icon: "👤", title: "Profile & greeting", needsAgent: true, desc: "Who the agent works for and the first thing it says.",
+    steps: [
+      { target: "#pType", before: goTab("profile"), title: "Agent type", text: "The agent's job. Changing it resets its setup, so it asks you first.", next: true },
+      { target: "#pTemplate", before: goTab("profile"), title: "Template", text: "Its script. Pick one for this type, or free conversation.", next: true },
+      { target: "#pOwner", before: goTab("profile"), title: "Works for", text: "👉 Type the person it answers for. It introduces itself as their assistant.", next: true },
+      { target: "#pOrg", before: goTab("profile"), title: "Organization", text: "The company or place it answers for.", next: true },
+      { target: "#pGreeting", before: goTab("profile"), title: "First line", text: "Leave it empty to use the template's greeting, or write your own. {agent}, {owner} and {org} are filled in for you.", next: true },
+      { target: "#pPreview", before: goTab("profile"), title: "Preview", text: "This is exactly what it will say. Your changes save by themselves; look for ✓ Saved at the top.", next: true },
+    ] },
+  { id: "availability", icon: "🕒", title: "Availability & calendar", needsAgent: true, desc: "When meetings can be booked, and the calendar they go into.",
+    steps: [
+      { target: "#avDays", before: goTab("availability"), title: "Available days", text: "👉 Tap the days the person is available, or **Weekdays**.", ready: () => av.days.length > 0 },
+      { target: "#avFrom", before: goTab("availability"), title: "From", text: "The time meetings can start.", next: true },
+      { target: "#avTo", before: goTab("availability"), title: "To", text: "The time the last meeting must end.", next: true },
+      { target: "#avTz", before: goTab("availability"), title: "Time zone", text: "Pick the time zone of those hours.", next: true },
+      { target: "#avPreview", before: goTab("availability"), title: "Saved", text: "The agent only offers meeting times inside these hours.", next: true },
+      { target: ["label[for=calToggle]"], before: goTab("calendar"), title: "Switch on the calendar", text: "👉 Switch on **Book into the calendar** so the agent can add confirmed meetings.",
+        ready: () => $("calToggle").checked, auto: true },
+      { target: "#calLen", before: goTab("calendar"), title: "Meeting length", text: "How long each booked meeting is. Booked meetings show below, and **⬇ Export all (.ics)** adds them to your own calendar.", next: true },
+    ] },
+  { id: "voice", icon: "🧠", title: "Voice & speed", needsAgent: true, desc: "Language, voice, speaking speed and AI models.",
+    steps: [
+      { target: "#lang", before: goTab("voice"), title: "Language", text: "The language the agent speaks. It also matches callers who mix languages.", next: true },
+      { target: "#voice", before: goTab("voice"), title: "Voice", text: "Pick one of 10 voices.", next: true },
+      { target: "#previewBtn", before: goTab("voice"), title: "Hear it", text: "👉 Click **▶** to hear a sample.", clickIn: "#previewBtn", next: true, nextLabel: "Skip" },
+      { target: "#speedPicks", before: goTab("voice"), title: "Speaking speed", text: "👉 Pick a speed: 🐢 Slow, Normal, Fast or 🚀 Faster. The slider below fine-tunes it.", clickIn: "#speedPicks button", next: true, nextLabel: "Skip" },
+      { target: ".model-row", before: goTab("voice"), title: "AI models", text: "LLM thinks and writes, STT hears the caller, TTS speaks. **gpt-4.1-mini** answers fastest.", next: true },
+    ] },
+  { id: "emergency", icon: "🚨", title: "Emergency contact", needsAgent: true, desc: "Give callers the right number or email in an emergency.",
+    steps: [
+      { target: "label[for=emgToggle]", before: goTab("emergency"), title: "Switch it on", text: "👉 Switch on **Emergency detection**.", ready: () => $("emgToggle").checked, auto: true },
+      { target: "#emgType", before: goTab("emergency"), title: "Related to", text: "What the contact is for: Ambulance, Police, Fire, a helpline, or Other.", next: true },
+      { target: "#emgVia", before: goTab("emergency"), title: "Phone or email", text: "How to reach it: 📞 Phone or ✉️ Email.", next: true },
+      { target: "#emgNumber", before: goTab("emergency"), title: "Number or email", text: "Check the number (it's filled in for the usual services) or type the email address.", next: true },
+      { target: "#emgSuggest", before: goTab("emergency"), title: "Keywords", text: "Words that trigger it. Tap suggestions or type your own below.", next: true },
+      { target: "#emgAddBtn", before: goTab("emergency"), title: "Add it", text: "👉 Click **＋ Add**.", done: () => state.rules.length > tourCtx.rules, warn: () => $("emgMsg").classList.contains("err") ? $("emgMsg").textContent : "" },
+      { target: "#emgRules", before: goTab("emergency"), title: "Saved", text: "During a call, a matching word shows a red banner with this contact, and the agent tells the caller first.", next: true },
+    ] },
+  { id: "playbook", icon: "📘", title: "Add a playbook", needsAgent: true, desc: "Write your own call script and use it on a call.",
+    steps: [
+      { target: "#addPbBtn", before: goTab("playbooks"), title: "New playbook", text: "👉 Click **＋ Add playbook**.", done: () => isOpen("pbDialog") },
+      { target: "#pbDialog .dialog", title: "Build the script", text: "👉 Pick an agent type, then a ready-made script or **Custom**, edit it and save.", done: () => !isOpen("pbDialog") && state.saved.length > tourCtx.playbooks },
+      { target: "#pbList", before: goTab("playbooks"), title: "Use it", text: "Click it here to use it for this agent, or pick it in the **Playbook** dropdown on the main page.", next: true },
+    ] },
+  { id: "summaries", icon: "📚", title: "Call summaries", desc: "Find past calls, their summaries, transcripts and recordings.",
+    steps: [
+      { target: ".card.history", before: goCall, title: "Your calls", text: "Totals for all your calls: count, talk time, tokens, reply speed and recordings.", next: true },
+      { target: "#toggleHistory", before: goCall, title: "Show the list", text: "👉 Click **Show calls**.", done: () => !$("historyList").hidden },
+      { target: "#calls", title: "Open a call", text: "👉 Click a call to open it. (No calls yet? Make one first, then come back.)", done: () => isOpen("callDialog"), next: true, nextLabel: "Skip" },
+      { target: "#callDialog .dialog", title: "Everything about the call", text: "The AI summary, the full transcript with mood and intent, the recording, and downloads.", next: true },
+    ] },
+  { id: "account", icon: "🔑", title: "Your account", desc: "Password, sign out and light or dark theme.",
+    steps: [
+      { target: "#userBtn", before: goCall, title: "Your menu", text: "👉 Click your name.", done: () => !$("userDrop").hidden },
+      { target: "#userDrop", title: "Account options", text: "Change your password or sign out here.", next: true },
+      { target: "#themeBtn", title: "Theme", text: "Switch between light and dark.", next: true },
+    ] },
 ];
 
-const tutEsc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-const tutText = (t) => tutEsc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>");
-const tutorialsFor = () => TUTORIALS.filter((t) => !t.adminOnly || state.me?.role === 1);
+const tourCtx = { tour: null, i: 0, timer: null, wasReady: false, lostSince: 0, clicked: false };
+const tourKey = () => `tsa-tours-${state.me?.id || ""}`;
+const toursDone = () => { try { return JSON.parse(store.get(tourKey()) || "[]"); } catch { return []; } };
 
-function showTutorial(id) {
-  const list = tutorialsFor();
-  const i = Math.max(0, list.findIndex((t) => t.id === id));
-  const t = list[i];
-  $("learnList").innerHTML = "";
-  list.forEach((x) => {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.setAttribute("aria-current", String(x.id === t.id));
-    b.innerHTML = `<span class="li-icon" aria-hidden="true">${x.icon}</span><span>${tutEsc(x.title)}</span>`;
-    b.onclick = () => (location.hash = `learn/${x.id}`);
-    $("learnList").appendChild(b);
-  });
-  const next = list[i + 1];
-  $("learnBody").innerHTML = `
-    <div class="lb-kicker">Tutorial ${i + 1} of ${list.length}</div>
-    <h2>${t.icon} ${tutEsc(t.title)}</h2>
-    <p class="lb-intro">${tutText(t.intro)}</p>
-    ${t.steps.length ? `<ol>${t.steps.map((x) => `<li>${tutText(x)}</li>`).join("")}</ol>` : ""}
-    ${t.tips.length ? `<div class="lb-tips"><b>💡 Good to know</b><ul>${t.tips.map((x) => `<li>${tutText(x)}</li>`).join("")}</ul></div>` : ""}
-    <div class="lb-actions"></div>`;
-  const acts = $("learnBody").querySelector(".lb-actions");
-  for (const a of t.actions) {
-    const b = document.createElement("button");
-    b.type = "button"; b.className = a.primary ? "btn btn-primary" : "btn btn-small"; b.textContent = a.label;
-    b.onclick = () => runTutorialAction(a);
-    acts.appendChild(b);
+function tourTarget(step) {
+  let sel = typeof step.target === "function" ? step.target() : step.target;
+  for (const s of [].concat(sel)) {
+    for (const el of document.querySelectorAll(s)) {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== "hidden") return el;
+    }
   }
-  const grow = document.createElement("span"); grow.className = "grow"; acts.appendChild(grow);
-  if (next) {
-    const n = document.createElement("button");
-    n.type = "button"; n.className = "lb-next"; n.textContent = `Next: ${next.title} →`;
-    n.onclick = () => (location.hash = `learn/${next.id}`);
-    acts.appendChild(n);
-  }
-  $("learnBody").scrollTop = 0;
+  return null;
 }
-function runTutorialAction(a) {
-  if (a.go) { location.hash = a.go; return; }
-  if (a.do === "admin") { location.href = "/admin.html"; return; }
-  if (a.do === "newAgent") { location.hash = "call"; openAgentDialog(); }
+
+function startTour(id) {
+  let t = TOURS.find((x) => x.id === id);
+  if (!t) return;
+  if (t.needsAgent && !state.agents.length) t = TOURS[0]; // nothing to show yet: create an agent first
+  endTour(true);
+  if (location.hash.startsWith("#learn")) location.hash = "call";
+  Object.assign(tourCtx, { tour: t, i: -1, agents: state.agents.length, rules: state.rules.length, playbooks: state.saved.length });
+  if (!$("tourRing")) {
+    document.body.insertAdjacentHTML("beforeend", '<div class="tour-ring" id="tourRing" aria-hidden="true"></div><div class="tour-card" id="tourCard" role="dialog" aria-live="polite" aria-label="Guided tour"></div>');
+    document.addEventListener("click", (e) => { // a click on the element a step asked for
+      const st = tourCtx.tour?.steps[tourCtx.i];
+      if (st?.clickIn && e.target.closest(st.clickIn)) tourCtx.clicked = true;
+    }, true);
+  }
+  setTimeout(() => tourGo(0), 150);
+}
+
+function tourGo(i) {
+  const t = tourCtx.tour;
+  if (!t) return;
+  if (i >= t.steps.length) return finishTour();
+  tourCtx.i = Math.max(0, i);
+  const step = t.steps[tourCtx.i];
+  tourCtx.clicked = false; tourCtx.lostSince = 0;
+  step.before?.();
+  tourCtx.wasReady = step.ready ? !!step.ready() : false;
+  renderTourCard();
+  setTimeout(() => tourTarget(step)?.scrollIntoView({ block: "center", behavior: "smooth" }), 250);
+  clearInterval(tourCtx.timer);
+  tourCtx.timer = setInterval(tourTick, 200);
+}
+
+function renderTourCard() {
+  const t = tourCtx.tour, step = t.steps[tourCtx.i], last = tourCtx.i === t.steps.length - 1;
+  const waiting = step.done || step.clickIn || step.auto;
+  $("tourCard").innerHTML = `
+    <div class="tc-kicker">${tutEsc(t.icon)} ${tutEsc(t.title)} · step ${tourCtx.i + 1} of ${t.steps.length}</div>
+    <div class="tc-bar"><i style="width:${Math.round(((tourCtx.i + 1) / t.steps.length) * 100)}%"></i></div>
+    <h4>${tutEsc(step.title)}</h4><p>${tutText(typeof step.text === "function" ? step.text() : step.text)}</p>
+    ${waiting ? '<div class="tc-wait">⏳ Waiting for you…</div>' : ""}
+    <div class="tc-warn" hidden></div>
+    <div class="tc-actions">
+      <button type="button" class="tc-skip" data-tc="skip">Skip tour</button><span class="grow"></span>
+      <button type="button" class="tc-skip" data-tc="again" hidden>Show me again</button>
+      ${tourCtx.i > 0 ? '<button type="button" class="btn btn-ghost btn-small" data-tc="back">Back</button>' : ""}
+      ${step.next || step.ready ? `<button type="button" class="btn btn-primary btn-small" data-tc="next">${last ? "Finish" : tutEsc(step.nextLabel || "Next")}</button>` : ""}
+    </div>`;
+  $("tourCard").querySelector('[data-tc="skip"]').onclick = () => endTour();
+  $("tourCard").querySelector('[data-tc="again"]').onclick = () => { step.before?.(); tourCtx.lostSince = 0; };
+  $("tourCard").querySelector('[data-tc="back"]')?.addEventListener("click", () => tourGo(tourCtx.i - 1));
+  $("tourCard").querySelector('[data-tc="next"]')?.addEventListener("click", () => tourGo(tourCtx.i + 1));
+  tourTick();
+}
+
+function tourTick() {
+  const t = tourCtx.tour;
+  if (!t) return;
+  const step = t.steps[tourCtx.i];
+  // Did the user do it?
+  const ready = step.ready ? !!step.ready() : true;
+  if ((step.done && step.done()) || (step.clickIn && tourCtx.clicked) || (step.auto && ready && !tourCtx.wasReady)) {
+    clearInterval(tourCtx.timer);
+    setTimeout(() => tourGo(tourCtx.i + 1), 450);
+    return;
+  }
+  const nextBtn = $("tourCard").querySelector('[data-tc="next"]');
+  if (nextBtn && step.ready) nextBtn.disabled = !ready;
+  const warn = step.warn?.() || "";
+  const w = $("tourCard").querySelector(".tc-warn");
+  w.hidden = !warn; w.textContent = warn;
+  // Place the ring around the element and the card next to it.
+  const el = tourTarget(step), ring = $("tourRing"), card = $("tourCard");
+  const vw = innerWidth, vh = innerHeight, cw = card.offsetWidth, ch = card.offsetHeight;
+  if (!el) {
+    ring.classList.add("lost");
+    if (!tourCtx.lostSince) tourCtx.lostSince = performance.now();
+    card.querySelector('[data-tc="again"]').hidden = !(step.before && performance.now() - tourCtx.lostSince > 900);
+    card.style.left = `${(vw - cw) / 2}px`; card.style.top = `${Math.max(12, (vh - ch) / 2)}px`;
+    return;
+  }
+  tourCtx.lostSince = 0;
+  card.querySelector('[data-tc="again"]').hidden = true;
+  const r = el.getBoundingClientRect(), pad = 6;
+  ring.classList.remove("lost");
+  ring.classList.toggle("act", !!(step.done || step.clickIn || step.auto || step.ready));
+  Object.assign(ring.style, { left: `${r.left - pad}px`, top: `${r.top - pad}px`, width: `${r.width + pad * 2}px`, height: `${r.height + pad * 2}px` });
+  let top = r.bottom + 14, left = Math.min(Math.max(12, r.left), vw - cw - 12);
+  if (top + ch > vh - 12) top = r.top - ch - 14;                     // no room below: above
+  if (top < 12) {                                                    // no room above either
+    if (r.right + 14 + cw < vw) { left = r.right + 14; top = Math.min(Math.max(12, r.top), vh - ch - 12); }        // beside it, right
+    else if (r.left - cw - 14 > 0) { left = r.left - cw - 14; top = Math.min(Math.max(12, r.top), vh - ch - 12); } // beside it, left
+    else { left = vw - cw - 12; top = vh - ch - 12; }                // it fills the screen: bottom-right corner, out of the way
+  }
+  card.style.left = `${left}px`; card.style.top = `${top}px`;
+}
+
+function finishTour() {
+  const t = tourCtx.tour;
+  const done = toursDone();
+  if (!done.includes(t.id)) { done.push(t.id); store.set(tourKey(), JSON.stringify(done)); }
+  endTour();
+  const next = t.then && TOURS.find((x) => x.id === t.then);
+  if (next) {
+    $("tourCard")?.remove(); $("tourRing")?.remove();
+    document.body.insertAdjacentHTML("beforeend", `<div class="tour-card" id="tourDone" role="dialog" style="left:50%;top:50%;transform:translate(-50%,-50%)">
+      <h4>🎉 Well done!</h4><p>You finished <b>${tutEsc(t.title)}</b>. Next up: <b>${tutEsc(next.title)}</b>.</p>
+      <div class="tc-actions"><button type="button" class="tc-skip" id="tdLater">Later</button><span class="grow"></span>
+      <button type="button" class="btn btn-primary btn-small" id="tdNext">Start: ${tutEsc(next.title)}</button></div></div>`);
+    $("tdLater").onclick = () => $("tourDone").remove();
+    $("tdNext").onclick = () => { $("tourDone").remove(); startTour(next.id); };
+  }
+}
+
+function endTour(silent) {
+  clearInterval(tourCtx.timer);
+  tourCtx.tour = null;
+  $("tourRing")?.remove(); $("tourCard")?.remove();
+  if (!silent) $("tourDone")?.remove();
+}
+
+const tutEsc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const tutText = (t) => tutEsc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+
+// The 📚 Tutorials pop-up lists the tours (✓ = finished before).
+function showTutorial() {
+  const done = toursDone();
+  const grid = $("tourGrid");
+  grid.innerHTML = "";
+  for (const t of TOURS) {
+    const el = document.createElement("div");
+    el.className = "tour-tile";
+    el.innerHTML = `<div class="tt-top"><span class="tt-icon" aria-hidden="true">${t.icon}</span><div><b>${tutEsc(t.title)}</b><div class="tt-meta">${t.steps.length} steps · about ${Math.max(1, Math.round(t.steps.length / 3))} min</div></div></div>
+      <p>${tutEsc(t.desc)}</p>${done.includes(t.id) ? '<span class="tt-done">✓ Done</span>' : ""}`;
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "btn btn-primary btn-small"; b.textContent = done.includes(t.id) ? "↻ Do it again" : "▶ Start";
+    b.onclick = () => startTour(t.id);
+    el.appendChild(b);
+    grid.appendChild(el);
+  }
+  if (state.me?.role === 1) {
+    const el = document.createElement("div");
+    el.className = "tour-tile";
+    el.innerHTML = `<div class="tt-top"><span class="tt-icon" aria-hidden="true">👑</span><div><b>Admin dashboard</b><div class="tt-meta">for admins</div></div></div>
+      <p>Users, agent types & templates, app settings (including the silent-caller re-ask), sign-ins and the activity log.</p>`;
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "btn btn-small"; b.textContent = "Open the dashboard";
+    b.onclick = () => (location.href = "/admin.html");
+    el.appendChild(b);
+    grid.appendChild(el);
+  }
 }
 $("lrClose").addEventListener("click", () => (location.hash = "call"));
 $("learnModal").addEventListener("click", (e) => { if (e.target === $("learnModal")) location.hash = "call"; });
@@ -2306,9 +2468,9 @@ document.addEventListener("keydown", (e) => {
   if ([...document.querySelectorAll(".overlay.open")].some((o) => o !== $("learnModal"))) return;
   location.hash = "call";
 });
-document.querySelectorAll("[data-learn]").forEach((b) => (b.onclick = () => (location.hash = `learn/${b.dataset.learn}`)));
+document.querySelectorAll("[data-tour]").forEach((b) => (b.onclick = () => startTour(b.dataset.tour)));
 $("firstAgentBtn").addEventListener("click", () => openAgentDialog());
-$("firstAgentLearn").addEventListener("click", () => (location.hash = "learn/first-agent"));
+$("firstAgentLearn").addEventListener("click", () => startTour("first-agent"));
 
 // ---------- menu: 🎙 Call (main page) · 🤖 My agents (editor, in tabs) · 📚 Tutorials ----------
 const TABS = ["profile", "voice", "availability", "calendar", "emergency", "playbooks"];
@@ -2323,7 +2485,7 @@ function route() {
   document.body.dataset.view = agents ? "agents" : learn ? "learn" : "call";
   $("agentsModal").classList.toggle("open", agents);
   $("learnModal").classList.toggle("open", learn);
-  if (learn) showTutorial(tab || "welcome");
+  if (learn) showTutorial();
   $("navCall").setAttribute("aria-current", agents || learn ? "false" : "page");
   $("navAgents").setAttribute("aria-current", agents ? "page" : "false");
   $("navLearn").setAttribute("aria-current", learn ? "page" : "false");
@@ -2479,7 +2641,7 @@ $("naForm").addEventListener("submit", async (e) => {
     loadModels().then(() => { state.savedSnapshot = formSnapshot(); renderSummary(); }).catch(() => {});
     loadCalendar().catch(() => {});
     // No agents yet (new account): show how to create one instead of making one for them.
-    if (!state.agents.length && !location.hash.replace("#", "")) location.hash = "learn/first-agent";
+    if (!state.agents.length && !location.hash.replace("#", "")) startTour("first-agent");
     } catch (e) {
     addMsg("error", "Couldn't load settings: " + e.message);
   }
