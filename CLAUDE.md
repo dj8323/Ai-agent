@@ -158,6 +158,16 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 
 ## Listening, agent setup card, emergency, call flow
 
+- **Barge-in:** while the agent speaks, `startBargeWatch()` keeps a recorder on the mic and `bargeTick()` watches its
+  level against an echo floor; `conversation.bargeInMs` of speech above `max(bargeInLevel, floor×3, vad×2.5)` →
+  `bargeIn()`: stop speaking/abort the stream, ✋ chip, keep that recording and switch to normal listening (`vadTick`).
+- **Instant greeting:** `prepareGreeting()` (on agent load/save and after each call) fetches POST `/api/greeting`
+  (agent → template → type greeting; translated once for non-English, cached) and its TTS audio; `startCall()` →
+  `speakGreeting()` plays it at once (falls back to the LLM `[call connected]` turn if not ready in 6 s).
+  The backend caches generated speech (LRU, 300 lines), so repeated lines cost nothing.
+- **Speaking speed:** `agents.speech_speed` (0.5–2.0; `agent.speechSpeed` in settings), set in Voice & AI; applied as
+  `audio.playbackRate` (pitch kept) to every sentence and the preview.
+
 - Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions /
   fallback. The agent replies after `conversation.responseDelayMs` of silence.
 - Top menu buttons (`.topnav`): **🎙 Call** (`#call`, the main page) and **🤖 My agents** (`#agents/<tab>`, hash routing,

@@ -199,7 +199,7 @@ Every change saves itself within a second: there is no Save button. A small pill
 | Tab | What you set |
 | --- | --- |
 | 👤 Profile | **Agent type** (change it any time, for example Personal Assistant → Call Assistant); Template; **Works for** (required for a Call Assistant); Organization; what it's for; the first line of every call, with a live preview. Text can use `{agent}`, `{owner}` and `{org}` |
-| 🧠 Voice & AI | Language (16) and voice (10, ▶ plays a sample); LLM, speech-to-text and text-to-speech models (lists come live from your OpenAI account) |
+| 🧠 Voice & AI | Language (16) and voice (10, ▶ plays a sample); **speaking speed** (🐢 Slow · Normal · Fast · 🚀 Faster, or fine-tune from 0.5× to 2×); LLM, speech-to-text and text-to-speech models (lists come live from your OpenAI account) |
 | 🕒 Availability | Days (tap Mon … Sun, or Weekdays / Every day), From and To time, time zone and an optional note. The agent only offers meeting times inside these hours, and says when the person is back |
 | 📅 Calendar | Switch on to let the agent book confirmed meetings; meeting length (15 minutes to 2 hours); upcoming events with .ics export |
 | 🚨 Emergency | Switch, plus emergency contacts by **phone or email** (below) |
@@ -235,11 +235,11 @@ The agent always speaks first, and the loop repeats for every turn; saying goodb
 ### Step by step
 
 1. **Start call.** Pick the agent in **Agent for this call**, then press the green button. The app opens the microphone, starts recording (if ● is on), clears the previous conversation and starts the visualizer.
-2. **Greeting.** The agent greets you first with its greeting, in its language, for example "Hello, this is Brown, DJ's assistant. DJ isn't available to take your call right now, but I can schedule a meeting or pass a message on."
+2. **Greeting.** The agent greets you first, straight away: its greeting (and the audio) is prepared as soon as the agent is selected, so it starts speaking the moment you press Start call. It speaks in its language (a non-English greeting is translated once and remembered), for example "Hello, this is Brown, DJ's assistant. DJ isn't available to take your call right now, but I can schedule a meeting or pass a message on."
 3. **Listening.** Your speech is recorded from the first word. Live captions appear in an italic bubble while you talk (Chrome and Edge), and a voice detector checks the mic level every 50 ms.
 4. **Transcribing.** When you've been silent for 2 seconds, the recording is sent to OpenAI `gpt-4o-transcribe`, with a hint about the language and the agent's last sentence so names and numbers come out right. The bubble is replaced with the accurate text; a ✏️ mark shows if it corrected the captions. Pure noise is ignored.
 5. **Thinking.** The text goes to the agent's LLM along with the recent conversation and its instructions (role, playbook, language, calendar and emergency rules). The reply streams back word by word.
-6. **Speaking.** Each finished sentence is sent to text-to-speech in the emotion the agent chose for it, played in order, while the next one is prepared. Tap the avatar to interrupt.
+6. **Speaking.** Each finished sentence is sent to text-to-speech in the emotion the agent chose for it, played in order at the agent's speaking speed, while the next one is prepared. **You can talk over the agent:** the mic keeps listening while it speaks, and when you speak for about a third of a second it stops at once and listens (an "✋ interrupted" chip marks its reply). Your first words are kept. Tapping the avatar also interrupts.
 7. **Goodbye.** When you clearly want to end ("bye", "that's all", "rakhta hoon" in any language), the agent says one short goodbye and hangs up by itself 0.8 seconds later. You can also press End call at any time.
 
 ### How the agent talks
@@ -363,7 +363,7 @@ The tables are defined in `db/schema.sql` and the ready-made types and templates
 | `app_config` | Shared settings, one JSON document per section | section (branding, agent, models, speechToText, conversation, history, calendar, emergency, auth), value |
 | `agent_types` | The agent types | type_key, name, icon, description, role (persona), greeting, needs_owner, default_calendar, sort_order, active |
 | `agent_templates` | Ready-made scripts per type | id, type_key, name, role (persona), greeting, goal, steps, rules, summary_focus, is_default, active |
-| `agents` | Each agent's own setup | id, user_id, name, agent_type, template_id, owner_name, organization, owner_availability, availability_plan, meeting_minutes, greeting, description, language, voice, chat_model, tts_model, stt_engine, stt_model, playbook_id, calendar_enabled, emergency_enabled, is_default |
+| `agents` | Each agent's own setup | id, user_id, name, agent_type, template_id, owner_name, organization, owner_availability, availability_plan, meeting_minutes, speech_speed, greeting, description, language, voice, chat_model, tts_model, stt_engine, stt_model, playbook_id, calendar_enabled, emergency_enabled, is_default |
 | `emergency_rules` | Emergency contacts per agent | agent_id, label, contact_type (phone or email), number (or email), keywords (JSON), sort_order |
 | `playbooks` | Users' saved call scripts | id, user_id, agent_type, name, role, goal, steps, rules, summary_focus |
 | `calls` | Every finished call | id, user_id, agent_id, agent_name, started_at, ended_at, duration, turns, tokens, avg_response_ms, stats, transcript, recording file details |
@@ -440,6 +440,7 @@ The LLM starts every reply with tags the page reads and removes before showing o
 | GET /api/config, POST /api/settings | Read and auto-save the selected agent's setup |
 | POST /api/chat | Streamed reply (server-sent events) |
 | POST /api/transcribe, /api/tts | Speech to text, text to speech |
+| POST /api/greeting | The agent's first line, ready to speak (translated once when needed) |
 | POST /api/summary | Write the call summary |
 | GET, POST, DELETE /api/calls | Call list, save, details, delete; recording upload and download; summary file |
 | GET, POST, DELETE /api/playbooks, /api/calendar | Playbooks; calendar events and .ics export |
@@ -461,6 +462,7 @@ Shared settings live in the `app_config` table; each agent's own choices (name, 
 | branding.theme.primary / secondary / tertiary | #7c3aed / #ec4899 / #06b6d4 | Brand colours used in every gradient |
 | agent.defaultName / defaultLanguage / defaultVoice | Riya / en-US / cedar | Starting name, language and voice for new agents |
 | agent.maxReplyWords | 25 | Target length of a spoken reply |
+| agent.speechSpeed | 1.0 | Speaking speed for agents that have none set |
 | agent.maxAgentsPerUser | 20 | Agent limit per user |
 | models.chat / tts / reasoningEffort | gpt-5.5 / gpt-4o-mini-tts / low | Default models for new agents |
 | models.maxReplyTokens / maxSummaryTokens | 1024 / 2048 | Output limits |
@@ -469,6 +471,7 @@ Shared settings live in the `app_config` table; each agent's own choices (name, 
 | speechToText.minSpeechMs / maxUtteranceSeconds | 250 / 60 | Shortest speech that counts / longest single utterance |
 | conversation.responseDelayMs | 2000 | Silence before the agent replies |
 | conversation.hangupDelayMs | 800 | Pause after the goodbye before disconnecting |
+| conversation.bargeIn / bargeInMs / bargeInLevel | true / 300 / 0.035 | Let the caller interrupt; how long and how loud they must speak to stop the agent (raise the level if the agent stops by itself on loudspeakers) |
 | conversation.historyTurnsSentToModel | 30 | Recent messages sent to the model |
 | history.pageSize / maxRecordingMB | 5 / 100 | Calls per page / recording size limit |
 | calendar.defaultDurationMin | 30 | Event length when none is given |
@@ -495,6 +498,7 @@ The four auth and agent-limit settings are editable in the admin dashboard; othe
 | "Rate limited or out of credit" | Check OpenAI billing |
 | Microphone doesn't work | Use Chrome or Edge at http://localhost (the Claude in-app browser blocks the mic) |
 | Agent cuts in too early or waits too long | Change `conversation.responseDelayMs` |
+| Agent stops talking by itself (no one spoke) | Its own voice from the speakers is heard as an interruption: use headphones, or raise `conversation.bargeInLevel` |
 | Background noise triggers replies | Raise `speechToText.vadThreshold` |
 | Create account tab is missing | Self sign-up is off: Admin dashboard → App settings |
 | Account locked | Wait 5 minutes after 5 wrong passwords, or ask an admin to reset it |
