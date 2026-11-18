@@ -162,8 +162,7 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
   fallback. The agent replies after `conversation.responseDelayMs` of silence.
 - **One page, two views** switched by the **☰ Menu** dropdown (`#menuBtn`/`#menuPanel`; hash routing, `route()` in
   app.js): **🎙 Call** (`#call`, the main page) and **🤖 My agents** (`#agents/<tab>`), plus ＋ New agent. My agents
-  (`#manageView`) lives in the right column and replaces the conversation there; the call card stays on the left.
-  CSS: `body[data-view="agents"] .right-col > :not(#manageView)` is hidden.
+  (`#manageView`) is a full-width page; CSS `body[data-view]` hides the other view.
 - Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,
   organization, availability, language · voice, AI models, playbook picker `#pbPick`, feature chips). ✎ Edit agent →
   `#agents/profile`. Keep it simple: anything that edits an agent belongs in My agents.

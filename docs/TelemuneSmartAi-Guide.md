@@ -192,7 +192,7 @@ On the right are the conversation and the call summaries.
 
 ### My agents (create and edit)
 
-**🤖 My agents** opens in the conversation area, so the call card stays on the left. It lists your agents (★ = the one that opens first) with **＋ New agent**. The selected agent's settings are on the right, under its name. The header holds **🎙 Call** (back to the main page with this agent), **☆ Default** and **🗑 Delete**.
+**🤖 My agents** is its own page: your agents are listed on the left (★ = the one that opens first) with **＋ New agent** below them. The selected agent's settings are on the right, under its name. The header holds **🎙 Call** (back to the main page with this agent), **☆ Default** and **🗑 Delete**.
 
 Every change saves itself within a second: there is no Save button. A small pill in the header shows **Saving…**, then **✓ Saved**. The next reply already uses the new setup.
 

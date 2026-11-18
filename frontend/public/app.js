@@ -2032,9 +2032,7 @@ function route() {
     showTab(tab || state.tab);
     if (state.tab === "calendar" && SETTINGS.calendar?.enabled) loadCalendar().catch(() => {});
   }
-  // My agents opens in the conversation area (right column); on a phone that sits below the call card, so scroll to it.
-  if (agents && matchMedia("(max-width: 900px)").matches) $("manageView").scrollIntoView({ block: "start" });
-  else window.scrollTo({ top: 0 });
+  window.scrollTo({ top: 0 });
 }
 document.querySelectorAll(".tabs [data-tab]").forEach((b) => (b.onclick = () => (location.hash = `agents/${b.dataset.tab}`)));
 // ☰ Menu dropdown
