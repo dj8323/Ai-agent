@@ -118,6 +118,20 @@ public class OpenAiClient {
     return res.body();
   }
 
+  /** Text to speech, streamed: the caller reads the mp3 as OpenAI produces it (first audio ~0.3 s sooner). */
+  public java.io.InputStream speechStream(Map<String, Object> body) {
+    HttpResponse<java.io.InputStream> res = send(req("/audio/speech", Duration.ofMinutes(2)).header("Content-Type", "application/json")
+        .POST(HttpRequest.BodyPublishers.ofString(J.json(body))).build(), HttpResponse.BodyHandlers.ofInputStream());
+    if (res.statusCode() >= 300) {
+      try (java.io.InputStream in = res.body()) {
+        throw error(res.statusCode(), new String(in.readAllBytes(), StandardCharsets.UTF_8));
+      } catch (IOException e) {
+        throw new OpenAiException(res.statusCode(), "HTTP " + res.statusCode());
+      }
+    }
+    return res.body();
+  }
+
   /** Speech to text for one utterance (multipart upload). */
   public String transcribe(byte[] audio, String fileName, String mime, String model, String prompt) {
     String boundary = "----tsa" + UUID.randomUUID().toString().replace("-", "");

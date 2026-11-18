@@ -24,7 +24,7 @@
   "models": {
     "chat": "gpt-5.5",
     "tts": "gpt-4o-mini-tts",
-    "reasoningEffort": "low",
+    "reasoningEffort": "none",
     "maxReplyTokens": 1024,
     "maxSummaryTokens": 2048
   },
@@ -36,7 +36,7 @@
     "maxUtteranceSeconds": 60
   },
   "conversation": {
-    "responseDelayMs": 2000,
+    "responseDelayMs": 1000,
     "hangupDelayMs": 800,
     "historyTurnsSentToModel": 30
   },

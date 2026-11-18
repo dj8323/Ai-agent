@@ -238,9 +238,9 @@ The agent always speaks first, and the loop repeats for every turn; saying goodb
 1. **Start call.** Pick the agent in **Agent for this call**, then press the green button. The app opens the microphone, starts recording (if ● is on), clears the previous conversation and starts the visualizer.
 2. **Greeting.** The agent greets you first, straight away: its greeting (and the audio) is prepared as soon as the agent is selected, so it starts speaking the moment you press Start call. It speaks in its language (a non-English greeting is translated once and remembered), for example "Hello, this is Brown, DJ's assistant. DJ isn't available to take your call right now, but I can schedule a meeting or pass a message on."
 3. **Listening.** Your speech is recorded from the first word. Live captions appear in an italic bubble while you talk (Chrome and Edge), and a voice detector checks the mic level every 50 ms.
-4. **Transcribing.** When you've been silent for 2 seconds, the recording is sent to OpenAI `gpt-4o-transcribe`, with a hint about the language and the agent's last sentence so names and numbers come out right. The bubble is replaced with the accurate text; a ✏️ mark shows if it corrected the captions. Pure noise is ignored.
-5. **Thinking.** The text goes to the agent's LLM along with the recent conversation and its instructions (role, playbook, language, calendar and emergency rules). The reply streams back word by word.
-6. **Speaking.** Each finished sentence is sent to text-to-speech in the emotion the agent chose for it, played in order at the agent's speaking speed, while the next one is prepared. **You can talk over the agent:** the mic keeps listening while it speaks, and when you speak for about a third of a second it stops at once and listens (an "✋ interrupted" chip marks its reply). Your first words are kept. Tapping the avatar also interrupts.
+4. **Transcribing.** After a short pause (0.4 s) the recording is already sent to OpenAI `gpt-4o-transcribe`, so the text is ready when the agent decides you've finished (after 1 second of silence; if you keep talking, that early text is thrown away). It goes with a hint about the language and the agent's last sentence so names and numbers come out right. The bubble is replaced with the accurate text; a ✏️ mark shows if it corrected the captions. Pure noise is ignored.
+5. **Thinking.** The text goes to the agent's LLM along with the recent conversation and its instructions (role, playbook, language, calendar and emergency rules). The reply streams back word by word, and the agent starts speaking as soon as the first phrase is written (it may end at a comma).
+6. **Speaking.** Each finished sentence is sent to text-to-speech in the emotion the agent chose for it and streamed: it starts playing while the audio is still arriving, in order, at the agent's speaking speed, while the next one is prepared. **You can talk over the agent:** the mic keeps listening while it speaks, and when you speak for about a third of a second it stops at once and listens (an "✋ interrupted" chip marks its reply). Your first words are kept. Tapping the avatar also interrupts.
 7. **Goodbye.** When you clearly want to end ("bye", "that's all", "rakhta hoon" in any language), the agent says one short goodbye and hangs up by itself 0.8 seconds later. You can also press End call at any time.
 
 ### How the agent talks
@@ -465,12 +465,12 @@ Shared settings live in the `app_config` table; each agent's own choices (name, 
 | agent.maxReplyWords | 25 | Target length of a spoken reply |
 | agent.speechSpeed | 1.0 | Speaking speed for agents that have none set |
 | agent.maxAgentsPerUser | 20 | Agent limit per user |
-| models.chat / tts / reasoningEffort | gpt-5.5 / gpt-4o-mini-tts / low | Default models for new agents |
+| models.chat / tts / reasoningEffort | gpt-5.5 / gpt-4o-mini-tts / none | Default models for new agents; "none" thinks least and answers fastest |
 | models.maxReplyTokens / maxSummaryTokens | 1024 / 2048 | Output limits |
 | speechToText.engine / model | openai / gpt-4o-transcribe | How the caller is heard |
 | speechToText.vadThreshold | 0.015 | Mic loudness counted as speech; raise in noisy rooms |
 | speechToText.minSpeechMs / maxUtteranceSeconds | 250 / 60 | Shortest speech that counts / longest single utterance |
-| conversation.responseDelayMs | 2000 | Silence before the agent replies |
+| conversation.responseDelayMs | 1000 | Silence before the agent replies (lower = faster, but it may answer before you finish a slow sentence) |
 | conversation.hangupDelayMs | 800 | Pause after the goodbye before disconnecting |
 | conversation.bargeIn / bargeInMs / bargeInLevel | true / 300 / 0.035 | Let the caller interrupt; how long and how loud they must speak to stop the agent (raise the level if the agent stops by itself on loudspeakers) |
 | conversation.historyTurnsSentToModel | 30 | Recent messages sent to the model |

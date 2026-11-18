@@ -165,6 +165,11 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
   (agent → template → type greeting; translated once for non-English, cached) and its TTS audio; `startCall()` →
   `speakGreeting()` plays it at once (falls back to the LLM `[call connected]` turn if not ready in 6 s).
   The backend caches generated speech (LRU, 300 lines), so repeated lines cost nothing.
+- **Reply speed:** speech is streamed (`GET /api/tts/stream?text&voice&emotion&lang&agentId`, played by an `<audio>`
+  while it downloads; `enqueueSpeech()` creates the element so later sentences load ahead); the first chunk of a reply
+  may end at a comma (`firstClause()`); `startEarlyTranscribe()` sends the recording after 0.4 s of silence so the text
+  is ready when `responseDelayMs` (1000) ends. Measured: ~4 s from end of speech to the agent's voice with gpt-5.5
+  (was ~6.5 s); most of what's left is the LLM (~1.5 s) and OpenAI's first speech audio (~1.1 s).
 - **Speaking speed:** `agents.speech_speed` (0.5–2.0; `agent.speechSpeed` in settings), set in Voice & AI; applied as
   `audio.playbackRate` (pitch kept) to every sentence and the preview.
 

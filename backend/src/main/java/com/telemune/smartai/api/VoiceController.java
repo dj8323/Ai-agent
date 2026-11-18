@@ -14,7 +14,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestAttribute;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
@@ -225,17 +227,23 @@ public class VoiceController {
     }
   }
 
-  @PostMapping("/api/tts")
-  ResponseEntity<?> tts(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
-    String text = J.str(body.get("text"), 1500);
+  /** The OpenAI speech request for one sentence (same voice, emotion and language rules for every TTS route). */
+  private Map<String, Object> speechRequest(Object textIn, Object voiceIn, Object emotionIn, Object langIn, Ctx ctx) {
+    String text = J.str(textIn, 1500);
     if (text.isEmpty()) throw ApiException.bad("No text");
-    String voice = Prompts.VOICES.containsKey(J.str(body.get("voice"))) ? J.str(body.get("voice")) : "marin";
-    String emotion = Prompts.EMOTIONS.containsKey(J.str(body.get("emotion"))) ? J.str(body.get("emotion")) : "neutral";
-    String lang = J.str(body.get("lang"));
+    String voice = Prompts.VOICES.containsKey(J.str(voiceIn)) ? J.str(voiceIn) : "marin";
+    String emotion = Prompts.EMOTIONS.containsKey(J.str(emotionIn)) ? J.str(emotionIn) : "neutral";
+    String lang = J.str(langIn);
     String model = J.str(J.get(config.forAgent(ctx.agent), "models.tts"));
     boolean legacy = model.startsWith("tts-1"); // tts-1 / tts-1-hd: no emotion instructions, older voice set
     Map<String, Object> req = J.map("model", model, "voice", legacy && !Prompts.LEGACY_VOICES.contains(voice) ? "alloy" : voice, "input", text, "response_format", "mp3");
     if (!legacy) req.put("instructions", "You are a voice agent on a phone call. " + Prompts.voiceStyle(lang) + " " + Prompts.EMOTIONS.get(emotion));
+    return req;
+  }
+
+  @PostMapping("/api/tts")
+  ResponseEntity<?> tts(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    Map<String, Object> req = speechRequest(body.get("text"), body.get("voice"), body.get("emotion"), body.get("lang"), ctx);
     String cacheKey = J.json(req);
     byte[] cached = speechCache.get(cacheKey);
     if (cached != null) return ResponseEntity.ok().contentType(MediaType.parseMediaType("audio/mpeg")).header("Cache-Control", "no-store").header("X-Cache", "hit").body(cached);
@@ -246,6 +254,48 @@ public class VoiceController {
     } catch (OpenAiClient.OpenAiException e) {
       log.warn("tts failed: {} {}", e.status, e.getMessage());
       return ResponseEntity.status(502).contentType(MediaType.TEXT_PLAIN).body(OpenAiClient.friendly(e));
+    }
+  }
+
+  /**
+   * Streamed speech for the live call: an <audio> element points here and starts playing while the mp3 is still
+   * arriving. GET (cookie-authenticated; agentId as a query parameter since an audio element can't send headers).
+   */
+  @GetMapping("/api/tts/stream")
+  void ttsStream(@RequestParam String text, @RequestParam(required = false) String voice, @RequestParam(required = false) String emotion,
+                 @RequestParam(required = false) String lang, @RequestAttribute("ctx") Ctx ctx, HttpServletResponse res) throws IOException {
+    Map<String, Object> req = speechRequest(text, voice, emotion, lang, ctx);
+    String cacheKey = J.json(req);
+    byte[] cached = speechCache.get(cacheKey);
+    res.setContentType("audio/mpeg");
+    res.setHeader("Cache-Control", "no-store");
+    if (cached != null) {
+      res.setHeader("X-Cache", "hit");
+      res.setContentLength(cached.length);
+      res.getOutputStream().write(cached);
+      return;
+    }
+    java.io.ByteArrayOutputStream copy = new java.io.ByteArrayOutputStream();
+    try (java.io.InputStream in = openai.speechStream(req)) {
+      ServletOutputStream out = res.getOutputStream();
+      byte[] buf = new byte[8192];
+      int n;
+      while ((n = in.read(buf)) > 0) {
+        out.write(buf, 0, n);
+        out.flush(); // hand each piece to the browser straight away
+        copy.write(buf, 0, n);
+      }
+      speechCache.put(cacheKey, copy.toByteArray());
+    } catch (OpenAiClient.OpenAiException e) {
+      log.warn("tts stream failed: {} {}", e.status, e.getMessage());
+      if (!res.isCommitted()) {
+        res.reset();
+        res.setStatus(502);
+        res.setContentType("text/plain");
+        res.getOutputStream().write(OpenAiClient.friendly(e).getBytes(StandardCharsets.UTF_8));
+      }
+    } catch (IOException e) {
+      // the caller hung up or interrupted: stop reading from OpenAI
     }
   }
 

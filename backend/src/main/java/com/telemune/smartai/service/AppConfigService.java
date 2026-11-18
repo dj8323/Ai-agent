@@ -130,7 +130,11 @@ public class AppConfigService {
     String r = env.getProperty("OPENAI_REASONING_EFFORT");
     if (r != null && !r.isBlank()) models.put("reasoningEffort", r);
     // Older chat models (non gpt-5 / o-series) reject reasoning_effort.
-    if (!J.str(models.get("chat")).matches("^(gpt-5|o\\d).*")) models.put("reasoningEffort", "");
+    String chat = J.str(models.get("chat"));
+    if (!chat.matches("^(gpt-5|o\\d).*")) models.put("reasoningEffort", "");
+    // "none" exists from gpt-5.1 on; the first gpt-5 family (gpt-5, -mini, -nano) calls the lowest level "minimal".
+    else if (chat.matches("^gpt-5(-.*)?$") && "none".equals(models.get("reasoningEffort"))) models.put("reasoningEffort", "minimal");
+    else if (chat.matches("^gpt-5\\.\\d.*") && "minimal".equals(models.get("reasoningEffort"))) models.put("reasoningEffort", "none");
     return cfg;
   }
 

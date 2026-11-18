@@ -654,11 +654,16 @@ async function fetchSpeech(text, emotion) {
   return URL.createObjectURL(await res.blob());
 }
 
+// Live replies are streamed: the <audio> element points at /api/tts/stream and starts playing while the mp3 is still
+// arriving. Creating it starts the download, so sentences further down the queue load while this one plays.
+const streamUrl = (text, emotion) => `/api/tts/stream?${new URLSearchParams({ text, emotion, voice: $("voice").value, lang: lang(), agentId: state.agentId || "" })}`;
 function enqueueSpeech(text, emotion = "neutral", turn = null) {
   text = text.trim();
   if (!text || !/[\p{L}\p{N}]/u.test(text)) return;
-  const item = { text, emotion, turn, url: fetchSpeech(text, emotion).catch((e) => { console.warn("TTS failed:", e); return null; }) };
-  state.speakQueue.push(item);
+  const audio = new Audio();
+  audio.preload = "auto";
+  audio.src = streamUrl(text, emotion);
+  state.speakQueue.push({ text, emotion, turn, audio });
   if (!state.playing) speakNext();
 }
 
@@ -675,19 +680,30 @@ async function speakNext() {
   setPhase("speaking", `Speaking · ${item.emotion}`);
   setEmotion(item.emotion);
   startBargeWatch();
-  const url = await item.url;
-  if (gen !== state.speechGen) { if (url) URL.revokeObjectURL(url); return; }
-  markVoiceStart(item.turn);
-  if (!url) return fallbackSpeak(item, gen);
-  const audio = new Audio(url);
+  let audio = item.audio, blobUrl = null;
+  if (!audio) { // a prepared clip (the greeting): a blob URL
+    blobUrl = await item.url;
+    if (gen !== state.speechGen) { if (blobUrl) URL.revokeObjectURL(blobUrl); return; }
+    if (!blobUrl) return fallbackSpeak(item, gen);
+    audio = new Audio(blobUrl);
+  }
   audio.preservesPitch = true;
   audio.playbackRate = speed();
   state.audio = audio;
   routeToMixer(audio);
-  const done = () => { URL.revokeObjectURL(url); if (gen === state.speechGen) speakNext(); };
-  audio.onended = done;
-  audio.onerror = done;
-  audio.play().catch(done);
+  let started = false, finished = false;
+  audio.onplaying = () => { if (!started) { started = true; markVoiceStart(item.turn); } };
+  const finish = (failed) => {
+    if (finished) return;
+    finished = true;
+    if (blobUrl) URL.revokeObjectURL(blobUrl);
+    if (gen !== state.speechGen) return;
+    if (failed && !started) fallbackSpeak(item, gen); // speech service failed: read it with the browser voice
+    else speakNext();
+  };
+  audio.onended = () => finish(false);
+  audio.onerror = () => finish(true);
+  audio.play().catch(() => finish(true));
 }
 
 // Agent finished talking: hang up if the caller said goodbye, otherwise listen again.
@@ -720,9 +736,12 @@ function fallbackSpeak(item, gen) {
 
 function stopSpeaking() {
   state.speechGen++;
-  for (const item of state.speakQueue) item.url.then((u) => u && URL.revokeObjectURL(u));
+  for (const item of state.speakQueue) {
+    if (item.audio) { item.audio.removeAttribute("src"); item.audio.load(); } // stop downloading
+    else item.url?.then((u) => u && URL.revokeObjectURL(u));
+  }
   state.speakQueue = [];
-  if (state.audio) { state.audio.pause(); state.audio = null; }
+  if (state.audio) { state.audio.pause(); state.audio.removeAttribute("src"); state.audio.load(); state.audio = null; }
   window.speechSynthesis?.cancel();
   state.playing = false;
 }
@@ -846,11 +865,28 @@ function vadTick() {
   const stt = SETTINGS.speechToText || {};
   if (micLevel() > (stt.vadThreshold ?? 0.015)) { u.speechMs += 50; u.lastVoiceAt = t; }
   const spoke = u.speechMs >= (stt.minSpeechMs ?? 250) || !!u.srText;
+  // After a short pause, start transcribing what was said so far; if the caller stays quiet, the text is ready when
+  // the reply wait ends. Speaking again throws it away.
+  if (u.spec && u.spec.voiceAt !== u.lastVoiceAt) u.spec = null;
+  if (spoke && u.lastVoiceAt && !u.spec && u.recorder && sttOn() && t - u.lastVoiceAt >= 400) startEarlyTranscribe(u);
   if (spoke && u.lastVoiceAt && t - u.lastVoiceAt >= CONFIG.responseDelayMs) return commitUtterance();
   if (t - u.startedAt > (stt.maxUtteranceSeconds ?? 60) * 1000) {
     if (spoke) return commitUtterance();
     stopRecorder(u); startUtterance(); // long silence: start a fresh recording so it stays small
   }
+}
+
+function startEarlyTranscribe(u) {
+  const r = u.recorder;
+  const spec = { voiceAt: u.lastVoiceAt };
+  spec.promise = new Promise((resolve) => {
+    const go = () => resolve(u.chunks.length ? transcribe(new Blob(u.chunks, { type: r.mimeType })).catch(() => null) : null);
+    if (r.state !== "recording") return go();
+    const prev = r.ondataavailable;
+    r.ondataavailable = (e) => { prev(e); r.ondataavailable = prev; go(); };
+    try { r.requestData(); } catch { r.ondataavailable = prev; go(); } // flush the last few hundred ms first
+  });
+  u.spec = spec;
 }
 
 function startListening() {
@@ -958,10 +994,11 @@ async function commitUtterance() {
   if (!u.bubble) { u.bubble = addMsg("user", "…"); u.bubble.classList.add("live"); }
 
   let text = u.srText, sttMs = null, corrected = false;
+  const early = u.spec && u.spec.voiceAt === u.lastVoiceAt ? u.spec.promise : null; // started during the silence
   const blob = await stopRecorder(u);
   if (blob && sttOn()) {
     try {
-      const heard = await transcribe(blob);
+      const heard = (early && (await early)) ?? (await transcribe(blob));
       sttMs = Math.round(now() - t0);
       if (heard) { corrected = !!u.srText && heard.trim().toLowerCase() !== u.srText.trim().toLowerCase(); text = heard; }
     } catch (e) {
@@ -980,6 +1017,17 @@ async function commitUtterance() {
 
 // ---------- talking to the backend ----------
 const SENTENCE_END = /([.!?।॥。！？؟\n])\s*/;
+// The first chunk of a reply may end at a comma (at least two words), so the agent starts talking sooner.
+const CLAUSE_END = /[,;:–—،、，]\s+/g;
+function firstClause(text) {
+  CLAUSE_END.lastIndex = 0;
+  let m;
+  while ((m = CLAUSE_END.exec(text))) {
+    const words = stripTags(text.slice(0, m.index)).trim().split(/\s+/).filter(Boolean);
+    if (words.length >= 2) return m;
+  }
+  return null;
+}
 
 function renderTiming(turn) {
   if (!turn.bubble) return;
@@ -1043,9 +1091,10 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
     const tags = [...chunk.matchAll(/\[([a-z]+)\]/gi)];
     if (tags.length) emotion = tags.at(-1)[1].toLowerCase();
     const clean = stripTags(chunk).trim();
-    if (!clean) return;
+    if (!clean) return false;
     addChip(turn.bubble, `${EMOJI[emotion] || "•"} ${emotion}`, emotion);
     if (state.inCall) enqueueSpeech(clean, emotion, turn);
+    return true;
   };
 
   try {
@@ -1089,9 +1138,9 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
         }
         if (/<[^>]*$/.test(pending)) continue; // wait until a tag is complete before splitting sentences
         let m;
-        while ((m = SENTENCE_END.exec(pending))) {
+        while ((m = SENTENCE_END.exec(pending)) || (!turn.firstChunk && (m = firstClause(pending)))) {
           const cut = m.index + m[0].length;
-          flushSentence(pending.slice(0, cut));
+          if (flushSentence(pending.slice(0, cut))) turn.firstChunk = true;
           pending = pending.slice(cut);
         }
       }
