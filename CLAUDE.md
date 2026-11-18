@@ -73,10 +73,10 @@ NO_OPEN=1 ./runScript.sh  # same, without opening a browser
 ```
 
 - URL: http://localhost:8323. Ctrl+C stops both.
-- **Logs** (`backend/src/main/resources/logback-spring.xml`, times UTC): `logs/error.log` (WARN+), `app.log` (INFO: every
-  request `← METHOD path status in N ms`, sign-ins, activity, OpenAI calls with timings/tokens), `debug.log` (DEBUG:
-  caller words, replies, details), `sql.log` (logger `SQL`: every statement + args, hashes masked), `backend.log`
-  (console). Line = time · level · [requestId] · [user] · [agentId]. The request id (MDC, set in `ApiFilter`) is also the
+- **Logs** (`backend/src/main/resources/logback-spring.xml`, times UTC): only two files: `logs/backend.log`
+  (everything: every request `← METHOD path status in N ms`, sign-ins, activity, OpenAI calls with timings/tokens, at
+  DEBUG the caller words, replies and every SQL statement via logger `SQL`, hashes masked) and `logs/error.log` (WARN+,
+  plus anything the JVM prints itself). Line = time · level · [requestId] · [user] · [agentId]. The request id (MDC, set in `ApiFilter`) is also the
   `X-Request-Id` header and `api_logs.request_id` / `activity_logs.request_id`. Levels: `LOG_LEVEL`, `SQL_LOG` in .env, or
   live via admin `GET/PUT /api/admin/log-level`. Slow SQL > 500 ms and slow requests > 3 s → WARN. Rotated into
   `logs/archive/`. Troubleshooting guide with all tables and SQL queries: `docs/Troubleshooting.md`. New code: log
@@ -120,7 +120,7 @@ docs/Troubleshooting.md  Log files, tracing a request, common problems, every ta
 docs/                  TelemuneSmartAi-Guide.md (+ PDF, images/). Keep it in step when features change. PDF rebuild:
                        node docs/md2html.mjs docs/TelemuneSmartAi-Guide.md /tmp/guide.html, then Chrome headless
                        --print-to-pdf=docs/TelemuneSmartAi-Guide.pdf file:///tmp/guide.html
-data/                  Call recordings only. Never wipe it.     logs/   backend.log (gitignored).
+data/                  Call recordings only. Never wipe it.     logs/   backend.log + error.log (gitignored).
 ```
 
 ## API (all served by the backend, reached through the frontend)

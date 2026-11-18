@@ -122,8 +122,8 @@ public class Db {
   }
 
   // ---------- helpers ----------
-  // Every statement is logged to sql.log (logger "SQL", DEBUG): time, rows, the SQL and its arguments.
-  // Slow ones (over SLOW_MS) also go to app.log as WARN; failed ones go to app.log + error.log as ERROR.
+  // Every statement is logged to backend.log (logger "SQL", DEBUG): time, rows, the SQL and its arguments.
+  // Slow ones (over SLOW_MS) are WARN and failed ones ERROR, so they also reach error.log.
 
   private static final Logger sqlLog = LoggerFactory.getLogger("SQL");
   private static final long SLOW_MS = 500;

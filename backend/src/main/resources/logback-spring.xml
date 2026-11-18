@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  TelemuneSmartAi backend logging. Files go to logs/ in the project folder (LOG_DIR in .env changes it):
+  TelemuneSmartAi backend logging: two files in logs/ (LOG_DIR in .env changes the folder).
 
-    app.log    INFO and up: every API request, sign-ins, user actions, OpenAI calls, start-up.   kept 30 days
-    debug.log  DEBUG and up: app.log + details (prompts sizes, transcripts, settings, SQL).       kept 7 days
-    sql.log    every SQL statement with its arguments, row count and time.                       kept 7 days
-    error.log  WARN and up only: the first place to look when something breaks.                  kept 60 days
+    backend.log  everything: start-up, every API request, sign-ins, user actions, OpenAI calls with timings,
+                 and at DEBUG the details (caller's words, agent's replies, every SQL statement).   kept 14 days
+    error.log    WARN and up only (also in backend.log): the first place to look when something breaks. kept 60 days
 
   Every line: time (UTC, like the database) · level · [request id] · [user] · [agent id] · logger · message.
   The request id is also sent back in the X-Request-Id header and stored in api_logs.request_id and
-  activity_logs.request_id, so one id finds a request in every log file and in MySQL.
+  activity_logs.request_id, so one id finds a request in the logs and in MySQL.
 
-  Levels (in .env, then restart): LOG_LEVEL=DEBUG (default) or INFO (no debug.log detail);
-  SQL_LOG=DEBUG (default) or INFO (no sql.log). Admins can also change them live: PUT /api/admin/log-level.
+  Levels (in .env, then restart): LOG_LEVEL=DEBUG (default) or INFO (no detail lines);
+  SQL_LOG=DEBUG (default) or INFO (no SQL lines). Admins can also change them live: PUT /api/admin/log-level.
+  Nothing is printed to the console (runScript.sh sends anything the JVM prints itself to error.log).
 -->
 <configuration>
   <springProperty scope="context" name="LOG_DIR" source="LOG_DIR" defaultValue="logs"/>
@@ -22,36 +22,11 @@
   <property name="PATTERN"
             value="%d{yyyy-MM-dd HH:mm:ss.SSS,UTC}Z %-5level [%X{reqId:--}] [%X{user:--}] [%X{agent:--}] %logger{1} - %msg%n%ex{full}"/>
 
-  <!-- Console: INFO and up (runScript.sh sends it to logs/backend.log, so start-up problems show there too). -->
-  <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
-    <filter class="ch.qos.logback.classic.filter.ThresholdFilter"><level>INFO</level></filter>
-    <encoder><pattern>${PATTERN}</pattern><charset>UTF-8</charset></encoder>
-  </appender>
-
-  <appender name="APP" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>${LOG_DIR}/app.log</file>
-    <filter class="ch.qos.logback.classic.filter.ThresholdFilter"><level>INFO</level></filter>
+  <appender name="BACKEND" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>${LOG_DIR}/backend.log</file>
     <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-      <fileNamePattern>${LOG_DIR}/archive/app.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-      <maxFileSize>50MB</maxFileSize><maxHistory>30</maxHistory><totalSizeCap>2GB</totalSizeCap>
-    </rollingPolicy>
-    <encoder><pattern>${PATTERN}</pattern><charset>UTF-8</charset></encoder>
-  </appender>
-
-  <appender name="DEBUG_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>${LOG_DIR}/debug.log</file>
-    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-      <fileNamePattern>${LOG_DIR}/archive/debug.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-      <maxFileSize>100MB</maxFileSize><maxHistory>7</maxHistory><totalSizeCap>3GB</totalSizeCap>
-    </rollingPolicy>
-    <encoder><pattern>${PATTERN}</pattern><charset>UTF-8</charset></encoder>
-  </appender>
-
-  <appender name="SQL_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
-    <file>${LOG_DIR}/sql.log</file>
-    <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
-      <fileNamePattern>${LOG_DIR}/archive/sql.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
-      <maxFileSize>100MB</maxFileSize><maxHistory>7</maxHistory><totalSizeCap>3GB</totalSizeCap>
+      <fileNamePattern>${LOG_DIR}/archive/backend.%d{yyyy-MM-dd}.%i.log.gz</fileNamePattern>
+      <maxFileSize>100MB</maxFileSize><maxHistory>14</maxHistory><totalSizeCap>5GB</totalSizeCap>
     </rollingPolicy>
     <encoder><pattern>${PATTERN}</pattern><charset>UTF-8</charset></encoder>
   </appender>
@@ -68,19 +43,15 @@
 
   <!-- Our code. -->
   <logger name="com.telemune" level="${LOG_LEVEL}"/>
-  <!-- SQL: only to sql.log (slow or failed statements also reach app.log / error.log through com.telemune.smartai.db). -->
-  <logger name="SQL" level="${SQL_LOG}" additivity="false">
-    <appender-ref ref="SQL_FILE"/>
-  </logger>
+  <!-- SQL statements (logger "SQL"): into backend.log like everything else, own level. -->
+  <logger name="SQL" level="${SQL_LOG}"/>
   <!-- Frameworks: start-up line and problems only. -->
   <logger name="org.springframework.boot.web.embedded.tomcat" level="INFO"/>
   <logger name="org.springframework.boot.StartupInfoLogger" level="INFO"/>
   <logger name="com.zaxxer.hikari" level="INFO"/>
 
   <root level="WARN">
-    <appender-ref ref="CONSOLE"/>
-    <appender-ref ref="APP"/>
-    <appender-ref ref="DEBUG_FILE"/>
+    <appender-ref ref="BACKEND"/>
     <appender-ref ref="ERROR_FILE"/>
   </root>
 </configuration>

@@ -65,18 +65,20 @@ free_port() { # port, what-it-should-be (pattern in the command line)
 free_port "$BACKEND_PORT" "smartai-backend.jar"
 free_port "$PORT" "server.js"
 
-# 5. Backend in the background (log: logs/backend.log), stopped again when this script ends
+# 5. Backend in the background, stopped again when this script ends.
+#    It writes logs/backend.log (everything) and logs/error.log (problems) itself; anything the JVM
+#    prints on its own (e.g. a crash before logging starts) is added to logs/error.log.
 mkdir -p logs
 say "Starting the backend on port ${BACKEND_PORT}…"
-java -jar "$JAR" >> logs/backend.log 2>&1 &
+java -jar "$JAR" > /dev/null 2>> logs/error.log &
 BACK_PID=$!
 cleanup() { kill "$BACK_PID" 2>/dev/null || true; }
 trap cleanup EXIT INT TERM
 for i in $(seq 1 120); do
   curl -fs "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1 && break
   if ! kill -0 "$BACK_PID" 2>/dev/null; then
-    tail -25 logs/backend.log
-    fail "The backend stopped while starting (see logs/backend.log). Is MySQL running and are MYSQL_* in .env right?"
+    tail -25 logs/error.log
+    fail "The backend stopped while starting (see logs/error.log and logs/backend.log). Is MySQL running and are MYSQL_* in .env right?"
   fi
   [ "$i" -eq 120 ] && fail "The backend didn't start within 60 seconds (see logs/backend.log)."
   sleep 0.5
@@ -99,6 +101,6 @@ if [ -z "${NO_OPEN:-}" ]; then
   ) &
 fi
 
-say "TelemuneSmartAi is running at $URL  (backend log: logs/backend.log · Ctrl+C stops both)"
+say "TelemuneSmartAi is running at $URL  (logs: logs/backend.log, logs/error.log · Ctrl+C stops both)"
 cd frontend
 node server.js

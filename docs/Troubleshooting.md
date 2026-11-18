@@ -8,13 +8,12 @@ what each table holds, and ready-to-run SQL queries.
 All logs are in `logs/` in the project folder (`LOG_DIR` in `.env` moves them). Old files are rotated daily (or at the
 size limit) into `logs/archive/` as `.gz`.
 
+Only two files:
+
 | File | What is in it | Level | Kept |
 |---|---|---|---|
-| `logs/error.log` | Problems only: failed sign-ins, 4xx/5xx answers, OpenAI errors, SQL errors, slow SQL. **Look here first.** | WARN, ERROR | 60 days |
-| `logs/app.log` | Every API request (method, path, status, time), sign-ins, user actions, every OpenAI call with timings and tokens, start-up | INFO and up | 30 days |
-| `logs/debug.log` | `app.log` plus details: incoming request (+ browser), caller's words, agent's reply, greeting text, OpenAI request ids, cache hits | DEBUG and up | 7 days |
-| `logs/sql.log` | Every SQL statement: time, rows, SQL, arguments (password and token hashes shown as `***`), BEGIN/COMMIT/ROLLBACK | DEBUG | 7 days |
-| `logs/backend.log` | Console output of the backend (start-up and anything printed before logging starts). Written by `runScript.sh` | INFO | not rotated |
+| `logs/backend.log` | **Everything**: start-up, every API request (method, path, status, time), sign-ins, user actions, every OpenAI call with timings and tokens; at DEBUG also the incoming request (+ browser), caller's words, agent's reply, greeting text, OpenAI request ids, cache hits and every SQL statement (time, rows, SQL, arguments with password/token hashes shown as `***`, BEGIN/COMMIT/ROLLBACK) | DEBUG and up | 14 days |
+| `logs/error.log` | **Problems only** (also in backend.log): failed sign-ins, 4xx/5xx answers, OpenAI errors, SQL errors, slow SQL, stack traces, and anything the JVM prints itself (e.g. a crash before logging starts). **Look here first.** | WARN, ERROR | 60 days |
 
 Times are **UTC** (marked `Z`), the same as every DATETIME in MySQL, so a log line and a table row can be matched
 directly. India time = UTC + 5:30.
@@ -35,8 +34,8 @@ directly. India time = UTC + 5:30.
 
 | Setting | Where | Values | Effect |
 |---|---|---|---|
-| `LOG_LEVEL` | `.env`, then restart | `DEBUG` (default), `INFO` | `INFO` stops the detail lines in `debug.log` |
-| `SQL_LOG` | `.env`, then restart | `DEBUG` (default), `INFO` | `INFO` stops `sql.log` (slow/failed SQL still reach `app.log`/`error.log`) |
+| `LOG_LEVEL` | `.env`, then restart | `DEBUG` (default), `INFO` | `INFO` drops the detail lines (caller's words, replies…) from `backend.log` |
+| `SQL_LOG` | `.env`, then restart | `DEBUG` (default), `INFO` | `INFO` drops the SQL lines from `backend.log` (slow/failed SQL are still logged, also in `error.log`) |
 | Live change | `PUT /api/admin/log-level` (admin) | `{"logger":"com.telemune" or "SQL","level":"DEBUG/INFO/WARN/ERROR"}` | Changes at once, until the next restart. `GET /api/admin/log-level` shows the current levels |
 
 Thresholds built in: SQL slower than **500 ms** → WARN "Slow SQL"; API requests slower than **3 s** → WARN "(slow)"
@@ -46,19 +45,19 @@ Thresholds built in: SQL slower than **500 ms** → WARN "Slow SQL"; API request
 
 ```bash
 # 1. find the request (e.g. the last failed one)
-grep "← " logs/app.log | grep -E " (4|5)[0-9]{2} in " | tail -5
+grep "← " logs/backend.log | grep -E " (4|5)[0-9]{2} in " | tail -5
 
-# 2. everything that happened in it: app lines + SQL
-grep -h "\[08c2f1f2\]" logs/debug.log logs/sql.log | sort
+# 2. everything that happened in it (app lines + SQL)
+grep "\[08c2f1f2\]" logs/backend.log
 
 # 3. everything one user did today
-grep "\[qa.logs\]" logs/app.log
+grep "\[qa.logs\]" logs/backend.log
 
 # 4. live view while you reproduce the problem
-tail -f logs/app.log logs/error.log
+tail -f logs/backend.log
 ```
 
-Example: one chat turn in `debug.log`
+Example: one chat turn in `backend.log`
 
 ```
 INFO  [08c2f1f2] [qa.logs] [0e1a116c] VoiceController - Chat turn: agent "Logbot", lang en-IN, playbook -, 1 turns, prompt 6354 chars
@@ -76,21 +75,21 @@ The OpenAI `request id` (`req_…`) is what OpenAI support asks for.
 
 | Symptom | Look for | Likely cause / fix |
 |---|---|---|
-| Backend won't start | `logs/backend.log` (last 30 lines) | MySQL not running, wrong `MYSQL_*` in `.env`, port 8324 in use |
+| Backend won't start | `logs/error.log` (last 30 lines) | MySQL not running, wrong `MYSQL_*` in `.env`, port 8324 in use |
 | "Server is missing a valid OPENAI_API_KEY" | `error.log`: `OpenAI answered HTTP 401` | Key missing/wrong in `.env`; restart |
 | "Rate limited or out of credit" | `error.log`: `OpenAI answered HTTP 429` | OpenAI billing / limits |
 | "A model … isn't available" | `error.log`: `OpenAI answered HTTP 404` + message | Model name in Admin → App settings or the agent's Voice & AI |
-| Agent slow to answer | `app.log`: `OpenAI chat … first token N ms`, `OpenAI transcribe … in N ms` | First token > 2.5 s = model/OpenAI; transcription slow = long recordings |
-| Agent says nothing / no voice | `app.log`: `OpenAI speech …`; `error.log`: `tts stream failed` | TTS model / voice; check the browser console too |
-| Caller's words wrong | `debug.log`: `Transcript: "…"` and `Caller said: "…"` | Mic, language setting, `speechToText.model` |
+| Agent slow to answer | `backend.log`: `OpenAI chat … first token N ms`, `OpenAI transcribe … in N ms` | First token > 2.5 s = model/OpenAI; transcription slow = long recordings |
+| Agent says nothing / no voice | `backend.log`: `OpenAI speech …`; `error.log`: `tts stream failed` | TTS model / voice; check the browser console too |
+| Caller's words wrong | `backend.log`: `Transcript: "…"` and `Caller said: "…"` | Mic, language setting, `speechToText.model` |
 | User can't sign in | `error.log`: `Sign-in FAILED: <user> from <ip> - <reason>` | reason = unknown user / wrong password / locked / disabled. Queries in §5 |
-| "Please sign in." on every click | `app.log`: `Refused 401: Please sign in.` | Session expired or deleted (`sessions` table) |
-| "Cross-site request blocked." | `app.log`: `Refused 403` | Page opened from another host/port than the frontend |
-| "Create an agent first." | `app.log`: `API answered 400: Create an agent first.` | User has no agents (normal for new accounts) |
-| Something saved wrong | `sql.log` for that request id: the exact UPDATE/INSERT and its values | |
+| "Please sign in." on every click | `backend.log`: `Refused 401: Please sign in.` | Session expired or deleted (`sessions` table) |
+| "Cross-site request blocked." | `backend.log`: `Refused 403` | Page opened from another host/port than the frontend |
+| "Create an agent first." | `backend.log`: `API answered 400: Create an agent first.` | User has no agents (normal for new accounts) |
+| Something saved wrong | `backend.log` SQL lines for that request id: the exact UPDATE/INSERT and its values | |
 | Server error 500 | `error.log`: `Request failed with an unexpected error` + Java stack trace | Send the stack trace to the developer |
 | Database error | `error.log`: `SQL failed (N ms): <sql> | args=[…] | <MySQL message>` | Missing column (restart runs migrations), data too long, duplicate key |
-| Recording missing | `app.log`: `Recording for call <id>: N KB … saved / not saved` | Size over `history.maxRecordingMB`; file in `data/users/<userId>/recordings/` |
+| Recording missing | `backend.log`: `Recording for call <id>: N KB … saved / not saved` | Size over `history.maxRecordingMB`; file in `data/users/<userId>/recordings/` |
 
 ## 4. Tables (MySQL database `ai-agent`)
 

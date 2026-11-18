@@ -22,7 +22,7 @@ Needs **MySQL 8** running: put its login in `.env` (`MYSQL_HOST`, `MYSQL_PORT`, 
 `MYSQL_DATABASE=ai-agent`). The database and all its tables are created on first start (`db/schema.sql`).
 
 It checks Java 21+ and Node 22+, creates `.env` if missing (paste your `OPENAI_API_KEY`), builds the backend with
-Maven when its code changed, starts the backend (log: `logs/backend.log`) and the frontend on **http://localhost:8323**,
+Maven when its code changed, starts the backend (logs: `logs/backend.log`, `logs/error.log`) and the frontend on **http://localhost:8323**,
 and opens it in Chrome. Use `NO_OPEN=1 ./runScript.sh` to skip the browser; Ctrl+C stops both.
 Voice input needs **Chrome or Edge**.
 
@@ -115,7 +115,7 @@ Powered by Telemune © 2027 · Designed by DJ
 
 ## Logs & troubleshooting
 
-Logs are in `logs/`: `error.log` (problems first), `app.log` (every request, sign-in, action and OpenAI call),
-`debug.log` (full detail), `sql.log` (every SQL statement). Each line carries a request id that is also in the
+Logs are in `logs/`: `backend.log` (everything: every request, sign-in, action, OpenAI call, the caller's words, the
+agent's replies and every SQL statement) and `error.log` (problems only, look here first). Each line carries a request id that is also in the
 `X-Request-Id` header and the `api_logs` / `activity_logs` tables. See [docs/Troubleshooting.md](docs/Troubleshooting.md)
 for the tables and ready SQL queries.

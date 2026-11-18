@@ -77,7 +77,7 @@ Copy `.env.example` to `.env` and fill it in. It is never committed to git.
 
 ### Starting the app
 
-1. Run `./runScript.sh`. It checks Java and Node, checks `.env`, builds the backend when its code changed, stops any older copy of the app, starts the backend (port 8324, log in `logs/backend.log`) and then the frontend (port 8323), and opens Chrome (`NO_OPEN=1 ./runScript.sh` skips the browser). Ctrl+C stops both.
+1. Run `./runScript.sh`. It checks Java and Node, checks `.env`, builds the backend when its code changed, stops any older copy of the app, starts the backend (port 8324, logs in `logs/backend.log` and `logs/error.log`) and then the frontend (port 8323), and opens Chrome (`NO_OPEN=1 ./runScript.sh` skips the browser). Ctrl+C stops both.
 2. On every start the backend creates any missing tables, adds the ready-made agent types and templates (`db/seed.sql`) if they're not there yet, copies the default settings from `config.json` into the database the first time, and creates the admin account if there are no users.
 3. Open http://localhost:8323. Signed-out visitors are sent to the login page.
 4. Sign in as **admin / admin@123** and change the password straight away (a banner reminds you).
@@ -395,7 +395,7 @@ Deleting an agent keeps its calls, events and messages (their agent link is clea
 | `backups/pre-login-2026-11-17/` | Older copy from before accounts were added |
 | `.env` | OpenAI key and MySQL login (never committed) |
 | `config.json` | Page port, and the first-start defaults copied into `app_config` |
-| `logs/backend.log` | The backend's log |
+| `logs/backend.log`, `logs/error.log` | The backend's logs: everything / problems only |
 
 ### Version history (git)
 
@@ -501,17 +501,15 @@ The auth, agent-limit and silence settings are editable in the admin dashboard; 
 
 ### Logs
 
-The backend writes four log files in `logs/` (times in UTC, like the database):
+The backend writes two log files in `logs/` (times in UTC, like the database):
 
 | File | What's in it |
 | --- | --- |
+| `backend.log` | Everything: every request with its status and time, sign-ins, user actions, every OpenAI call with timings and tokens, what the caller said, what the agent replied, and every database query with its values (passwords and tokens hidden) |
 | `error.log` | Problems only (failed sign-ins, errors, OpenAI and database failures). Look here first |
-| `app.log` | Every request with its status and time, sign-ins, user actions, every OpenAI call with timings and tokens |
-| `debug.log` | Everything in app.log plus details: what the caller said, what the agent replied |
-| `sql.log` | Every database query with its values (passwords and tokens hidden) |
 
 Every line has a **request id**, e.g. `[08c2f1f2]`. The browser gets the same id in the `X-Request-Id` header, and it is
-saved in the `api_logs` and `activity_logs` tables, so `grep 08c2f1f2 logs/*.log` shows one request from start to end.
+saved in the `api_logs` and `activity_logs` tables, so `grep 08c2f1f2 logs/backend.log` shows one request from start to end.
 Set `LOG_LEVEL=INFO` / `SQL_LOG=INFO` in `.env` for less detail. **docs/Troubleshooting.md** lists every table and
 ready-made SQL queries for sign-in, error, speed, call and agent problems.
 
@@ -519,7 +517,7 @@ ready-made SQL queries for sign-in, error, speed, call and agent problems.
 
 | Symptom | Fix |
 | --- | --- |
-| "The backend stopped while starting" | Start MySQL and check the `MYSQL_*` values in `.env`; details in `logs/backend.log` |
+| "The backend stopped while starting" | Start MySQL and check the `MYSQL_*` values in `.env`; details in `logs/error.log` |
 | "The backend isn't running" page or error | Start everything with `./runScript.sh` |
 | "Backend build failed" | Install a JDK 21+ and Maven, then run `./runScript.sh` again |
 | "Server is missing a valid OPENAI_API_KEY" | Add the key to `.env` and restart |
