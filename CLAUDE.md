@@ -2,284 +2,201 @@
 
 A multilingual **AI voice agent** you talk to from the browser with a call button. The caller speaks, the agent
 answers out loud with an emotional voice, and every call gets a summary, stats and an optional recording.
+Agents can work **for a person** ("Hello, this is Brown, DJ's assistant. DJ isn't available… I can schedule a meeting
+or pass a message on"): they book meetings into the calendar and take messages.
 Branding: "TelemuneSmartAi", footer "Powered by Telemune © 2027 · Designed by DJ".
 
-## Storage = MySQL (read this first)
+## Two applications (read this first)
+
+| App | Folder | Port | What it does |
+|---|---|---|---|
+| **Backend** | `backend/` | `BACKEND_PORT` (8324), bound to 127.0.0.1 | Spring Boot 3.5 (Java 21+, Maven). Every `/api` route, MySQL, OpenAI |
+| **Frontend** | `frontend/` | `server.port` in `config.json` (8323) | Node 22+, no dependencies. Serves `frontend/public/` and forwards `/api/*` to the backend (same origin, so cookies and SSE just work) |
+
+- The browser only talks to the frontend. Signed-out visits to `/`, `/index.html`, `/admin.html` → `/login.html`
+  (the frontend asks the backend `/api/me`); `/admin.html` is admins only; `/api/*` returns 401 when signed out.
+- The old single Node server (`server.js`, `auth.js`, …) was replaced on 2026-11-18; it is in git history
+  (commit `1bc7bec` and earlier).
+
+## Storage = MySQL
 
 - Everything lives in MySQL, database **`ai-agent`** (connection in `.env`: `MYSQL_HOST/PORT/USER/PASSWORD/DATABASE`).
-  `db/schema.sql` creates the database and all tables; `db.js` runs it on every start (all `IF NOT EXISTS`).
-  Connections use `time_zone = '+00:00'`: every DATETIME is UTC.
-- Tables: `roles` (1 admin, 2 user) · `users` · `sessions` · `app_config` (shared settings, one JSON per section) ·
-  `agents` + `emergency_rules` (each agent's own setup) · `playbooks` · `calls` + `call_summaries` ·
-  `calendar_events` · `activity_logs` (who did what) · `api_logs` (every API request: path, status, ms).
+  `db/schema.sql` = all tables (IF NOT EXISTS); `db/seed.sql` = ready-made agent types + templates (INSERT IGNORE, so
+  admin edits are kept). Both are copied into the backend jar and run on every backend start (`db/Db.java`), which
+  also adds missing columns to old tables (`Db.migrate()`). Connections use UTC: every DATETIME is UTC.
+- Tables: `roles` (1 admin, 2 user) · `users` · `sessions` · `login_attempts` (every sign-in, drives the lockout) ·
+  `app_config` (shared settings, one JSON per section) · `agent_types` + `agent_templates` (personas, greetings, scripts) ·
+  `agents` + `emergency_rules` (each agent's own setup) · `playbooks` · `calls` + `call_summaries` · `calendar_events` ·
+  `messages` (messages callers left) · `activity_logs` (who did what) · `api_logs` (every API request).
 - Only call recordings stay on disk: `data/users/<userId>/recordings/<file>` (file name in `calls.recording_file`).
-- `migrate.js` imported the old JSON storage once (2026-11-17); a full copy is in `backups/pre-mysql-2026-11-17/`.
-  Older copy (before accounts): `backups/pre-login-2026-11-17/`.
-- No Spring Boot or other backend: Node talks to MySQL directly with `mysql2` (the only other dependency).
+- Backups of the pre-MySQL JSON data: `backups/pre-mysql-2026-11-17/`, `backups/pre-login-2026-11-17/`.
 
 ## Accounts & roles
 
-- Sign-in is required for everything. `/login.html` → POST `/api/login` → HttpOnly `tsa_session` cookie
-  (`app_config.auth.sessionHours`, or `rememberDays` with "Keep me signed in"). Signed-out visits to `/`, `/index.html`,
-  `/admin.html` redirect to login; `/api/*` returns 401 (the pages then go to the login page).
-- **Self sign-up**: "Create account" tab on the login page → POST `/api/signup` (name, username, optional email,
-  password, confirm) → role 2, signed in straight away, gets a starter Personal Assistant agent. Shown only while
-  `app_config.auth.allowSignup` is true (switch in the admin dashboard → ⚙️ App settings). 5 sign-ups per IP per hour.
-- Roles: **1 = admin** (lands on `/admin.html`: every user, all their agents, calls, summaries, recordings, the activity
-  log and app settings; add / reset password / make admin / disable / delete users) and **2 = user** (own agents and data).
-- Default account created when `users` is empty: **admin / admin@123** (flagged `must_change_password`).
-  Users created by the admin also get a temporary password they must change.
-- Passwords: scrypt hashes. Sessions: SHA-256 of the token. 5 wrong passwords per username+IP → 5-minute lockout.
-  Non-GET requests from another origin are rejected.
-- Deleting a user is a soft delete (`deleted_at` set, username freed as `name~deleted-<id>`); their rows stay.
-  The last active admin can't be demoted, disabled or deleted, and admins can't remove their own access.
-- Admin read-only access to another user's data: any GET `/api/...?as=<userId>` (ignored for non-admins).
+- `/login.html` → POST `/api/login` → HttpOnly `tsa_session` cookie (`app_config.auth.sessionHours`, or `rememberDays`
+  with "Keep me signed in"). The sessions table stores only the SHA-256 of the token.
+- **Self sign-up**: "Create account" tab → POST `/api/signup` → role 2, signed in, gets a starter Personal Assistant
+  agent. Shown only while `app_config.auth.allowSignup` is true. 5 sign-ups per IP per hour (counted from activity_logs).
+- Roles: **1 = admin** (`/admin.html`: every user, agents, calls, recordings, activity log, sign-ins, app settings,
+  agent types & templates) and **2 = user** (own agents and data).
+- Default account when `users` is empty: **admin / admin@123** (must change it).
+- Passwords: scrypt (N=16384, r=8, p=1, 64 bytes) as `scrypt$salt$hash`, the same format as the old Node code, so old
+  passwords still work (BouncyCastle `SCrypt`). 5 wrong passwords per username+IP in 5 min → locked (from `login_attempts`).
+  Non-GET requests whose Origin host ≠ Host are rejected.
+- Deleting a user is a soft delete (`deleted_at`, username freed as `name~deleted-<id>`). The last active admin can't be
+  demoted, disabled or deleted. Admin read-only view of another user's data: any GET `/api/...?as=<userId>`.
 
-## Agents (many per user)
+## Agents, types & templates
 
-- Each user can create agents for different jobs (**＋ New agent**: Personal, Customer Support, Telecom, Hospital &
-  Healthcare, Banking & Finance, Sales, Appointment, Payment Reminder, Survey, HR, Tutor, Wellness, Other). The type
-  sets the agent's role when no playbook is picked (`playbookPrompt(pb, agent)`); "What it's for" is added to the prompt.
-- Each agent has its own name, language, voice, LLM/STT/TTS, playbook, calendar switch and emergency numbers.
-  Saving one agent never touches another agent or another user. Playbooks belong to the user; any agent can pick one.
-- The page sends **`X-Agent-Id`** on every `/api/` request (fetch wrapper in app.js). `server.js` resolves it with
-  `resolveAgent()` (must belong to the user, else their default agent) into the request context; `getConfig()` then
-  layers DEFAULTS ← `app_config` ← that agent's row. Calls and calendar events record `agent_id` + agent name.
-- Last-opened agent per user is kept in localStorage (`tsa-agent-<userId>`); ★ Default opens first otherwise.
-- How code finds the user/agent: `context.js` (AsyncLocalStorage) → `currentDataUserId()`, `currentAgent()`.
+- Each user has many agents. The **agent type** (`agent_types`: personal, **secretary = "Call Assistant (for a person)"**,
+  support, telecom, hospital, banking, sales, appointment, collections, survey, hr, tutor, wellness, other) gives the
+  default persona (`role`) and **greeting**; `needs_owner` makes "Works for" required; `default_calendar` turns the
+  calendar on for new agents.
+- **Templates** (`agent_templates`): persona, greeting, goal, steps, rules, summary focus, per type; one per type can be
+  `is_default` (pre-selected). An agent points at one (`agents.template_id`), so admin edits reach every agent using it.
+- Per-agent persona fields: `owner_name` (works for), `organization`, `owner_availability` (used for meeting times),
+  `greeting` (own first line; empty = the template's, else the type's).
+- Text may use `{agent}`, `{owner}`, `{org}`; `[[ … ]]` is dropped when a value inside is empty
+  (`TemplateService.render`, mirrored by `renderTpl` in app.js/admin.js for previews).
+- Prompt role section (`TemplateService.rolePrompt`): user's own playbook > agent template > type role; then
+  "You work for {owner}…", availability, description. The greeting goes into the `[call connected]` instruction.
+- The page sends **`X-Agent-Id`** on every `/api/` request; `ApiFilter` resolves it (must belong to the user, else
+  their default agent) into `Ctx.agent`. `AppConfigService.forAgent()` layers defaults.json ← app_config ← agent ← env.
 
 ## Run
 
 ```bash
-./runScript.sh            # checks Node 22+, installs deps, checks .env, starts on config port, opens Chrome
+./runScript.sh            # checks Node 22+ / Java 21+, builds the backend if its code or db/*.sql changed, starts both, opens Chrome
 NO_OPEN=1 ./runScript.sh  # same, without opening a browser
-npm start                 # just the server
 ```
 
-- URL: http://localhost:8323 (port = `server.port` in `config.json`; read only at startup → restart to change).
-- Needs `OPENAI_API_KEY` in `.env` (copy `.env.example`). `.env` is the only place for secrets.
-- Best in **Chrome or Edge** (live captions use the Web Speech API; OpenAI STT works in any browser with a mic).
-  The Claude desktop in-app browser blocks the mic.
-
-## Stack
-
-Plain Node (ESM, Node 22+) with `node:http` — no framework, no build step. Only dependency: `openai`.
-Front end is static HTML/CSS/JS in `public/` (no bundler, no framework).
-
-| Piece | How |
-|---|---|
-| Speech → text | Mic recorded per utterance + voice-activity detection → OpenAI `gpt-4o-transcribe` (`/api/transcribe`). Browser `SpeechRecognition` runs alongside only for live captions / fallback |
-| Thinking | OpenAI Chat Completions, streamed over SSE (`/api/chat`) |
-| Text → speech | OpenAI TTS (`gpt-4o-mini-tts`), one request per sentence, with emotion `instructions` (`/api/tts`) |
-| Summary | OpenAI Chat Completions, non-streamed (`/api/summary`) |
-| Storage | MySQL `ai-agent` via `mysql2` (recordings as files under `data/users/<id>/recordings/`) |
+- URL: http://localhost:8323. Backend log: `logs/backend.log`. Ctrl+C stops both.
+- Build only: `cd backend && mvn -q -DskipTests package` → `backend/target/smartai-backend.jar`
+  (run it from the project folder: it reads `.env`, `config.json` and `data/` from the working directory).
+- Needs `OPENAI_API_KEY` and `MYSQL_*` in `.env` (copy `.env.example`). `.env` is the only place for secrets.
+- Best in **Chrome or Edge** (live captions use the Web Speech API). The Claude desktop in-app browser blocks the mic.
 
 ## File map
 
 ```
-config.json        Seed for app_config on first start + server.port (read before the DB connects). Not read after that.
-db/schema.sql      All tables (run by db.js on start, or by hand: mysql -uroot -p < db/schema.sql).
-db.js              MySQL pool (UTC), initDb(), query/one/exec/tx helpers.
-migrate.js         One-time import of the old JSON files into MySQL (+ backup).
-auth.js            Users, roles, scrypt passwords, sessions, login lockout, sign-up, first-start admin.
-agents.js          Agents CRUD, resolveAgent(), saveAgentSettings() (the auto-save target), emergency rules.
-logs.js            logActivity(), logRequest(), listActivity(), apiStats().
-context.js         Per-request user, data user and agent (AsyncLocalStorage); asUser() for admin roll-ups.
-config.js          DEFAULTS ← app_config ← active agent ← env; publicConfig() = what the browser may see;
-                   seedAppConfig(), saveAppSection() (admin), bootPort().
-calendar.js        Calendar events (calendar_events) + .ics export.
-server.js          HTTP server + API routes, system prompt, voices (10), emotions (20), languages (15).
-playbooks.js       AGENT_TYPES (13 types, each with ready-made templates) + saved playbooks CRUD + playbookPrompt().
-calls.js           Call history CRUD (calls + call_summaries), recordings on disk, totals (callStats).
-public/login.html  Sign-in + Create account (split brand panel + form).
-public/admin.html  Admin dashboard (+ public/admin.js): KPIs, user cards with all their agents, add/reset/role/disable/
-                   delete, user drawer (agents, playbooks, calls, call view), ⚙️ App settings, 📜 Activity log.
-public/index.html  Layout + all CSS (theme tokens for light/dark), dialogs (incl. New agent), user menu.
-public/app.js      Everything in the browser: My agents switcher, call flow, speech in/out, tag parsing, visualizer,
-                   recording, playbook manager, call summaries panel + pagination.
-public/telemune-mark.png   Official Telemune snowflake (from telemune.com). Used as a CSS mask filled with the theme
-                           gradient (`.logo` in index.html), so it always matches branding.theme.
-public/telemune-logo.svg   Same mark, gradient baked in — the browser-tab icon (favicon).
-public/logo.svg            Old waveform logo, no longer used.
-runScript.sh       One-command start.
-docs/              TelemuneSmartAi-Guide.md (full product + technical guide) and images/ (call-flow, architecture).
-                   Keep it in step when features change. PDF copy: TelemuneSmartAi-Guide.pdf, rebuilt with
-                   node docs/md2html.mjs docs/TelemuneSmartAi-Guide.md /tmp/guide.html, then Chrome headless
-                   --print-to-pdf=docs/TelemuneSmartAi-Guide.pdf file:///tmp/guide.html
-data/              Call recordings only (data/users/<userId>/recordings/). Never wipe it.
+config.json            Seed for app_config on first start + server.port (frontend port).
+db/schema.sql          All tables.     db/seed.sql   Agent types + templates (generated once from the old playbooks.js).
+backend/pom.xml        Spring Boot 3.5.6, Java 21, starter-web + starter-jdbc, mysql-connector-j, bcprov (scrypt).
+backend/src/main/resources/application.properties   Ports, datasource (UTC), .env import, app.home.
+backend/src/main/resources/defaults.json            Default settings (bottom layer).
+backend/src/main/java/com/telemune/smartai/
+  SmartAiApplication.java   main.        Bootstrap.java   seeds app_config, creates the first admin.
+  db/Db.java                schema + migrations + seed on start; query/one/count/exec/tx helpers.
+  web/ApiFilter.java        sign-in check, origin check, admin-only, ?as=, X-Agent-Id → Ctx, api_logs.
+  web/Ctx.java · ApiException.java · ErrorAdvice.java (every error is JSON {error}).
+  util/J.java               JSON/map helpers (rows are Map<String,Object>).
+  ai/OpenAiClient.java      HTTPS to OpenAI: chat (streamed + plain), speech, transcriptions, models.
+  ai/Prompts.java           voices (10), emotions (20), languages (16), system prompt + tag protocol.
+  service/                  AuthService, AgentService, TemplateService, PlaybookService, CallService,
+                            CalendarService, MessageService, AppConfigService, LogService.
+  api/                      AuthController, AgentController (+ /api/templates), ConfigController (config, settings,
+                            models), VoiceController (chat SSE, tts, transcribe, summary), DataController (playbooks,
+                            calls, calendar, messages), AdminController.
+frontend/server.js     Static files + /api proxy + page guard.  frontend/package.json (no deps).
+frontend/public/login.html   Sign in + Create account.
+frontend/public/admin.html + admin.js   KPIs, users, 🧩 agent types & templates editor, ⚙️ settings, 🔐 sign-ins, 📜 log.
+frontend/public/index.html   Layout + CSS (light/dark tokens), dialogs (New agent with type/template/works-for).
+frontend/public/app.js       Agents switcher, persona section, call flow, speech in/out, tag parsing, messages,
+                             calendar, playbooks, call summaries.
+frontend/public/telemune-mark.png / telemune-logo.svg   Logo (CSS mask, theme gradient) / favicon.
+runScript.sh           One-command start of both apps.
+docs/                  TelemuneSmartAi-Guide.md (+ PDF, images/). Keep it in step when features change. PDF rebuild:
+                       node docs/md2html.mjs docs/TelemuneSmartAi-Guide.md /tmp/guide.html, then Chrome headless
+                       --print-to-pdf=docs/TelemuneSmartAi-Guide.pdf file:///tmp/guide.html
+data/                  Call recordings only. Never wipe it.     logs/   backend.log (gitignored).
 ```
 
-## API
+## API (all served by the backend, reached through the frontend)
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/login`, `/api/logout` | sign in (body: username, password, remember) / out |
-| POST | `/api/signup` | self sign-up {name, username, email?, password, confirm, remember} (when allowed) |
-| GET | `/api/auth-options` | public: {allowSignup, appName, tagline} for the login page |
-| GET / POST / PATCH / DELETE | `/api/agents[/:id]` | list {agents, currentId, types} / create {name, type, description} / {name, description, type, isDefault} / delete |
+| POST | `/api/login`, `/api/logout` | sign in (username, password, remember) / out |
+| POST | `/api/signup` | self sign-up {name, username, email?, password, confirm, remember} |
+| GET | `/api/auth-options`, `/api/health` | public: {allowSignup, appName, tagline} / {ok} |
 | GET / POST | `/api/me`, `/api/me/password` | who is signed in / change own password {current, next} |
-| GET | `/api/admin/overview` | admin: totals + every user with agent summary and stats |
-| POST / GET / PATCH / DELETE | `/api/admin/users[/:id]` | admin: create / detail / {name, role, password, disabled} / delete |
-| GET | `/api/admin/logs?page=N&user=ID` | admin: activity log (15 per page) |
-| GET / PUT | `/api/admin/config[/:section]` | admin: all app_config sections / replace one section (JSON object) |
-| GET | `/api/config` | models, voices, languages, emotions, `settings` (= `publicConfig`) |
-| POST | `/api/chat` | SSE stream: `delta` {text}, `usage` {input,output,total}, `error`, `done` |
-| POST | `/api/tts` | mp3 for {text, emotion, voice, lang} |
-| POST | `/api/transcribe` | {audio: base64, mime, lang, context} → {text}. Context = agent's last line (helps accuracy) |
-| POST | `/api/summary` | {summary, usage} |
-| GET/POST/DELETE | `/api/playbooks[/:id]` | agent types + saved playbooks |
-| GET | `/api/models` | models on the OpenAI account, grouped `{chat, stt, tts}` (cached 10 min; fallback list offline) |
-| POST | `/api/settings` | Save the active agent (X-Agent-Id): name/language/voice/playbook/models/calendar/emergency |
-| GET/POST/DELETE | `/api/calendar[/:id]` | list / add (only when calendar is on) / delete events |
-| GET | `/api/calendar/calendar.ics`, `/api/calendar/:id.ics` | export all / one event |
-| GET | `/api/calls?page=N&agent=ID` | paginated call list (no transcripts), optionally one agent's |
-| GET | `/api/calls/stats` | totals: calls, seconds, tokens, avg reply, recordings |
-| GET/DELETE | `/api/calls/:id` | full call / delete call + its summary + recording |
-| POST | `/api/calls` | save a finished call (calls + call_summaries rows) |
-| GET | `/api/calls/:id/summary` | the summary as a .txt download (call_summaries.full_text) |
-| GET/PUT | `/api/calls/:id/recording` | recording download / upload (raw body) |
+| GET / POST / PATCH / DELETE | `/api/agents[/:id]` | list {agents, currentId, types (with templates)} / create {name, type, templateId, ownerName, organization, availability, description} / update (same + isDefault) / delete |
+| GET | `/api/templates` | active agent types with their active templates |
+| GET | `/api/config` | models, voices, languages, emotions, `settings` (`currentAgent` = full agent card) |
+| POST | `/api/settings` | auto-save the active agent: agent/models/calendar/emergency/**persona** {templateId, ownerName, organization, availability, greeting} → {settings, agent} |
+| POST | `/api/chat` | SSE: `delta` {text}, `usage`, `error`, `done` |
+| POST | `/api/tts`, `/api/transcribe`, `/api/summary` | mp3 / {text} / {summary, usage} |
+| GET | `/api/models` | OpenAI models grouped {chat, stt, tts} (cached 10 min) |
+| GET/POST/DELETE | `/api/playbooks[/:id]` | {types, saved} / add / delete (the user's own playbooks) |
+| GET/POST/DELETE | `/api/calendar[/:id]`, GET `/api/calendar/calendar.ics`, `/:id.ics` | events (POST only when the calendar is on) |
+| GET/POST/PATCH/DELETE | `/api/messages[/:id]` | current agent's messages (`?scope=all`, `?status=new\|done`) / add {callerName, callerNumber, urgency, message} / {status} / delete |
+| GET/POST | `/api/calls`, `/api/calls/stats`, `/api/calls/:id` (GET/DELETE), `/:id/summary`, `/:id/recording` (GET/PUT) | call history |
+| GET | `/api/admin/overview`, `/api/admin/logs?page&user`, `/api/admin/logins?page` | admin: totals + users / activity / sign-ins |
+| POST/GET/PATCH/DELETE | `/api/admin/users[/:id]` | admin: users |
+| GET / PUT | `/api/admin/config[/:section]` | admin: app_config |
+| GET | `/api/admin/templates` | admin: all types + templates (+ how many agents use each) |
+| POST / PUT | `/api/admin/types`, `/api/admin/types/:key` | admin: add / edit a type |
+| POST / PUT / DELETE | `/api/admin/templates[/:id]` | admin: add / edit / delete a template |
 
 ## The reply tag protocol (important)
-
-The model must start every reply with metadata tags and prefix every sentence with an emotion:
 
 ```
 <intent:refund for caller tune charge><mood:angry><lang:Hinglish>[apologetic] Oh no, sorry about that. [curious] Which number is it?
 <intent:end call><mood:satisfied><lang:English><hangup:yes>[grateful] Glad I could help, bye!
 ```
 
-- `app.js` `readMeta()` pulls `<intent|mood|lang|hangup:…>` out of the stream; `flushSentence()` reads `[emotion]`
-  and sends each finished sentence to TTS. `stripTags()` removes all tags (also half-streamed ones) before display/speech.
-- History sent back to the model keeps the tags so the format stays consistent.
-- `<calendar:TITLE|YYYY-MM-DDTHH:MM|MINUTES>` (only when calendar is on) → `addCalendarEvent()` → POST `/api/calendar`
-  → 📅 chip on the reply + refresh of the event list in the Calendar section.
-- `<hangup:yes>` → agent finishes speaking → waits `hangupDelayMs` → `endCall("caller said goodbye")`.
-- The first turn is a hidden `[call connected]` user message so the agent greets first.
-- If you change the prompt in `server.js systemPrompt()`, keep these tags or update the parser.
+- `app.js` `readMeta()` pulls `<intent|mood|lang|hangup|calendar|message:…>` out of the stream; `flushSentence()` reads
+  `[emotion]` and sends each sentence to TTS. `stripTags()` removes all tags before display/speech.
+- `<calendar:TITLE|YYYY-MM-DDTHH:MM|MINUTES>` (calendar on) → POST `/api/calendar` → 📅 chip.
+- `<message:CALLER NAME|CALLBACK NUMBER|normal or urgent|MESSAGE>` → `saveCallerMessage()` → POST `/api/messages` →
+  📨 chip and the 📨 Messages section; also stored in the call transcript and `stats.messages`.
+- `<hangup:yes>` → finish speaking → `hangupDelayMs` → `endCall("caller said goodbye")`.
+- The first turn is a hidden `[call connected]` user message; the prompt tells the agent to say its greeting.
+- If you change `Prompts.system()`, keep these tags or update the parser.
 
-## Listening (why words aren't missed)
+## Listening, agent setup card, emergency, call flow
 
-1. `startListening` → `startUtterance()` starts a `MediaRecorder` on the mic immediately, plus browser recognition
-   for live captions, plus `vadTick()` every 50 ms (RMS of a mic-only analyser vs `speechToText.vadThreshold`).
-2. Caller speaks → a "live" user bubble shows captions (italic, ●●●). Chrome recognition restarts instantly on `onend`
-   and keeps earlier text (`srBase`), so nothing is dropped between sessions.
-3. Silence for `conversation.responseDelayMs` after ≥ `minSpeechMs` of voice → `commitUtterance()`:
-   stop recorder → `/api/transcribe` → replace the live bubble with the accurate text (✏️ corrected chip if it
-   differs; hover shows what captions heard) → `sendUserText(text, { bubble, t0 })`.
-4. STT off/failing → browser caption text is used. Pure noise (no letters) → bubble removed, keep listening.
-5. Prompt rules: the agent treats later corrections ("I meant Saturday") as the truth and confirms them, and
-   checks back when a word looks misheard.
-
-## Agent setup card (auto-saves)
-
-- Compact "agent profile" card on the left, top to bottom: **🤖 My agents** (chips to switch, ＋ New agent, ✎ About,
-  ☆ Default, 🗑; switching is locked during a call) → **AI name** (gradient header with mini avatar) →
-  **AI models** (LLM · STT · TTS in one row) → **Voice & language** (one row + ▶ preview) → **Playbook** →
-  **📅 Calendar** section (switch + the calendar's events and .ics export live inside it) →
-  **🚨 Emergency** section (collapsed). Switching it on shows only the **＋ Add emergency number** form:
-  "Related to" (`EMERGENCY_TYPES` in app.js: Ambulance, Police, Fire, Women/Mental-health/Child helplines,
-  Disaster, All emergencies, Other) → number pre-filled (editable) → keyword suggestions to tap + typed keywords.
-  Adding the same service again updates it instead of duplicating. Saved numbers sit in a closed "Saved numbers" list.
-  Everything about a feature stays in its own section — no separate Calendar card elsewhere on the page.
-- No Save button: every change auto-saves. `markDirty()` debounces (150 ms for selects/switches, 700 ms while typing)
-  → `autoSave()` → POST `/api/settings` → `saveAgentSettings()` rewrites only those keys in `config.json`.
-  Status pill in the header: "Saving…" → "✓ Saved" (or "⚠ …" on error).
-- A half-filled emergency number stays on screen and is saved once it has a name, number and keyword.
-- The server reads config on every request, so new models/calendar/emergency rules apply to the next reply.
-- `tts-1*` models: no emotion instructions and an older voice set — the server falls back to `alloy` when needed.
-
-## Restarting / "server is older than the page"
-
-- Static files are read from disk on every request, but server code loads only at start. After editing
-  `server.js`, `config.js`, `calls.js`, `calendar.js` or `playbooks.js`, **restart the server**.
-- `/api/config` returns `stale: true` when those files changed after start; the page then shows an orange banner.
-  Unknown `/api/*` routes return JSON 404 (never an empty body), and auto-save shows "Restart the server to save".
-- `./runScript.sh` restarts an older copy of this app on the same port by itself (it only kills a `server.js`
-  process whose working directory is this project; anything else on the port → it stops with a message).
-- Config writes are queued and atomic (temp file + rename), so concurrent saves can't corrupt `config.json`.
-
-## Emergency
-
-- Rules: `{ label, number, keywords[] }` in `config.json → emergency.rules`, added through the form above.
-- Browser `detectEmergency()` checks each caller message (word-boundary match for Latin text, substring for other
-  scripts; longest keyword wins) → red 🚨 banner with a `tel:` link, and sends `emergency` with the chat request.
-- Server adds a system note so the reply leads with the number; the prompt also lists all rules so the model spots
-  emergencies described in other words or languages. Emergencies are saved in the call transcript/summary.
-
-## Call flow (browser)
-
-`startCall` → clear chat, open mic + audio mixer (analyser for the visualizer, MediaStreamDestination for recording)
-→ hidden greeting turn → **listen** (continuous recognition; reply only after `responseDelayMs` of silence)
-→ `sendUserText` (stream, parse tags, queue sentences) → `speakNext` (TTS fetched ahead, played in order, routed through
-the mixer) → `afterAgentTurn` (listen again or hang up) → `endCall` → stop recording → `summarizeCall` → save to
-`/api/calls` (+ upload recording) → refresh Call summaries panel.
-
-Per-turn timing: `firstText` (first words on screen), `firstVoice` (first audio starts), `total` (stream done).
-Tokens: summed from the chat `usage` events + summary usage (TTS isn't counted — OpenAI doesn't report it).
+- Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions /
+  fallback. The agent replies after `conversation.responseDelayMs` of silence.
+- Agent card (auto-saves, no Save button; `markDirty()` → `autoSave()` → POST `/api/settings`): 🤖 My agents →
+  AI name → **🎭 Persona & greeting** (template, works for, organization, availability, first line + preview) →
+  AI models → Voice & language → Playbook → 📅 Calendar → **📨 Messages** → 🚨 Emergency.
+- Emergency rules `{label, number, keywords[]}` per agent (`emergency_rules`); browser `detectEmergency()` + prompt.
+- Call flow: `startCall` → greeting turn → listen → `sendUserText` (SSE) → `speakNext` → `afterAgentTurn` → `endCall`
+  → `summarizeCall` → POST `/api/calls` (+ PUT recording).
 
 ## Settings reference (MySQL `app_config`; `config.json` only seeds it)
 
-Edit with the admin dashboard (⚙️ App settings), `PUT /api/admin/config/<section>`, or SQL
-(`UPDATE app_config SET value = JSON_SET(value, '$.pageSize', 8) WHERE section = 'history'`). Per-agent values
-(name, language, voice, models, calendar, emergency) live in `agents` / `emergency_rules`.
-
-| Key | Meaning |
-|---|---|
-| `server.port` | HTTP port (8323). Restart needed. |
-| `branding.appName / tagline / footer` | Header title, subtitle, footer text |
-| `branding.logo` | Logo shape in `public/` (transparent PNG/SVG); it's painted with the theme gradient |
-| `branding.favicon` | Browser-tab icon file in `public/` |
-| `branding.theme.primary / secondary / tertiary` | Brand colours (violet / pink / cyan) → CSS `--c1/--c2/--c3`, used by gradients everywhere |
-| `agent.defaultName / defaultLanguage / defaultVoice` | Used until the user picks their own (saved in the browser) |
-| `agent.maxReplyWords` | Target length of spoken replies |
-| `models.chat / tts / reasoningEffort` | OpenAI models. `reasoningEffort` is dropped automatically for non gpt-5/o models |
-| `models.maxReplyTokens / maxSummaryTokens` | Output caps |
-| `speechToText.engine` | `"openai"` (accurate, recommended) or `"browser"` (Chrome captions only) |
-| `speechToText.model` | OpenAI transcription model (`gpt-4o-transcribe`; `gpt-4o-mini-transcribe` is cheaper) |
-| `speechToText.vadThreshold` | Mic loudness counted as speech (raise in noisy rooms, lower for quiet speakers) |
-| `speechToText.minSpeechMs / maxUtteranceSeconds` | Min voice before a reply can trigger / max length of one utterance |
-| `conversation.responseDelayMs` | Silence to wait before the agent replies (2000) |
-| `conversation.hangupDelayMs` | Pause after the goodbye before disconnecting |
-| `conversation.historyTurnsSentToModel` | How many recent messages go to the model |
-| `history.pageSize / maxRecordingMB` | Call summaries per page, upload limit |
-| `agent.defaultPlaybookId` | Playbook selected when the page loads ("" = default agent) |
-| `calendar.enabled / defaultDurationMin` | Calendar default for new agents / default event length |
-| `auth.allowSignup` | Show "Create account" on the login page (self sign-up) |
-| `auth.sessionHours / rememberDays` | Sign-in length without / with "Keep me signed in" |
-| `agent.maxAgentsPerUser` | Most agents one user can create (20) |
-| `emergency.enabled / rules[]` | Emergency detection and the numbers + keywords (India defaults: 112, 108, 100, 101, 1091, 14416) |
-
-Env overrides (optional): `PORT`, `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT`.
-New tunables go in `config.json` + `DEFAULTS` in `config.js` (+ `publicConfig()` if the browser needs it).
+Edit in the admin dashboard, `PUT /api/admin/config/<section>`, or SQL. Per-agent values live in `agents`.
+Sections/keys: `branding.*` (appName, tagline, footer, logo, favicon, theme.primary/secondary/tertiary) ·
+`agent.defaultName/defaultLanguage/defaultVoice/maxReplyWords/maxAgentsPerUser/defaultPlaybookId` ·
+`models.chat/tts/reasoningEffort/maxReplyTokens/maxSummaryTokens` · `speechToText.engine/model/vadThreshold/minSpeechMs/maxUtteranceSeconds` ·
+`conversation.responseDelayMs/hangupDelayMs/historyTurnsSentToModel` · `history.pageSize/maxRecordingMB` ·
+`calendar.enabled/defaultDurationMin` · `emergency.enabled/rules[]` · `auth.allowSignup/sessionHours/rememberDays`.
+Env overrides: `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT`, `BACKEND_PORT`, `PORT`.
+New tunables: `defaults.json` (+ `publicConfig()` in AppConfigService if the browser needs it).
 
 ## Conventions & preferences (from the project owner)
 
 - **Git: commit the current state before every change, then commit the change** — everything must be recoverable.
-  Never commit `.env`, `data/` or `backups/`.
-- Settings and data go in MySQL, not JSON files. New tables/columns go in `db/schema.sql` (keep it `IF NOT EXISTS`;
-  for a new column on an existing table add an idempotent migration in `db.js`).
-
+  Never commit `.env`, `data/`, `backups/`, `logs/`, `backend/target/`.
+- Settings and data go in MySQL. New tables/columns go in `db/schema.sql` (IF NOT EXISTS); for a new column on an
+  existing table also add it to `Db.migrate()`. New ready-made types/templates go in `db/seed.sql`.
+- Backend = Spring Boot (JdbcTemplate, no JPA); frontend = plain HTML/CSS/JS, no framework, no build step, no npm deps.
 - Agent replies must sound **human and short**: 1–2 sentences, one question at a time, no bot phrases, no lists.
-- Provider is **OpenAI** (owner's choice). Don't switch to another provider unless asked.
-- Anything someone might want to change belongs in `config.json`, not hard-coded.
-- Default mode = no playbook. When a playbook is selected the "Default" row is hidden; clicking the selected
-  playbook again returns to default.
-- Keep the light/dark theme working: colours are CSS variables on `:root` (light) with dark overrides
-  (`prefers-color-scheme` and `[data-theme="dark"]`). Brand colours are `--c1/--c2/--c3` and `--grad`.
-  Don't hard-code colours in new UI.
-- Keep it dependency-free on the front end; no build step.
+- Provider is **OpenAI** (owner's choice). Don't switch unless asked.
+- Keep the light/dark theme working: colours are CSS variables (`--c1/--c2/--c3`, `--grad`). Don't hard-code colours.
 - Don't delete anything in `data/` while testing — clean up only what your test created.
 
 ## Testing tips
 
-- Syntax check: `node --check server.js config.js calls.js playbooks.js public/app.js`
-- In the in-app browser the mic is blocked. To exercise a full call, stub the mic before clicking Start call:
+- Backend: `cd backend && mvn -q -o -DskipTests package`, then restart with `./runScript.sh`.
+  Frontend syntax: `node --check frontend/server.js frontend/public/app.js frontend/public/admin.js`.
+- API tests with curl against `http://127.0.0.1:8324` and a cookie jar (sign up a throw-away user and delete it after:
+  `DELETE FROM users WHERE id=…` cascades its agents, calls, messages and events; also clear its activity_logs,
+  api_logs, login_attempts and `data/users/<id>/`).
+- In the in-app browser the mic is blocked. Drive turns with `sendUserText("…")` after seeding `state.history`, or
+  stub the mic before Start call:
   ```js
   navigator.mediaDevices.getUserMedia = async () => { const c = new AudioContext(); const d = c.createMediaStreamDestination(); c.createOscillator().connect(d); return d.stream; };
   ```
-  then after the call starts: `state.recognition.start = () => {}; state.recognition.abort = () => {};`
-  and drive turns with `sendUserText("…")`.
-- To test real listening/STT: make the fake mic a `MediaStreamDestination`, generate a sentence with `/api/tts`,
-  decode it and play it into that destination after the agent's greeting — the recorder, VAD and `/api/transcribe`
-  then run exactly as with a real voice. Note `endCall` stops the mic tracks, so make a new destination per call.
-- Summaries/TTS cost real OpenAI tokens — keep test calls short and delete them afterwards (🗑 or `DELETE /api/calls/:id`).
+- Chat/summaries/TTS cost real OpenAI tokens — keep test calls short and delete them afterwards.

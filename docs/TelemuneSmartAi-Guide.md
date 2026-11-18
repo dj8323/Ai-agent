@@ -1,6 +1,6 @@
 # TelemuneSmartAi — Product & Technical Guide
 
-17 Nov 2026 · Dhananjay · Online version: https://claude.ai/artifact/CZ6KCE8PCPkDbrgop82cDo
+18 Nov 2026 · Dhananjay · Version 2: Spring Boot backend + web frontend, agent templates, caller messages
 
 ## Contents
 
@@ -20,16 +20,20 @@
 
 TelemuneSmartAi is a web app where you talk to AI voice agents through a call button in the browser: you speak, the agent answers out loud in a natural, emotional voice, and every call ends with a summary, statistics and an optional recording.
 
-Each person signs in with their own account and can build several agents for different jobs: a personal assistant, a hospital front desk, a bank helpline, an HR recruiter and so on. Every agent keeps its own name, voice, language, AI models, script (playbook), calendar and emergency numbers. An admin sees every user, agent, call and log from one dashboard.
+Each person signs in with their own account and can build several agents for different jobs: a personal assistant, a call assistant that answers for someone who is busy, a hospital front desk, a bank helpline, an HR recruiter and so on. Every agent keeps its own name, voice, language, AI models, persona and greeting, script, calendar and emergency numbers. An admin sees every user, agent, call and log from one dashboard, and edits the ready-made agent types and templates.
 
-The app runs on one Node.js server at http://localhost:8323, stores its data in a MySQL database called `ai-agent`, and uses OpenAI for thinking, listening and speaking.
+A typical call assistant answers: *"Hello, this is Brown, DJ's assistant. DJ isn't available to take your call right now, but I can schedule a meeting or pass a message on. Which would you like?"* It then books the meeting into the calendar or takes the caller's message for DJ.
+
+The app is two applications: a **Spring Boot backend** (Java) that holds all the logic, the database access and the OpenAI calls, and a small **web frontend** that serves the pages at http://localhost:8323 and passes every request on to the backend. All data lives in a MySQL database called `ai-agent`; OpenAI does the thinking, listening and speaking.
 
 ### Features at a glance
 
 | Area | What you get |
 | --- | --- |
 | Accounts | Sign in, self sign-up (Create account), two roles: Admin and User, password change, lockout after 5 wrong tries |
-| Agents | Many agents per user, 13 agent types (Hospital, Banking, HR, Telecom, Support, Sales and more), switch with one click |
+| Agents | Many agents per user, 14 agent types (Call Assistant, Hospital, Banking, HR, Telecom, Support, Sales and more), each with ready-made templates stored in the database; switch with one click |
+| Persona | Each agent says who it works for and for which organization, with a greeting from its template or its own |
+| Messages | The agent takes messages for the person it works for (caller name, number, urgency, message) |
 | Voice calls | Web call button, live captions, accurate speech-to-text, emotional replies, automatic hang-up when the caller says goodbye |
 | Languages | 16 languages incl. English, Hindi, Bengali, Tamil, Telugu, Marathi, Gujarati, Arabic, Spanish, French, German, Portuguese, Japanese, Mandarin and Jamaican Patois |
 | Voices | 10 OpenAI voices, 20 emotions chosen sentence by sentence |
@@ -38,8 +42,8 @@ The app runs on one Node.js server at http://localhost:8323, stores its data in 
 | After the call | AI summary, downloadable summary file, transcript, recording, token and time totals |
 | Calendar | Agent can book events during a call; export as .ics for Google, Outlook or Apple Calendar |
 | Emergency | Keyword detection with a red banner and the right helpline number (112, 108, 100, 101, 1091, 14416 …) |
-| Admin | Dashboard with totals, user management, every agent and call, app settings, activity log |
-| Storage | MySQL tables for users, roles, sessions, settings, agents, playbooks, calls, summaries, calendar and logs |
+| Admin | Dashboard with totals, user management, every agent and call, agent types & templates editor, app settings, sign-in list, activity log |
+| Storage | MySQL tables for users, roles, sessions, sign-in attempts, settings, agent types, templates, agents, playbooks, calls, summaries, calendar, messages and logs |
 | Look | Telemune branding, light and dark theme, live voice visualizer |
 
 ## Getting started
@@ -50,7 +54,9 @@ One command starts everything: `./runScript.sh` in the `voice-assistant` folder,
 
 | Item | Detail |
 | --- | --- |
-| Node.js | Version 22 or newer |
+| Java | JDK 21 or newer (runs the Spring Boot backend) |
+| Maven | Builds the backend the first time and after code changes |
+| Node.js | Version 22 or newer (runs the web frontend; no packages to install) |
 | MySQL | Version 8, running locally (the database and tables are created automatically) |
 | OpenAI API key | From platform.openai.com; pays for chat, voice and transcription |
 | Browser | Chrome or Edge for live captions; any browser with a microphone works for OpenAI speech-to-text |
@@ -64,18 +70,19 @@ MYSQL_PORT=3306
 MYSQL_USER=root
 MYSQL_PASSWORD=...
 MYSQL_DATABASE=ai-agent
+# BACKEND_PORT=8324   (optional)
 ```
 
 Copy `.env.example` to `.env` and fill it in. It is never committed to git.
 
 ### Starting the app
 
-1. Run `./runScript.sh`. It checks Node, installs packages, checks `.env`, restarts any older copy of the app on the same port, starts the server and opens Chrome (`NO_OPEN=1 ./runScript.sh` skips the browser).
-2. On first start the server creates the `ai-agent` database and all tables, copies the default settings from `config.json` into the database, and creates the admin account if there are no users.
+1. Run `./runScript.sh`. It checks Java and Node, checks `.env`, builds the backend when its code changed, stops any older copy of the app, starts the backend (port 8324, log in `logs/backend.log`) and then the frontend (port 8323), and opens Chrome (`NO_OPEN=1 ./runScript.sh` skips the browser). Ctrl+C stops both.
+2. On every start the backend creates any missing tables, adds the ready-made agent types and templates (`db/seed.sql`) if they're not there yet, copies the default settings from `config.json` into the database the first time, and creates the admin account if there are no users.
 3. Open http://localhost:8323. Signed-out visitors are sent to the login page.
 4. Sign in as **admin / admin@123** and change the password straight away (a banner reminds you).
 
-The port (8323) is set in `config.json` under `server.port`; changing it needs a restart. After editing server code, restart the server; the page shows an orange banner when the running server is older than the code.
+The page port (8323) is set in `config.json` under `server.port`; the backend port in `.env` as `BACKEND_PORT`. After changing backend code, run `./runScript.sh` again: it rebuilds and restarts. The backend only listens on this computer; the browser always goes through the frontend.
 
 ## Accounts, roles and sign-up
 
@@ -85,14 +92,14 @@ Everyone must sign in, and each person sees only their own agents and calls; onl
 
 | Role | Number | Lands on | Can do |
 | --- | --- | --- | --- |
-| Admin | 1 | Admin dashboard (`/admin.html`) | Everything a user can, plus: see every user, agent, call, summary and recording; add users, reset passwords, make admin or user, disable, delete; change app settings; read the activity log |
+| Admin | 1 | Admin dashboard (`/admin.html`) | Everything a user can, plus: see every user, agent, call, summary and recording; add users, reset passwords, make admin or user, disable, delete; edit agent types and templates; change app settings; read the sign-in list and activity log |
 | User | 2 | The agent page (`/`) | Create and use their own agents, playbooks, calls and calendar; change their own password |
 
 ### Signing in
 
 1. Enter username and password on the login page. Tick **Keep me signed in** to stay signed in for 30 days; otherwise the sign-in lasts 12 hours (both adjustable by the admin).
 2. Admins go to the dashboard, users go to their agents.
-3. Five wrong passwords for the same username from the same computer lock it for 5 minutes.
+3. Five wrong passwords for the same username from the same computer lock it for 5 minutes. Every attempt, successful or not, is recorded in the database (`login_attempts`) and listed for the admin.
 4. **Sign out** and **Change password** are in the user menu at the top right.
 
 ### Creating an account (self sign-up)
@@ -120,11 +127,12 @@ An agent is one AI voice persona with its own job and setup; each user can creat
 
 ### Agent types
 
-The type decides how the agent behaves when no playbook is selected, and which ready-made playbooks it offers.
+The type gives the agent its default persona and greeting, and offers ready-made **templates** (persona, greeting, goal, steps, rules and summary focus). Types and templates are stored in the database (`agent_types`, `agent_templates`) and the admin can change them or add new ones; an agent uses its template live, so an edit reaches every agent using it on its next call.
 
-| Type | Default role | Ready-made playbooks |
+| Type | Default role | Ready-made templates |
 | --- | --- | --- |
 | Personal Assistant | Sharp, friendly personal assistant | Daily planner, Reminders & to-dos, Message drafting |
+| Call Assistant (for a person) | Someone's polite, discreet call assistant | Message & meeting desk (pre-selected), Call screening, Out of office |
 | Customer Support | Patient support agent | Order issue & returns, Technical troubleshooting, Complaint handling |
 | Telecom Care | Mobile network care executive | Recharge & data packs, VAS / caller tune deactivation, Network complaint |
 | Hospital & Healthcare | Calm hospital front desk and patient care | OPD appointment, Lab report status, Discharge follow-up |
@@ -143,7 +151,12 @@ Safety rules travel with the types: the hospital agent never diagnoses and sends
 ### Creating and switching agents
 
 1. At the top of the setup card, **My agents** shows one chip per agent; the active one is highlighted and ★ marks the default.
-2. **＋ New agent** opens a dialog: pick the type, type a name (for example "Asha") and, optionally, what it's for ("Front desk for City Hospital, Pune"). That description is added to the agent's instructions, so it introduces itself correctly.
+2. **＋ New agent** opens a dialog:
+    - pick the **type** (for example Call Assistant) and a **template** (the type's usual one is pre-selected, or "No template: free conversation");
+    - type a **name** (for example "Brown");
+    - **Works for**: the person it answers for (for example "DJ"). Required for the Call Assistant, optional for others;
+    - **Organization** (for example "Telemune" or "City Hospital"), **Availability for meetings** ("Weekdays 3 to 6 pm IST") and, optionally, what it's for.
+    - A preview shows the first line the agent will say. **Create agent** saves it.
 3. Click a chip to switch. The whole setup card reloads with that agent's settings. Switching is locked during a call.
 4. **✎ About** edits the description, **☆ Default** makes the agent open first next time, **🗑** deletes it (its past calls stay in Call summaries).
 
@@ -155,8 +168,9 @@ The app remembers the last agent each user had open. A new account starts with o
 | --- | --- |
 | Name, language, voice | Saved playbooks (any agent can pick one) |
 | LLM, speech-to-text and text-to-speech models | Call summaries list and totals (each call is labelled with its agent) |
-| Selected playbook | Calendar events (each records which agent added it) |
+| Selected playbook, template, works for, organization, availability, greeting | Calendar events (each records which agent added it) |
 | Calendar on/off, emergency on/off and numbers | Account and password |
+| Messages callers left with it | |
 
 ## Agent setup card
 
@@ -168,20 +182,22 @@ A small pill in the card's header shows **Saving…**, then **✓ Saved** (or a 
 
 1. **My agents**: switch, create, describe, set default or delete agents.
 2. **AI name**: the name the agent uses for itself; also shown on the avatar.
-3. **AI models**, in one row:
+3. **🎭 Persona & greeting**: the template, who the agent works for, the organization, availability for meetings, and the first line of every call (empty = the template's greeting). Text can use `{agent}`, `{owner}` and `{org}`. A preview shows exactly what the agent will say first.
+4. **AI models**, in one row:
     - **LLM** (thinks and writes replies), default `gpt-5.5`.
     - **STT** (hears the caller), default `gpt-4o-transcribe`, or "Browser captions only" (free, less accurate).
     - **TTS** (speaks), default `gpt-4o-mini-tts` (supports emotions). The lists come live from your OpenAI account.
-4. **Voice & language**: one of 16 languages and one of 10 voices (Marin, Cedar, Alloy, Coral, Shimmer, Sage, Ballad, Ash, Echo, Verse); ▶ plays a sample.
-5. **Playbook**: the call script (next section).
-6. **Calendar**: a switch. When on, the agent can add confirmed bookings during a call; the events list and .ics export sit inside this section.
-7. **Emergency**: a switch plus emergency numbers (below).
+5. **Voice & language**: one of 16 languages and one of 10 voices (Marin, Cedar, Alloy, Coral, Shimmer, Sage, Ballad, Ash, Echo, Verse); ▶ plays a sample.
+6. **Playbook**: your own call script (next section). A selected playbook takes the place of the template.
+7. **Calendar**: a switch. When on, the agent can add confirmed bookings and meetings during a call; the events list and .ics export sit inside this section. With it off, meeting requests are taken as messages.
+8. **📨 Messages**: messages callers left with this agent, newest first, with caller name, a tap-to-call number, an **urgent** badge, ✓ Done and 🗑.
+9. **Emergency**: a switch plus emergency numbers (below).
 
 ### Playbooks
 
 A playbook tells the agent its role, goal, steps, rules and what the summary should focus on.
 
-- With no playbook selected, the agent runs in its type's default role (for example a hospital front desk).
+- With no playbook selected, the agent runs its template, or its type's default role if it has no template.
 - **＋ Add** → pick an agent type → pick a ready-made template or Custom → edit the fields → save.
 - Click a playbook to use it; the "Default" row then hides. Click the selected playbook again to go back to default. 🗑 removes one.
 - Playbooks belong to the user, so all of their agents can use them; each agent remembers its own selection.
@@ -207,7 +223,7 @@ The agent always speaks first, and the loop repeats for every turn; saying goodb
 ### Step by step
 
 1. **Start call.** Press the green button. The app opens the microphone, starts recording (if ● is on), clears the previous conversation and starts the visualizer.
-2. **Greeting.** The agent greets you first in its role and language, for example "Hello, City Hospital front desk, Asha speaking. How can I help you today?"
+2. **Greeting.** The agent greets you first with its greeting, in its language, for example "Hello, this is Brown, DJ's assistant. DJ isn't available to take your call right now, but I can schedule a meeting or pass a message on."
 3. **Listening.** Your speech is recorded from the first word. Live captions appear in an italic bubble while you talk (Chrome and Edge), and a voice detector checks the mic level every 50 ms.
 4. **Transcribing.** When you've been silent for 2 seconds, the recording is sent to OpenAI `gpt-4o-transcribe`, with a hint about the language and the agent's last sentence so names and numbers come out right. The bubble is replaced with the accurate text; a ✏️ mark shows if it corrected the captions. Pure noise is ignored.
 5. **Thinking.** The text goes to the agent's LLM along with the recent conversation and its instructions (role, playbook, language, calendar and emergency rules). The reply streams back word by word.
@@ -230,7 +246,8 @@ The agent has 20 emotions: neutral, happy, excited, cheerful, calm, empathetic, 
 
 ### During a call, if enabled
 
-- **Calendar**: once a booking is confirmed, the agent adds it, a 📅 chip appears on the reply and the event shows in the Calendar section.
+- **Calendar**: once a booking or meeting is confirmed, the agent adds it (with the caller's name in the title), a 📅 chip appears on the reply and the event shows in the Calendar section.
+- **Messages**: when the caller wants to leave a message, the agent takes their name, callback number and message, reads it back, and after they confirm saves it: a "📨 message saved for DJ" chip appears and it shows in the 📨 Messages section. Urgent messages are marked.
 - **Emergency**: a matching keyword shows a red banner with the number to call, and the agent tells you to call it first.
 
 You can also type a message in the box under the chat instead of speaking.
@@ -249,7 +266,7 @@ The summary is written by the chat model in fixed sections, so every call reads 
 - **Key details**: the facts that matter, focused by the playbook (for example mobile number, plan, refund reference).
 - **Action items** and **Outcome**.
 
-The downloadable summary file adds the header (call ID, agent, start time, playbook, duration, turns, average reply, languages, mood path, tokens, emergencies, calendar events) and the full annotated transcript.
+The downloadable summary file adds the header (call ID, agent, start time, playbook, duration, turns, average reply, languages, mood path, tokens, emergencies, calendar events, messages taken) and the full annotated transcript.
 
 ### Call summaries panel
 
@@ -271,7 +288,7 @@ Admins land on `/admin.html`, a single page that shows every user, every agent a
 
 ### Totals (top row)
 
-Users (active and admins), agents (and per user), calls and turns, talk time, tokens, average reply time, playbooks and calendar events, and recordings, summed across all users.
+Users (active and admins), agents (and per user), calls and turns, talk time, tokens, average reply time, playbooks and calendar events, recordings, new messages waiting, and templates, summed across all users.
 
 ### User cards
 
@@ -288,6 +305,16 @@ One card per user shows their role badge, a chip per agent (★ = default), thei
 
 Admins can only read other users' data; they cannot change another user's agents or calls.
 
+### Agent types & templates
+
+The **🧩 Agent types & templates** card lists every type on the left. Pick one to edit:
+
+- **The type**: name, icon, description, the persona used when an agent has no template, the greeting, and three switches: *Ask "works for whom?"* (makes it required), *Calendar on for new agents*, and *Available to users*.
+- **Its templates**, one panel each: name, persona, greeting, goal, steps and rules (one per line), what the summary should cover, *Pre-selected for new agents* and *Available to users*. Each shows how many agents use it. Save or 🗑 delete (agents using a deleted template go back to free conversation).
+- **＋ New template** and **＋ New type** add new ones.
+
+Every greeting box shows a live example (with Brown, DJ and Telemune). In any text `{agent}` is the agent's name, `{owner}` who it works for and `{org}` the organization; a part in `[[ … ]]` is left out when a value inside it is empty, so `Thank you for calling[[ {org}]]` reads well with or without an organization.
+
 ### App settings
 
 | Setting | Default | Meaning |
@@ -299,15 +326,19 @@ Admins can only read other users' data; they cannot change another user's agents
 
 Changes are saved to the database and apply immediately.
 
+### Sign-ins
+
+Every sign-in attempt, newest first: username, ✓ or ✕ with the reason (ok, wrong password, unknown user, disabled, locked) and the time.
+
 ### Activity log
 
-A paged list, newest first, of who did what and when: sign-in, sign-out, failed sign-in, sign-up, password change, users added, changed or deleted, agents created, edited or deleted, agent setup changes, playbooks added or removed, calls saved or deleted, calendar events, and app-setting changes. Above it, a line shows API requests, errors and average response time for the last 24 hours.
+A paged list, newest first, of who did what and when: sign-in, sign-out, failed sign-in, sign-up, password change, users added, changed or deleted, agents created, edited or deleted, agent setup changes, playbooks added or removed, calls saved or deleted, calendar events, messages taken or handled, template and type changes, and app-setting changes. Above it, a line shows API requests, errors and average response time for the last 24 hours.
 
 ## Data and storage
 
-All data and settings live in the MySQL database `ai-agent` (12 tables); only call recordings are kept as audio files on disk.
+All data and settings live in the MySQL database `ai-agent` (16 tables); only call recordings are kept as audio files on disk.
 
-The tables are defined in `db/schema.sql` and created automatically on every start if missing. All times are stored in UTC.
+The tables are defined in `db/schema.sql` and the ready-made types and templates in `db/seed.sql`; the backend runs both on every start (only adding what's missing). All times are stored in UTC.
 
 ### Tables
 
@@ -316,17 +347,21 @@ The tables are defined in `db/schema.sql` and created automatically on every sta
 | `roles` | The two roles | id (1 admin, 2 user), name, description |
 | `users` | Accounts | id, username, name, email, role_id, password_hash, must_change_password, disabled, signup_source (setup, admin, self, import), last_login_at, deleted_at |
 | `sessions` | Who is signed in | token_hash, user_id, ip, user_agent, expires_at |
+| `login_attempts` | Every sign-in attempt | username, user_id, ip, user_agent, success, reason, created_at |
 | `app_config` | Shared settings, one JSON document per section | section (branding, agent, models, speechToText, conversation, history, calendar, emergency, auth), value |
-| `agents` | Each agent's own setup | id, user_id, name, agent_type, description, language, voice, chat_model, tts_model, stt_engine, stt_model, playbook_id, calendar_enabled, emergency_enabled, is_default |
+| `agent_types` | The agent types | type_key, name, icon, description, role (persona), greeting, needs_owner, default_calendar, sort_order, active |
+| `agent_templates` | Ready-made scripts per type | id, type_key, name, role (persona), greeting, goal, steps, rules, summary_focus, is_default, active |
+| `agents` | Each agent's own setup | id, user_id, name, agent_type, template_id, owner_name, organization, owner_availability, greeting, description, language, voice, chat_model, tts_model, stt_engine, stt_model, playbook_id, calendar_enabled, emergency_enabled, is_default |
 | `emergency_rules` | Emergency numbers per agent | agent_id, label, number, keywords (JSON), sort_order |
 | `playbooks` | Users' saved call scripts | id, user_id, agent_type, name, role, goal, steps, rules, summary_focus |
 | `calls` | Every finished call | id, user_id, agent_id, agent_name, started_at, ended_at, duration, turns, tokens, avg_response_ms, stats, transcript, recording file details |
 | `call_summaries` | The AI summary and the full summary file text | call_id, summary, full_text |
 | `calendar_events` | Events agents booked | id, user_id, agent_id, title, start_at, duration_min, notes |
+| `messages` | Messages callers left | id, user_id, agent_id, agent_name, for_name, caller_name, caller_number, urgency, message, status (new, done) |
 | `activity_logs` | Who did what | user_id, username, action, target, details, ip, created_at |
 | `api_logs` | Every API request | user_id, agent_id, method, path, status, duration_ms, created_at |
 
-Deleting an agent keeps its calls and events (their agent link is cleared). Logs have no links to other tables, so history survives when users are deleted.
+Deleting an agent keeps its calls, events and messages (their agent link is cleared). Logs have no links to other tables, so history survives when users are deleted.
 
 ### Files on disk
 
@@ -336,7 +371,8 @@ Deleting an agent keeps its calls and events (their agent link is cleared). Logs
 | `backups/pre-mysql-2026-11-17/` | Full copy of the old file-based data before the move to MySQL |
 | `backups/pre-login-2026-11-17/` | Older copy from before accounts were added |
 | `.env` | OpenAI key and MySQL login (never committed) |
-| `config.json` | Port, and the first-start defaults copied into `app_config` |
+| `config.json` | Page port, and the first-start defaults copied into `app_config` |
+| `logs/backend.log` | The backend's log |
 
 ### Version history (git)
 
@@ -344,18 +380,23 @@ The code is in a git repository and every change is committed first, so any earl
 
 ## How it works (architecture)
 
-The browser pages talk only to one Node.js server; that server checks who is signed in, picks the right agent, calls OpenAI, and reads and writes MySQL and the recording files.
+The browser talks only to the web frontend; the frontend passes every `/api` request to the Spring Boot backend, which checks who is signed in, picks the right agent and its template, calls OpenAI, and reads and writes MySQL and the recording files.
 
-![Architecture: browser, Node server, OpenAI, MySQL, disk](images/architecture.png)
+![Architecture: browser, web frontend, Spring Boot backend, OpenAI, MySQL, disk](images/architecture.png)
 
-There is no separate Java or Spring Boot backend: Node connects to MySQL directly with the `mysql2` package, so there is one server to run. The front end is plain HTML, CSS and JavaScript with no build step.
+| App | Folder | Built with | Job |
+| --- | --- | --- | --- |
+| Web frontend | `frontend/` | Node.js, no packages; plain HTML, CSS and JavaScript, no build step | Serves the pages, sends signed-out visitors to the login page, forwards `/api` (including the streamed replies) to the backend |
+| Backend | `backend/` | Spring Boot 3.5, Java 21, JdbcTemplate, MySQL Connector/J | Accounts, agents, templates, calls, messages, calendar, admin, logs; OpenAI chat, voice, transcription and summaries |
+
+Because the browser sees one address, the sign-in cookie and the live reply stream work without extra setup, and the backend stays private to the computer.
 
 ### What happens on every request
 
 1. The page sends the request with the session cookie and an `X-Agent-Id` header naming the selected agent.
-2. The server checks the session (no session: sign-in page or a 401 error) and blocks data-changing requests from other websites.
+2. The frontend forwards it to the backend, whose request filter checks the session (no session: a 401 error, and the page goes to sign-in) and blocks data-changing requests from other websites.
 3. Admin-only routes are refused for users. An admin may read another user's data with `?as=<userId>` (read-only).
-4. The server loads the agent, but only if it belongs to that user; otherwise it uses their default agent.
+4. The backend loads the agent, but only if it belongs to that user; otherwise it uses their default agent. Its template and persona build the role and greeting part of the instructions.
 5. Settings are layered: built-in defaults, then `app_config` from MySQL, then the agent's own setup.
 6. The handler runs, then the request is written to `api_logs`; important actions also go to `activity_logs`.
 
@@ -375,6 +416,7 @@ The LLM starts every reply with tags the page reads and removes before showing o
 | [emotion] | How text-to-speech says that sentence |
 | hangup:yes | Ends the call after the goodbye |
 | calendar:TITLE\|DATE TIME\|MINUTES | Adds a calendar event (only when Calendar is on) |
+| message:NAME\|NUMBER\|URGENCY\|MESSAGE | Saves a message the caller left |
 
 ### Main API routes
 
@@ -389,12 +431,15 @@ The LLM starts every reply with tags the page reads and removes before showing o
 | POST /api/summary | Write the call summary |
 | GET, POST, DELETE /api/calls | Call list, save, details, delete; recording upload and download; summary file |
 | GET, POST, DELETE /api/playbooks, /api/calendar | Playbooks; calendar events and .ics export |
+| GET /api/templates | Agent types and templates for the New agent dialog |
+| GET, POST, PATCH, DELETE /api/messages | Messages callers left: list, save, mark done, delete |
 | GET /api/models | Models available on the OpenAI account |
-| /api/admin/overview, users, logs, config | Admin dashboard data and actions |
+| /api/admin/overview, users, logs, logins, config | Admin dashboard data and actions |
+| /api/admin/templates, /api/admin/types | Edit agent types and templates |
 
 ## Settings, security and troubleshooting
 
-Shared settings live in the `app_config` table; each agent's own choices (name, language, voice, models, playbook, calendar, emergency) live in `agents` and override them.
+Shared settings live in the `app_config` table; each agent's own choices (name, language, voice, models, template and persona, playbook, calendar, emergency) live in `agents` and override them.
 
 ### Settings reference (`app_config`)
 
@@ -417,7 +462,7 @@ Shared settings live in the `app_config` table; each agent's own choices (name, 
 | calendar.defaultDurationMin | 30 | Event length when none is given |
 | auth.allowSignup / sessionHours / rememberDays | true / 12 / 30 | Sign-up and sign-in length |
 
-The four auth and agent-limit settings are editable in the admin dashboard; others are changed in the database, for example `UPDATE app_config SET value = JSON_SET(value, '$.responseDelayMs', 1500) WHERE section = 'conversation';`. Optional environment overrides: `PORT`, `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT`.
+The four auth and agent-limit settings are editable in the admin dashboard; others are changed in the database, for example `UPDATE app_config SET value = JSON_SET(value, '$.responseDelayMs', 1500) WHERE section = 'conversation';`. Optional environment overrides: `PORT`, `BACKEND_PORT`, `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT`.
 
 ### Security notes
 
@@ -431,8 +476,9 @@ The four auth and agent-limit settings are editable in the admin dashboard; othe
 
 | Symptom | Fix |
 | --- | --- |
-| Server stops with "Can't connect to MySQL" | Start MySQL and check the `MYSQL_*` values in `.env` |
-| Orange banner: server is older than the page | Restart with `./runScript.sh` |
+| "The backend stopped while starting" | Start MySQL and check the `MYSQL_*` values in `.env`; details in `logs/backend.log` |
+| "The backend isn't running" page or error | Start everything with `./runScript.sh` |
+| "Backend build failed" | Install a JDK 21+ and Maven, then run `./runScript.sh` again |
 | "Server is missing a valid OPENAI_API_KEY" | Add the key to `.env` and restart |
 | "Rate limited or out of credit" | Check OpenAI billing |
 | Microphone doesn't work | Use Chrome or Edge at http://localhost (the Claude in-app browser blocks the mic) |
@@ -441,3 +487,5 @@ The four auth and agent-limit settings are editable in the admin dashboard; othe
 | Create account tab is missing | Self sign-up is off: Admin dashboard → App settings |
 | Account locked | Wait 5 minutes after 5 wrong passwords, or ask an admin to reset it |
 | Can't switch agents | Switching is locked during a call; end the call first |
+| "Who does this … work for?" | The Call Assistant type needs the person's name in *Works for* |
+| A template is missing in the New agent dialog | The admin switched it (or its type) off in 🧩 Agent types & templates |
