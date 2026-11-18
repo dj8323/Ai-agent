@@ -108,6 +108,38 @@ function refreshName() {
   $("agentName").textContent = agentName();
   $("avatar").textContent = agentName()[0].toUpperCase();
   $("miniAvatar").textContent = agentName()[0].toUpperCase();
+  renderSummary();
+}
+
+// ---------- main page: the agent for this call, basic information only (edit it under 🤖 My agents) ----------
+function setDd(id, text) {
+  $(id).textContent = text || "Not set";
+  $(id).classList.toggle("none", !text);
+}
+function renderSummary() {
+  if (!state.agents.length) return; // still starting up
+  const a = SETTINGS.currentAgent || currentAgentCard() || {};
+  const tpl = (typeOf(a.type).templates || []).find((t) => t.id === $("pTemplate").value);
+  $("sIcon").textContent = a.icon || "✨";
+  $("sName").textContent = agentName();
+  $("sType").textContent = [a.typeName, tpl?.name].filter(Boolean).join(" · ");
+  setDd("sOwner", $("pOwner").value.trim());
+  setDd("sOrg", $("pOrg").value.trim());
+  setDd("sAvail", availabilityText());
+  const voice = ($("voice").selectedOptions[0]?.text || $("voice").value || "").split(" — ")[0];
+  setDd("sLang", [$("lang").selectedOptions[0]?.text, voice].filter(Boolean).join(" · "));
+  setDd("sModels", [$("llmSel").value || SETTINGS.models?.chat, $("sttSel").value === "browser" ? "browser captions" : $("sttSel").value || SETTINGS.models?.stt, $("ttsSel").value || SETTINGS.models?.tts].filter(Boolean).join(" · "));
+  const feats = $("sFeats");
+  feats.innerHTML = "";
+  const feat = (text, cls, tab) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "feat" + (cls ? " " + cls : ""); b.textContent = text;
+    b.onclick = () => (location.hash = `agents/${tab}`);
+    feats.appendChild(b);
+  };
+  feat($("calToggle").checked ? "📅 Calendar on" : "📅 Calendar off", $("calToggle").checked ? "on" : "", "calendar");
+  feat($("emgToggle").checked ? `🚨 Emergency on · ${state.rules.length}` : "🚨 Emergency off", $("emgToggle").checked ? "on" : "", "emergency");
+  if (state.newMessages) feat(`📨 ${state.newMessages} new message${state.newMessages === 1 ? "" : "s"}`, "alert", "messages");
 }
 $("nameInput").addEventListener("input", () => { refreshName(); markDirty(); });
 refreshName();
@@ -171,15 +203,16 @@ function fillPersona() {
   sel.value = a.templateId || "";
   $("pOwner").value = a.ownerName || "";
   $("pOrg").value = a.organization || "";
-  $("pAvail").value = a.availability || "";
+  $("pDesc").value = a.description || "";
   $("pGreeting").value = a.greeting || "";
+  fillAvailability(a);
   $("pOwnerLabel").innerHTML = type.needsOwner ? 'Works for <span class="req">*</span>' : "Works for";
   renderPersonaPreview();
 }
 
 function personaPayload() {
   return { templateId: $("pTemplate").value, ownerName: $("pOwner").value.trim(), organization: $("pOrg").value.trim(),
-    availability: $("pAvail").value.trim(), greeting: $("pGreeting").value.trim() };
+    description: $("pDesc").value.trim(), availability: availabilityText(), availabilityPlan: availabilityPlan(), greeting: $("pGreeting").value.trim() };
 }
 
 function renderPersonaPreview() {
@@ -195,7 +228,69 @@ function renderPersonaPreview() {
   $("personaNote").classList.toggle("on", !!(p.ownerName || p.organization));
 }
 $("pTemplate").addEventListener("change", () => { renderPersonaPreview(); markDirty(); });
-["pOwner", "pOrg", "pAvail", "pGreeting"].forEach((id) => $(id).addEventListener("input", () => { renderPersonaPreview(); markDirty(); }));
+["pOwner", "pOrg", "pDesc", "pGreeting"].forEach((id) => $(id).addEventListener("input", () => { renderPersonaPreview(); renderAvailability(); markDirty(); }));
+
+// ---------- availability: days + hours + time zone (the agent only offers meeting times inside them) ----------
+const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+const av = { days: [] };
+const localTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; } })();
+[...new Set([localTz, "Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin",
+  "America/New_York", "America/Chicago", "America/Los_Angeles", "Australia/Sydney", "UTC"])].forEach((z) => $("avTz").add(new Option(z.replace(/_/g, " "), z)));
+DAY_NAMES.forEach((d, i) => {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = d; b.dataset.day = String(i + 1);
+  b.onclick = () => { const n = i + 1; av.days = av.days.includes(n) ? av.days.filter((x) => x !== n) : [...av.days, n].sort(); renderAvailability(); markDirty(); };
+  $("avDays").appendChild(b);
+});
+document.querySelectorAll("[data-days]").forEach((b) => (b.onclick = () => {
+  av.days = b.dataset.days ? b.dataset.days.split(",").map(Number) : [];
+  renderAvailability(); markDirty();
+}));
+["avFrom", "avTo", "avTz"].forEach((id) => $(id).addEventListener("change", () => { renderAvailability(); markDirty(); }));
+$("avNote").addEventListener("input", () => { renderAvailability(); markDirty(); });
+$("avClear").addEventListener("click", () => { av.days = []; $("avNote").value = ""; renderAvailability(); markDirty(); });
+
+function dayRanges(days) {
+  if (days.length === 7) return "Every day";
+  const runs = [];
+  for (const d of days) {
+    const last = runs.at(-1);
+    if (last && d === last[1] + 1) last[1] = d; else runs.push([d, d]);
+  }
+  return runs.map(([a, b]) => (b - a >= 2 ? `${DAY_NAMES[a - 1]}–${DAY_NAMES[b - 1]}` : a === b ? DAY_NAMES[a - 1] : `${DAY_NAMES[a - 1]}, ${DAY_NAMES[b - 1]}`)).join(", ");
+}
+const fmtClock = (hhmm) => { const [h, m] = String(hhmm || "0:0").split(":").map(Number); return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
+function availabilityPlan() {
+  const note = $("avNote").value.trim();
+  if (!av.days.length && !note) return null;
+  return { days: av.days, from: $("avFrom").value || "09:00", to: $("avTo").value || "18:00", tz: $("avTz").value, note };
+}
+function availabilityText() {
+  const p = availabilityPlan();
+  if (!p) return "";
+  const when = p.days.length ? `${dayRanges(p.days)}, ${fmtClock(p.from)}–${fmtClock(p.to)} (${p.tz.replace(/_/g, " ")})` : "";
+  return [when, p.note].filter(Boolean).join(". ");
+}
+function fillAvailability(a) {
+  const p = a.availabilityPlan;
+  av.days = Array.isArray(p?.days) ? p.days.map(Number) : [];
+  $("avFrom").value = p?.from || "09:00";
+  $("avTo").value = p?.to || "18:00";
+  if (p?.tz && ![...$("avTz").options].some((o) => o.value === p.tz)) $("avTz").add(new Option(p.tz, p.tz));
+  $("avTz").value = p?.tz || localTz;
+  $("avNote").value = p ? p.note || "" : a.availability || ""; // older agents only had a text
+  renderAvailability();
+}
+function renderAvailability() {
+  $("avDays").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(av.days.includes(Number(b.dataset.day)))));
+  const owner = $("pOwner").value.trim();
+  $("avWho").textContent = owner || "the owner";
+  const text = availabilityText();
+  showPreview($("avPreview"), `${owner || "Available"}:`, text);
+  if (!text) $("avPreview").textContent = "No availability set: the agent asks the caller for a time and takes it as a request.";
+  $("availNote").textContent = text ? "Set" : "";
+  $("availNote").className = "sec-note" + (text ? " on" : "");
+}
 $("nameInput").addEventListener("input", () => renderPersonaPreview());
 
 // Put the saved configuration into the form.
@@ -211,12 +306,17 @@ function fillForm() {
   setSelect($("ttsSel"), SETTINGS.models.tts);
   setSelect($("sttSel"), SETTINGS.speechToText?.engine === "browser" ? "browser" : SETTINGS.models.sttModel);
   $("calToggle").checked = !!SETTINGS.calendar?.enabled;
+  const len = String(SETTINGS.calendar?.defaultDurationMin || 30);
+  if (![...$("calLen").options].some((o) => o.value === len)) $("calLen").add(new Option(`${len} minutes`, len));
+  $("calLen").value = len;
   $("emgToggle").checked = !!SETTINGS.emergency?.enabled;
   state.rules = structuredClone(SETTINGS.emergency?.rules || []);
   renderRules();
   fillPersona();
   state.savedSnapshot = formSnapshot();
   $("calendarCard").hidden = !SETTINGS.calendar?.enabled;
+  renderNotes();
+  renderSummary();
 }
 
 const warnings = [];
@@ -238,6 +338,8 @@ function applyBranding(b) {
 }
 
 // ---------- playbooks: list, select, remove ----------
+$("pbPick").addEventListener("change", () => { state.playbookId = $("pbPick").value; renderPlaybooks(); markDirty(); });
+
 async function loadPlaybooks() {
   const data = await fetch("/api/playbooks").then((r) => r.json());
   state.types = data.types;
@@ -249,6 +351,12 @@ async function loadPlaybooks() {
 const activePlaybook = () => state.saved.find((p) => p.id === state.playbookId) || null;
 
 function renderPlaybooks() {
+  const pick = $("pbPick");
+  pick.innerHTML = "";
+  pick.add(new Option("Default: the agent's template", ""));
+  for (const pb of state.saved) pick.add(new Option(`${state.types[pb.type]?.icon || "📘"} ${pb.name}`, pb.id));
+  pick.value = state.playbookId;
+  pick.disabled = state.inCall;
   const list = $("pbList");
   list.innerHTML = "";
   // Default shows only while no playbook is selected. Click the selected playbook again to go back to default.
@@ -1402,6 +1510,7 @@ async function loadModels() {
 }
 ["llmSel", "sttSel", "ttsSel"].forEach((id) => $(id).addEventListener("change", () => { $(id).title = $(id).value; markDirty(); }));
 $("calToggle").addEventListener("change", () => { renderNotes(); markDirty(); });
+$("calLen").addEventListener("change", markDirty);
 $("emgToggle").addEventListener("change", () => { renderRules(); markDirty(); if ($("emgToggle").checked) $("emgType").focus(); });
 
 // Keywords offered in the "pick a keyword" list (anyone can also type their own).
@@ -1416,10 +1525,11 @@ function renderNotes() {
   $("emgAdd").hidden = !$("emgToggle").checked;
   $("emgCount").textContent = `${state.rules.length}`;
   const on = $("emgToggle").checked, cal = $("calToggle").checked;
-  $("emgNote").textContent = on ? `On · ${state.rules.length} number${state.rules.length === 1 ? "" : "s"}` : "Off";
+  $("emgNote").textContent = on ? `On · ${state.rules.length}` : "Off";
   $("emgNote").className = "sec-note" + (on ? " on" : "");
   $("calNote").textContent = cal ? "On" : "Off";
   $("calNote").className = "sec-note" + (cal ? " on" : "");
+  renderSummary();
 }
 
 function renderRules() {
@@ -1433,7 +1543,8 @@ function renderRules() {
     el.innerHTML = `
       <div class="rule-top">
         <input type="text" class="r-label" placeholder="Service, e.g. Ambulance" maxlength="40" aria-label="Emergency service name" />
-        <input type="text" class="r-num" placeholder="Number" maxlength="20" inputmode="tel" aria-label="Emergency number" />
+        <select class="r-type" aria-label="Contact by"><option value="phone">📞 Phone</option><option value="email">✉️ Email</option></select>
+        <input type="text" class="r-num" placeholder="Number" maxlength="120" inputmode="tel" aria-label="Emergency number or email" />
         <button type="button" class="rule-del" title="Remove this emergency number" aria-label="Remove">🗑</button>
       </div>
       <div class="kw-list"></div>
@@ -1443,6 +1554,9 @@ function renderRules() {
       </div>`;
     el.querySelector(".r-label").value = r.label;
     el.querySelector(".r-num").value = r.number;
+    el.querySelector(".r-type").value = r.type === "email" ? "email" : "phone";
+    el.querySelector(".r-num").placeholder = r.type === "email" ? "name@example.com" : "Number";
+    el.querySelector(".r-type").addEventListener("change", (e) => { r.type = e.target.value; renderRules(); markDirty(); });
     el.querySelector(".r-label").addEventListener("input", (e) => { r.label = e.target.value; markDirty(); });
     el.querySelector(".r-num").addEventListener("input", (e) => { r.number = e.target.value; markDirty(); });
     el.querySelector(".rule-del").addEventListener("click", () => { state.rules.splice(i, 1); renderRules(); markDirty(); });
@@ -1519,8 +1633,16 @@ function toggleKw(k) {
   emgForm.picked = emgForm.picked.includes(k) ? emgForm.picked.filter((x) => x !== k) : [...emgForm.picked, k];
   renderEmgForm();
 }
+function setEmgVia(via) {
+  $("emgVia").value = via;
+  $("emgNumberLabel").textContent = via === "email" ? "Email" : "Number";
+  $("emgNumber").placeholder = via === "email" ? "e.g. help@company.com" : "e.g. 108";
+  $("emgNumber").inputMode = via === "email" ? "email" : "tel";
+}
+$("emgVia").addEventListener("change", () => { setEmgVia($("emgVia").value); $("emgNumber").value = ""; $("emgNumber").focus(); });
 function resetEmgForm() {
   const t = EMERGENCY_TYPES[$("emgType").value];
+  setEmgVia("phone");
   $("emgNumber").value = t.number;
   $("emgCustom").value = "";
   emgForm.picked = [...t.keywords.slice(0, 3)]; // start with the most common ones picked
@@ -1539,16 +1661,18 @@ $("emgAddBtn").addEventListener("click", () => {
   if (typed) { toggleKw(typed); $("emgKwInput").value = ""; }
   const label = $("emgType").value === "Other" ? $("emgCustom").value.trim() : $("emgType").value;
   const number = $("emgNumber").value.trim();
+  const via = $("emgVia").value;
   if (!label) return emgMsg("Give it a name.", "err");
-  if (!/^[\d+*# -]{2,20}$/.test(number)) return emgMsg("Enter a valid number.", "err");
+  if (via === "email" ? !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(number) : !/^[\d+*# -]{2,20}$/.test(number)) return emgMsg(via === "email" ? "Enter a valid email address." : "Enter a valid number.", "err");
   if (!emgForm.picked.length) return emgMsg("Pick or type at least one keyword.", "err");
   // Same service again: update its number and add the new keywords instead of making a duplicate.
   const existing = state.rules.find((r) => r.label.toLowerCase() === label.toLowerCase());
   if (existing) {
     existing.number = number;
+    existing.type = via;
     existing.keywords = [...new Set([...existing.keywords, ...emgForm.picked])];
   } else {
-    state.rules.push({ label, number, keywords: [...emgForm.picked] });
+    state.rules.push({ label, type: via, number, keywords: [...emgForm.picked] });
   }
   renderRules();
   markDirty();
@@ -1562,7 +1686,7 @@ function formPayload() {
   return {
     agent: { defaultName: agentName(), defaultLanguage: lang(), defaultVoice: $("voice").value, defaultPlaybookId: state.playbookId },
     models: { chat: $("llmSel").value, stt: $("sttSel").value, tts: $("ttsSel").value },
-    calendar: { enabled: $("calToggle").checked },
+    calendar: { enabled: $("calToggle").checked, defaultDurationMin: Number($("calLen").value) || 30 },
     emergency: { enabled: $("emgToggle").checked, rules: state.rules },
     persona: personaPayload(),
   };
@@ -1575,6 +1699,7 @@ function markDirty() {
   if (!state.savedSnapshot) return; // still filling the form on start-up
   if (formSnapshot() === state.savedSnapshot) return;
   setSaveStatus("Saving…");
+  renderSummary();
   clearTimeout(state.saveTimer);
   const typing = document.activeElement?.matches?.('input[type="text"], textarea');
   state.saveTimer = setTimeout(autoSave, typing ? 700 : 150);
@@ -1644,10 +1769,11 @@ function showEmergency(rule) {
   el.setAttribute("role", "alert");
   el.innerHTML = `<div class="big">🚨</div><div><div class="t"></div><div class="s"></div></div><a></a>`;
   el.querySelector(".t").textContent = `Emergency: ${rule.label}`;
-  el.querySelector(".s").textContent = `Heard “${rule.keyword}”. Call now:`;
+  const email = rule.type === "email";
+  el.querySelector(".s").textContent = `Heard “${rule.keyword}”. ${email ? "Contact now" : "Call now"}:`;
   const a = el.querySelector("a");
-  a.href = `tel:${rule.number.replace(/\s/g, "")}`;
-  a.textContent = `📞 ${rule.number}`;
+  a.href = email ? `mailto:${rule.number}` : `tel:${rule.number.replace(/\s/g, "")}`;
+  a.textContent = `${email ? "✉️" : "📞"} ${rule.number}`;
   $("msgs").appendChild(el);
   scrollDown();
 }
@@ -1729,6 +1855,12 @@ async function loadMessages() {
   box.innerHTML = "";
   $("msgNote").textContent = data.newCount ? `${data.newCount} new` : "";
   $("msgNote").classList.toggle("on", !!data.newCount);
+  state.newMessages = data.newCount || 0;
+  renderSummary();
+  fetch("/api/messages?scope=all&status=new&limit=1").then((r) => r.json()).then((all) => {
+    $("navMsgCount").hidden = !all.newCount;
+    $("navMsgCount").textContent = all.newCount || "";
+  }).catch(() => {});
   if (!data.items?.length) { box.innerHTML = '<div class="empty">No messages yet.</div>'; return; }
   for (const m of data.items) {
     const el = document.createElement("div");
@@ -1825,30 +1957,63 @@ function renderAgents() {
   box.innerHTML = "";
   for (const a of state.agents) {
     const b = document.createElement("button");
-    b.type = "button"; b.className = "agent-chip";
-    b.setAttribute("aria-pressed", String(a.id === state.agentId));
-    b.title = `${a.typeName}${a.description ? " · " + a.description : ""}${a.isDefault ? " · opens first" : ""}`;
+    b.type = "button"; b.className = "agent-item"; b.setAttribute("role", "listitem");
+    b.setAttribute("aria-current", String(a.id === state.agentId));
     b.disabled = state.inCall && a.id !== state.agentId;
-    b.innerHTML = `<span aria-hidden="true"></span><span class="n"></span>`;
-    b.firstChild.textContent = a.icon;
-    b.querySelector(".n").textContent = a.name;
-    if (a.isDefault) b.insertAdjacentHTML("beforeend", '<span class="star" aria-label="default">★</span>');
+    b.innerHTML = `<span class="i" aria-hidden="true"></span><span class="grow"><span class="t"></span><span class="s"></span></span>`;
+    b.querySelector(".i").textContent = a.icon;
+    b.querySelector(".t").textContent = a.name + (a.isDefault ? " ★" : "");
+    b.querySelector(".s").textContent = a.ownerName ? `${a.typeName} · for ${a.ownerName}` : a.typeName;
+    b.title = a.description || a.typeName;
     b.addEventListener("click", () => switchAgent(a.id));
     box.appendChild(b);
   }
-  const add = document.createElement("button");
-  add.type = "button"; add.className = "agent-chip add"; add.textContent = "＋ New agent";
-  add.disabled = state.inCall;
-  add.addEventListener("click", openAgentDialog);
-  box.appendChild(add);
-  $("agentCount").textContent = state.agents.length > 1 ? `${state.agents.length} agents` : "";
+  $("mgNew").disabled = $("sumNew").disabled = state.inCall;
+  $("agentCount").textContent = `${state.agents.length} agent${state.agents.length === 1 ? "" : "s"}`;
+  const pick = $("agentPick");
+  pick.innerHTML = "";
+  for (const a of state.agents) pick.add(new Option(`${a.icon} ${a.name}${a.ownerName ? ` · for ${a.ownerName}` : ` · ${a.typeName}`}`, a.id));
+  pick.value = state.agentId;
+  pick.disabled = state.inCall;
   const cur = currentAgentCard();
-  $("agentDesc").textContent = cur ? `${cur.icon} ${cur.typeName}${cur.description ? " · " + cur.description : ""}` : "";
-  $("agentDesc").title = $("agentDesc").textContent;
+  $("agentDesc").textContent = cur ? `${cur.icon} ${cur.typeName}${cur.ownerName ? ` · works for ${cur.ownerName}` : ""}${cur.organization ? ` · ${cur.organization}` : ""}` : "";
   $("agentDefault").textContent = cur?.isDefault ? "★ Default" : "☆ Default";
   $("agentDefault").disabled = !!cur?.isDefault;
   $("agentDelete").hidden = state.agents.length <= 1;
+  $("agentDelete").disabled = state.inCall;
+  renderSummary();
 }
+$("agentPick").addEventListener("change", () => switchAgent($("agentPick").value));
+$("sumNew").addEventListener("click", openAgentDialog);
+$("mgNew").addEventListener("click", openAgentDialog);
+$("sumEdit").addEventListener("click", () => (location.hash = "agents/profile"));
+$("agentCallBtn").addEventListener("click", () => (location.hash = "call"));
+
+// ---------- menu: 🎙 Call (main page) · 🤖 My agents (editor, in tabs) · 📨 Messages ----------
+const TABS = ["profile", "voice", "availability", "calendar", "messages", "emergency", "playbooks"];
+function showTab(tab) {
+  state.tab = TABS.includes(tab) ? tab : "profile";
+  document.querySelectorAll(".tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === state.tab)));
+  document.querySelectorAll(".tab-panel").forEach((p) => (p.hidden = p.dataset.panel !== state.tab));
+}
+function route() {
+  const [view, tab] = location.hash.replace(/^#/, "").split("/");
+  const agents = view === "agents";
+  document.body.dataset.view = agents ? "agents" : "call";
+  $("navCall").setAttribute("aria-current", agents ? "false" : "page");
+  $("navAgents").setAttribute("aria-current", agents && tab !== "messages" ? "page" : "false");
+  $("navMsgs").setAttribute("aria-current", agents && tab === "messages" ? "page" : "false");
+  if (agents) {
+    showTab(tab || state.tab);
+    if (state.tab === "messages") loadMessages().catch(() => {});
+    if (state.tab === "calendar" && SETTINGS.calendar?.enabled) loadCalendar().catch(() => {});
+  }
+  window.scrollTo({ top: 0 });
+}
+document.querySelectorAll(".tabs [data-tab]").forEach((b) => (b.onclick = () => (location.hash = `agents/${b.dataset.tab}`)));
+document.querySelectorAll(".topnav [data-go]").forEach((b) => (b.onclick = () => (location.hash = b.dataset.go)));
+window.addEventListener("hashchange", route);
+route();
 
 async function switchAgent(id) {
   if (id === state.agentId || state.inCall) return;
@@ -1874,16 +2039,6 @@ async function agentRequest(url, method, body) {
   return data;
 }
 
-$("agentEdit").addEventListener("click", async () => {
-  const cur = currentAgentCard();
-  if (!cur) return;
-  const desc = prompt(`What is "${cur.name}" for? (e.g. Front desk for City Hospital)`, cur.description || "");
-  if (desc === null) return;
-  try {
-    Object.assign(cur, await agentRequest(`/api/agents/${cur.id}`, "PATCH", { description: desc }));
-    renderAgents();
-  } catch (e) { setSaveStatus("⚠ " + e.message, "err"); }
-});
 $("agentDefault").addEventListener("click", async () => {
   const cur = currentAgentCard();
   if (!cur) return;
@@ -1971,6 +2126,7 @@ $("naForm").addEventListener("submit", async (e) => {
     state.agents.push(a);
     closeAgentDialog();
     await switchAgent(a.id);
+    location.hash = "agents/profile";
   } catch (err) {
     $("naErr").textContent = err.message;
   } finally {
@@ -1989,7 +2145,7 @@ $("naForm").addEventListener("submit", async (e) => {
     await loadPlaybooks();
     fillForm(); // show the saved settings right away
     // The model list comes from OpenAI and can take a few seconds; fill the dropdowns when it arrives.
-    loadModels().then(() => { state.savedSnapshot = formSnapshot(); }).catch(() => {});
+    loadModels().then(() => { state.savedSnapshot = formSnapshot(); renderSummary(); }).catch(() => {});
     loadCalendar().catch(() => {});
     loadMessages().catch(() => {});
   } catch (e) {

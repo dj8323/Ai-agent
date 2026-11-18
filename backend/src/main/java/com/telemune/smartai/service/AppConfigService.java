@@ -112,7 +112,8 @@ public class AppConfigService {
         "agent", J.map("defaultName", a.get("name"), "defaultLanguage", a.get("language"), "defaultVoice", a.get("voice"),
             "defaultPlaybookId", a.get("playbook_id") == null ? "" : a.get("playbook_id")),
         "models", models, "speechToText", stt,
-        "calendar", J.map("enabled", J.bool(a.get("calendar_enabled"))),
+        "calendar", a.get("meeting_minutes") == null ? J.map("enabled", J.bool(a.get("calendar_enabled")))
+            : J.map("enabled", J.bool(a.get("calendar_enabled")), "defaultDurationMin", a.get("meeting_minutes")),
         "emergency", J.map("enabled", J.bool(a.get("emergency_enabled")), "rules", a.getOrDefault("rules", List.of())));
   }
 

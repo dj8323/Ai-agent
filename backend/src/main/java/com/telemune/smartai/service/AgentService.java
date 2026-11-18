@@ -43,8 +43,8 @@ public class AgentService {
     if (a == null) return null;
     Map<String, Object> out = new LinkedHashMap<>(a);
     List<Map<String, Object>> rules = new ArrayList<>();
-    for (Map<String, Object> r : db.query("SELECT label, number, keywords FROM emergency_rules WHERE agent_id = ? ORDER BY sort_order, id", a.get("id"))) {
-      rules.add(J.map("label", r.get("label"), "number", r.get("number"), "keywords", J.strings(r.get("keywords"))));
+    for (Map<String, Object> r : db.query("SELECT label, contact_type, number, keywords FROM emergency_rules WHERE agent_id = ? ORDER BY sort_order, id", a.get("id"))) {
+      rules.add(J.map("label", r.get("label"), "type", r.get("contact_type"), "number", r.get("number"), "keywords", J.strings(r.get("keywords"))));
     }
     out.put("rules", rules);
     return out;
@@ -73,7 +73,8 @@ public class AgentService {
         "playbookId", a.get("playbook_id") == null ? "" : a.get("playbook_id"),
         "templateId", a.get("template_id") == null ? "" : a.get("template_id"), "templateName", tp == null ? null : tp.get("name"),
         "ownerName", J.str(a.get("owner_name")), "organization", J.str(a.get("organization")),
-        "availability", J.str(a.get("owner_availability")), "greeting", J.str(a.get("greeting")),
+        "availability", J.str(a.get("owner_availability")), "availabilityPlan", J.parse(a.get("availability_plan")),
+        "meetingMinutes", a.get("meeting_minutes"), "greeting", J.str(a.get("greeting")),
         "greetingPreview", templates.greeting(a, null),
         "calendar", J.bool(a.get("calendar_enabled")), "emergency", J.bool(a.get("emergency_enabled")), "isDefault", J.bool(a.get("is_default")),
         "createdAt", J.iso(a.get("created_at")), "updatedAt", J.iso(a.get("updated_at")));
@@ -168,10 +169,31 @@ public class AgentService {
       if (tid != null || J.blank(p.get("templateId"))) db.exec("UPDATE agents SET template_id = ? WHERE id = ?", tid, id);
     }
     if (p.containsKey("ownerName")) db.exec("UPDATE agents SET owner_name = ? WHERE id = ?", J.str(p.get("ownerName"), 60), id);
+    if (p.containsKey("description")) db.exec("UPDATE agents SET description = ? WHERE id = ?", J.str(p.get("description"), 300), id);
     if (p.containsKey("organization")) db.exec("UPDATE agents SET organization = ? WHERE id = ?", J.str(p.get("organization"), 80), id);
     if (p.containsKey("availability")) db.exec("UPDATE agents SET owner_availability = ? WHERE id = ?", J.str(p.get("availability"), 300), id);
+    if (p.containsKey("availabilityPlan")) db.exec("UPDATE agents SET availability_plan = ? WHERE id = ?", cleanPlan(p.get("availabilityPlan")), id);
     if (p.containsKey("greeting")) db.exec("UPDATE agents SET greeting = ? WHERE id = ?", J.str(p.get("greeting"), 400), id);
   }
+
+  private static final Pattern HHMM = Pattern.compile("^([01]\\d|2[0-3]):[0-5]\\d$");
+
+  /** Availability picker → JSON {days:[1..7] (1 = Monday), from, to, tz, note}, or null. */
+  private static String cleanPlan(Object v) {
+    Map<String, Object> p = J.obj(v);
+    if (p.isEmpty()) return null;
+    List<Long> days = new ArrayList<>();
+    for (Object d : J.list(p.get("days"))) {
+      long n = J.num(d);
+      if (n >= 1 && n <= 7 && !days.contains(n)) days.add(n);
+    }
+    days.sort(null);
+    String from = J.str(p.get("from")), to = J.str(p.get("to"));
+    return J.json(J.map("days", days, "from", HHMM.matcher(from).matches() ? from : "09:00", "to", HHMM.matcher(to).matches() ? to : "18:00",
+        "tz", J.str(p.get("tz"), 60), "note", J.str(p.get("note"), 200)));
+  }
+
+  private static final Pattern EMAIL = Pattern.compile("^[^\\s@]{1,64}@[^\\s@]{1,60}\\.[^\\s@]{2,}$");
 
   public Map<String, Object> delete(String id, String userId) {
     Map<String, Object> a = get(id, userId);
@@ -188,7 +210,9 @@ public class AgentService {
     for (Object o : rules) {
       Map<String, Object> r = J.obj(o);
       String label = J.str(r.get("label"), 40);
-      String number = J.str(r.get("number"), 20).replaceAll("[^\\d+*# -]", "");
+      boolean email = "email".equals(r.get("type"));
+      String number = email ? J.str(r.get("number"), 120).toLowerCase() : J.str(r.get("number"), 20).replaceAll("[^\\d+*# -]", "");
+      if (email && !EMAIL.matcher(number).matches()) continue;
       LinkedHashSet<String> kws = new LinkedHashSet<>();
       for (String k : J.strings(r.get("keywords"))) {
         String kk = J.str(k, 40).toLowerCase();
@@ -196,8 +220,8 @@ public class AgentService {
       }
       if (label.isEmpty() || number.isEmpty() || kws.isEmpty()) continue;
       if (i >= 20) break;
-      db.exec("INSERT INTO emergency_rules (agent_id, label, number, keywords, sort_order) VALUES (?, ?, ?, ?, ?)",
-          agentId, label, number, J.json(new ArrayList<>(kws)), i++);
+      db.exec("INSERT INTO emergency_rules (agent_id, label, contact_type, number, keywords, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
+          agentId, label, email ? "email" : "phone", number, J.json(new ArrayList<>(kws)), i++);
     }
   }
 
@@ -223,7 +247,12 @@ public class AgentService {
         if ("browser".equals(m.get("stt"))) db.exec("UPDATE agents SET stt_engine = 'browser' WHERE id = ?", agentId);
         else if (modelId(m.get("stt")) != null) db.exec("UPDATE agents SET stt_engine = 'openai', stt_model = ? WHERE id = ?", m.get("stt"), agentId);
         if (in.get("calendar") instanceof Map<?, ?>) {
-          db.exec("UPDATE agents SET calendar_enabled = ? WHERE id = ?", J.bool(J.obj(in.get("calendar")).get("enabled")) ? 1 : 0, agentId);
+          Map<String, Object> cal = J.obj(in.get("calendar"));
+          db.exec("UPDATE agents SET calendar_enabled = ? WHERE id = ?", J.bool(cal.get("enabled")) ? 1 : 0, agentId);
+          if (cal.containsKey("defaultDurationMin")) {
+            long mins = J.num(cal.get("defaultDurationMin"));
+            db.exec("UPDATE agents SET meeting_minutes = ? WHERE id = ?", mins >= 5 && mins <= 480 ? mins : null, agentId);
+          }
         }
         if (in.get("emergency") instanceof Map<?, ?>) {
           Map<String, Object> e = J.obj(in.get("emergency"));

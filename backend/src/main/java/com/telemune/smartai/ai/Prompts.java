@@ -102,10 +102,11 @@ public final class Prompts {
     StringBuilder sb = new StringBuilder("\nEmergencies (top priority, overrides your playbook):\n");
     for (Object o : rules) {
       Map<String, Object> r = J.obj(o);
-      sb.append("- ").append(r.get("label")).append(": call ").append(r.get("number")).append(" (signs: ").append(String.join(", ", J.strings(r.get("keywords")))).append(")\n");
+      boolean email = "email".equals(r.get("type"));
+      sb.append("- ").append(r.get("label")).append(email ? ": email " : ": call ").append(r.get("number")).append(" (signs: ").append(String.join(", ", J.strings(r.get("keywords")))).append(")\n");
     }
     sb.append("- If the caller describes an emergency like these, in ANY language, immediately and calmly tell them the right number first and urge them to call it now, "
-        + "then ask if they are safe. Use the intent \"emergency: <label>\". Say the number digit by digit.\n");
+        + "then ask if they are safe. Use the intent \"emergency: <label>\". Say a number digit by digit; spell an email address clearly.\n");
     return sb.toString();
   }
 

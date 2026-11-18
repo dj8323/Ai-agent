@@ -46,6 +46,13 @@ public class Db {
     addColumn("agents", "organization", "VARCHAR(80) NOT NULL DEFAULT '' AFTER owner_name");
     addColumn("agents", "owner_availability", "VARCHAR(300) NOT NULL DEFAULT '' AFTER organization");
     addColumn("agents", "greeting", "VARCHAR(400) NOT NULL DEFAULT '' AFTER owner_availability");
+    addColumn("agents", "availability_plan", "JSON NULL AFTER greeting");
+    addColumn("agents", "meeting_minutes", "INT NULL AFTER availability_plan");
+    addColumn("emergency_rules", "contact_type", "VARCHAR(10) NOT NULL DEFAULT 'phone' AFTER label");
+    // Emergency contacts can be an email address now: widen the old VARCHAR(20).
+    Long len = jdbc.queryForObject("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+        + "AND TABLE_NAME = 'emergency_rules' AND COLUMN_NAME = 'number'", Long.class);
+    if (len != null && len < 120) jdbc.execute("ALTER TABLE emergency_rules MODIFY number VARCHAR(120) NOT NULL");
   }
 
   private void addColumn(String table, String column, String definition) {

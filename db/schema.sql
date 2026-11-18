@@ -79,6 +79,8 @@ CREATE TABLE IF NOT EXISTS agents (
   organization      VARCHAR(80)  NOT NULL DEFAULT '',     -- e.g. "City Hospital"
   owner_availability VARCHAR(300) NOT NULL DEFAULT '',    -- e.g. "Weekdays 3 to 6 pm"
   greeting          VARCHAR(400) NOT NULL DEFAULT '',     -- own first line; empty = the template's greeting
+  availability_plan JSON         NULL,                    -- {days:[1..7], from:"15:00", to:"18:00", tz, note}; owner_availability is its text
+  meeting_minutes   INT          NULL,                    -- meeting length for calendar bookings; NULL = app default
   created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   INDEX idx_agents_user (user_id),
@@ -89,8 +91,9 @@ CREATE TABLE IF NOT EXISTS agents (
 CREATE TABLE IF NOT EXISTS emergency_rules (
   id         INT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
   agent_id   VARCHAR(16)  NOT NULL,
-  label      VARCHAR(40)  NOT NULL,
-  number     VARCHAR(20)  NOT NULL,
+  label        VARCHAR(40)  NOT NULL,
+  contact_type VARCHAR(10)  NOT NULL DEFAULT 'phone',   -- phone | email
+  number       VARCHAR(120) NOT NULL,                   -- phone number, or email address when contact_type = email
   keywords   JSON         NOT NULL,
   sort_order INT          NOT NULL DEFAULT 0,
   INDEX idx_emergency_agent (agent_id),
