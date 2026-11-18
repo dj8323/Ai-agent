@@ -35,8 +35,9 @@ Branding: "TelemuneSmartAi", footer "Powered by Telemune © 2027 · Designed by 
 
 - `/login.html` → POST `/api/login` → HttpOnly `tsa_session` cookie (`app_config.auth.sessionHours`, or `rememberDays`
   with "Keep me signed in"). The sessions table stores only the SHA-256 of the token.
-- **Self sign-up**: "Create account" tab → POST `/api/signup` → role 2, signed in, gets a starter Personal Assistant
-  agent. Shown only while `app_config.auth.allowSignup` is true. 5 sign-ups per IP per hour (counted from activity_logs).
+- **Self sign-up**: "Create account" tab → POST `/api/signup` → role 2, signed in. **New accounts start with no agents**
+  (also admin-created users and the first admin): `AgentService.resolve()` returns null, the page shows the empty
+  state (`body.no-agents`) and opens `#learn/first-agent`. Shown only while `app_config.auth.allowSignup` is true. 5 sign-ups per IP per hour (counted from activity_logs).
 - Roles: **1 = admin** (`/admin.html`: every user, agents, calls, recordings, activity log, sign-ins, app settings,
   agent types & templates) and **2 = user** (own agents and data).
 - Default account when `users` is empty: **admin / admin@123** (must change it).
@@ -178,7 +179,9 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 
 - Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions /
   fallback. The agent replies after `conversation.responseDelayMs` of silence.
-- Top menu buttons (`.topnav`): **🎙 Call** (`#call`, the main page) and **🤖 My agents** (`#agents/<tab>`, hash routing,
+- **📚 Tutorials** (`#learn/<topic>`, pop-up `#learnModal`): the `TUTORIALS` array in app.js (id, icon, title, intro,
+  steps, tips, actions with `go` = hash or `do` = newAgent/admin; `adminOnly`). Keep it in step when features change.
+- Top menu buttons (`.topnav`): **🎙 Call** (`#call`, the main page), **🤖 My agents** (`#agents/<tab>`, hash routing,
   `route()` in app.js). My agents (`#manageView`) is a pop-up window (`#agentsModal`) over the call page; ✕, Escape or a
   click outside closes it (back to `#call`). Dialogs opened from it (New agent, type change, playbook) sit on top.
 - Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,

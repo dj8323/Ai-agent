@@ -106,7 +106,7 @@ Everyone must sign in, and each person sees only their own agents and calls; onl
 
 1. On the login page, open the **Create account** tab.
 2. Enter full name, a username (suggested from the name; 3–32 letters, numbers, dot, dash or underscore), an optional email and a password of at least 6 characters, twice.
-3. The new account is a **User**, is signed in straight away and already has one agent: a Personal Assistant.
+3. The new account is a **User** and is signed in straight away. It starts with **no agents**: the **📚 Tutorials** window opens on "Create your first agent", and the main page shows a **＋ Create my first agent** button.
 
 The admin can turn self sign-up off in **Admin dashboard → App settings**; the tab then disappears. At most 5 accounts can be created per computer per hour.
 
@@ -162,7 +162,7 @@ Safety rules travel with the types: the hospital agent never diagnoses and sends
 4. In My agents, **☆ Default** makes the agent open first next time and **🗑** deletes it (its past calls stay in Call summaries).
 5. To change what an agent is, pick a new **Agent type** in **My agents → 👤 Profile**. A new type is a new job, so a dialog first shows what will be reset and asks for approval; **Cancel** changes nothing. After **Change type and reset**, the database is updated in one step: template, greeting and description go to the new type's defaults; works for, organization and availability are cleared; the playbook is removed; the calendar and emergency settings go back to the defaults. Name, language, voice, AI models and past calls are kept. If the new type works for a person, fill in **Works for**.
 
-The app remembers the last agent each user had open. A new account starts with one Personal Assistant agent.
+The app remembers the last agent each user had open. A new account starts with no agents; nothing is created for it automatically.
 
 ### What belongs to an agent and what to the user
 
@@ -176,7 +176,11 @@ The app remembers the last agent each user had open. A new account starts with o
 
 ## Main page and the My agents menu
 
-The menu at the top right has two buttons: **🎙 Call** (the main page) and **🤖 My agents**, which opens a pop-up window over the call page to create and edit agents.
+The menu at the top right has three buttons: **🎙 Call** (the main page), **🤖 My agents**, which opens a pop-up window over the call page to create and edit agents, and **📚 Tutorials**.
+
+### 📚 Tutorials
+
+**📚 Tutorials** opens short, step-by-step guides in a pop-up window: Welcome, Create your first agent, Make a call, Profile & greeting, Availability & calendar, Voice, speed & AI, Emergency contacts, Playbooks, Call summaries, Manage your agents, Your account, and Tips & troubleshooting (admins also see **For admins**). Each guide has **Show me** buttons that open the right screen, and **Next** goes to the following guide. The window opens by itself the first time a user with no agents signs in.
 
 ### The main page (🎙 Call)
 
@@ -316,7 +320,7 @@ One card per user shows their role badge, a chip per agent (★ = default), thei
 | Make admin / Make user | Changes the role |
 | ⛔ Disable / ✅ Enable | Blocks or restores sign-in; disabling signs the user out at once |
 | 🗑 Delete | Hides the account (data is kept in the database) |
-| ＋ Add user | Creates an account with a temporary password and a starter agent |
+| ＋ Add user | Creates an account with a temporary password (no agents; the user creates their own) |
 
 Admins can only read other users' data; they cannot change another user's agents or calls.
 
