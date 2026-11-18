@@ -194,6 +194,12 @@ function showPreview(el, label, text) {
 function fillPersona() {
   const a = personaAgent();
   const type = typeOf(a.type);
+  const tSel = $("pType");
+  tSel.innerHTML = "";
+  for (const [key, t] of Object.entries(state.agentTypes || {})) tSel.add(new Option(`${t.icon} ${t.name}`, key));
+  if (a.type && !state.agentTypes?.[a.type]) tSel.add(new Option(`${a.icon || "✨"} ${a.typeName || a.type} (switched off)`, a.type));
+  tSel.value = a.type || "";
+  tSel.disabled = state.inCall;
   const sel = $("pTemplate");
   sel.innerHTML = "";
   sel.add(new Option("No template: free conversation", ""));
@@ -221,12 +227,45 @@ function renderPersonaPreview() {
   const tpl = (type.templates || []).find((t) => t.id === p.templateId);
   const v = { agent: agentName(), owner: p.ownerName, org: p.organization };
   $("pGreeting").placeholder = renderTpl(tpl?.greeting || type.greeting || "", v);
-  showPreview($("pPreview"), "First line:", renderTpl(p.greeting || tpl?.greeting || type.greeting || "", v));
+  const greet = p.greeting || tpl?.greeting || type.greeting || "";
+  if (type.needsOwner && !p.ownerName && /\{owner\}/.test(greet)) $("pPreview").textContent = "⚠ Fill in Works for: the greeting and the script use that name.";
+  else showPreview($("pPreview"), "First line:", renderTpl(greet, v));
   $("pTemplateHint").textContent = tpl ? `🎯 ${renderTpl(tpl.goal, v)}` : `${type.icon || "✨"} ${type.name || "Agent"}: no fixed script, it helps with whatever the caller needs.`;
   $("personaNote").textContent = p.ownerName ? `for ${p.ownerName}` : p.organization || "";
   $("personaNote").classList.toggle("on", !!(p.ownerName || p.organization));
 }
 $("pTemplate").addEventListener("change", () => { renderPersonaPreview(); markDirty(); });
+
+// Change the agent's type (e.g. Personal Assistant → Call Assistant). Saved in MySQL straight away (PATCH /api/agents/:id):
+// the type's pre-selected template comes with it, and the form reloads from the database.
+$("pType").addEventListener("change", async () => {
+  const cur = currentAgentCard();
+  const key = $("pType").value;
+  if (!cur || key === cur.type) return;
+  const t = typeOf(key);
+  const tpl = (t.templates || []).find((x) => x.isDefault);
+  if (state.inCall || !confirm(`Change "${cur.name}" to ${t.name}?\nIts template becomes ${tpl ? `"${tpl.name}"` : "free conversation"}. Name, voice, models, availability and emergency contacts stay.`)) {
+    $("pType").value = cur.type;
+    return;
+  }
+  try {
+    if (state.savedSnapshot && formSnapshot() !== state.savedSnapshot) { clearTimeout(state.saveTimer); await autoSave(); }
+    setSaveStatus("Saving…");
+    const updated = await agentRequest(`/api/agents/${cur.id}`, "PATCH", { type: key });
+    Object.assign(cur, updated);
+    state.savedSnapshot = "";
+    await loadConfig();
+    fillForm();
+    renderAgents();
+    setSaveStatus(`✓ Now a ${updated.typeName}`);
+    clearTimeout(state.saveFade);
+    state.saveFade = setTimeout(() => setSaveStatus(""), 2500);
+    if (t.needsOwner && !$("pOwner").value.trim()) $("pOwner").focus();
+  } catch (e) {
+    $("pType").value = cur.type;
+    setSaveStatus("⚠ " + e.message, "err");
+  }
+});
 ["pOwner", "pOrg", "pDesc", "pGreeting"].forEach((id) => $(id).addEventListener("input", () => { renderPersonaPreview(); renderAvailability(); markDirty(); }));
 
 // ---------- availability: days + hours + time zone (the agent only offers meeting times inside them) ----------

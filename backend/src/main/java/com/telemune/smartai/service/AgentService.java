@@ -149,9 +149,20 @@ public class AgentService {
     }
     if (in.containsKey("description")) db.exec("UPDATE agents SET description = ? WHERE id = ?", J.str(in.get("description"), 300), id);
     if (in.containsKey("type")) {
-      String type = templates.validType(in.get("type"));
+      Map<String, Object> newType = templates.type(J.str(in.get("type")));
+      if (newType == null || !J.bool(newType.get("active"))) throw ApiException.bad("That agent type doesn't exist or is switched off.");
+      String type = (String) newType.get("key");
       if (!type.equals(a.get("agent_type"))) {
-        db.exec("UPDATE agents SET agent_type = ?, template_id = ? WHERE id = ?", type, templates.defaultTemplateId(type), id);
+        // New type → its pre-selected template; the description follows if it was still the old type's default text;
+        // types that book meetings (default_calendar) switch the calendar on.
+        Map<String, Object> oldType = templates.type(J.str(a.get("agent_type")));
+        String desc = J.str(a.get("description"));
+        boolean defaultDesc = desc.isEmpty() || (oldType != null && desc.equals(J.str(oldType.get("description"))));
+        db.tx(() -> {
+          db.exec("UPDATE agents SET agent_type = ?, template_id = ? WHERE id = ?", type, templates.defaultTemplateId(type), id);
+          if (defaultDesc) db.exec("UPDATE agents SET description = ? WHERE id = ?", J.str(newType.get("description"), 300), id);
+          if (J.bool(newType.get("defaultCalendar"))) db.exec("UPDATE agents SET calendar_enabled = 1 WHERE id = ?", id);
+        });
       }
     }
     writePersona(id, userId, in);
