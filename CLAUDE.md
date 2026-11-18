@@ -54,8 +54,9 @@ Branding: "TelemuneSmartAi", footer "Powered by Telemune © 2027 · Designed by 
   calendar on for new agents.
 - **Templates** (`agent_templates`): persona, greeting, goal, steps, rules, summary focus, per type; one per type can be
   `is_default` (pre-selected). An agent points at one (`agents.template_id`), so admin edits reach every agent using it.
-- Per-agent persona fields: `owner_name` (works for), `organization`, `owner_availability` (used for meeting times),
-  `greeting` (own first line; empty = the template's, else the type's).
+- Per-agent persona fields: `owner_name` (works for), `organization`, `owner_availability` (text the prompt uses) +
+  `availability_plan` (JSON from the picker: {days:[1..7] Mon=1, from, to, tz, note}), `meeting_minutes` (calendar
+  meeting length; NULL = app default), `greeting` (own first line; empty = the template's, else the type's).
 - Text may use `{agent}`, `{owner}`, `{org}`; `[[ … ]]` is dropped when a value inside is empty
   (`TemplateService.render`, mirrored by `renderTpl` in app.js/admin.js for previews).
 - Prompt role section (`TemplateService.rolePrompt`): user's own playbook > agent template > type role; then
@@ -100,9 +101,10 @@ backend/src/main/java/com/telemune/smartai/
 frontend/server.js     Static files + /api proxy + page guard.  frontend/package.json (no deps).
 frontend/public/login.html   Sign in + Create account.
 frontend/public/admin.html + admin.js   KPIs, users, 🧩 agent types & templates editor, ⚙️ settings, 🔐 sign-ins, 📜 log.
-frontend/public/index.html   Layout + CSS (light/dark tokens), dialogs (New agent with type/template/works-for).
-frontend/public/app.js       Agents switcher, persona section, call flow, speech in/out, tag parsing, messages,
-                             calendar, playbooks, call summaries.
+frontend/public/index.html   Layout + CSS (light/dark tokens): top menu, Call view (call card + summary card,
+                             conversation, call summaries), My agents view (list + tabbed editor), dialogs.
+frontend/public/app.js       Menu/tab routing, agent picker + summary, persona/availability/emergency editors, call flow,
+                             speech in/out, tag parsing, messages, calendar, playbooks, call summaries.
 frontend/public/telemune-mark.png / telemune-logo.svg   Logo (CSS mask, theme gradient) / favicon.
 runScript.sh           One-command start of both apps.
 docs/                  TelemuneSmartAi-Guide.md (+ PDF, images/). Keep it in step when features change. PDF rebuild:
@@ -157,10 +159,19 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 
 - Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions /
   fallback. The agent replies after `conversation.responseDelayMs` of silence.
-- Agent card (auto-saves, no Save button; `markDirty()` → `autoSave()` → POST `/api/settings`): 🤖 My agents →
-  AI name → **🎭 Persona & greeting** (template, works for, organization, availability, first line + preview) →
-  AI models → Voice & language → Playbook → 📅 Calendar → **📨 Messages** → 🚨 Emergency.
-- Emergency rules `{label, number, keywords[]}` per agent (`emergency_rules`); browser `detectEmergency()` + prompt.
+- **One page, two views** switched by the top menu (hash routing, `route()` in app.js): **🎙 Call** (`#call`, the main
+  page) and **🤖 My agents** (`#agents/<tab>`); **📨 Messages** = `#agents/messages` (badge = new messages, all agents).
+  CSS: `body[data-view]` hides the other view.
+- Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,
+  organization, availability, language · voice, AI models, playbook picker `#pbPick`, feature chips). ✎ Edit agent →
+  `#agents/profile`. Keep it simple: anything that edits an agent belongs in My agents.
+- My agents = agent list (`#agentChips`, ＋ New agent) + the setup card with tabs: Profile (template, works for,
+  organization, what it's for, greeting + preview) · Voice & AI · Availability (day buttons, from/to, time zone, note) ·
+  Calendar (switch, meeting length, events) · Messages · Emergency · Playbooks. Hero: name, 🎙 Call, ☆ Default, 🗑.
+- Everything auto-saves (no Save button; `markDirty()` → `autoSave()` → POST `/api/settings`; persona payload carries
+  description, availability text + availabilityPlan; calendar carries defaultDurationMin).
+- Emergency contacts `{label, type: phone|email, number, keywords[]}` per agent (`emergency_rules.contact_type`);
+  browser `detectEmergency()` → banner with tel: or mailto:; the prompt says "call" or "email".
 - Call flow: `startCall` → greeting turn → listen → `sendUserText` (SSE) → `speakNext` → `afterAgentTurn` → `endCall`
   → `summarizeCall` → POST `/api/calls` (+ PUT recording).
 

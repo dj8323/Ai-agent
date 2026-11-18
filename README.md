@@ -77,7 +77,15 @@ emergency numbers, so changing one never changes another, or anyone else's.
 - **Call summaries panel** (under the chat): totals for calls, total talk time, tokens used (chat + summaries;
   voice/TTS isn't counted), average reply time and recordings. Click any of them, or Show calls, to open the list.
 
-## Agent setup (left panel)
+## Main page and menu
+
+The top menu has **🎙 Call** (main page), **🤖 My agents** and **📨 Messages**. The main page is kept simple: pick the
+agent for the call, press Start call, and see its basics (works for, organization, availability, language, voice,
+models, playbook). Everything else is edited under **🤖 My agents**, in tabs: Profile · Voice & AI · Availability
+(days, hours, time zone) · Calendar (on/off, meeting length) · Messages · Emergency (contacts by phone or email) ·
+Playbooks.
+
+## Agent settings (🤖 My agents)
 
 Edit the **🎭 persona & greeting** (template, works for, organization, availability, first line, with a preview),
 choose the **playbook, language, voice, name, LLM, speech-to-text and text-to-speech models** (the lists come from

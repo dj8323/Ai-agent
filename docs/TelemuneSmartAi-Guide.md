@@ -1,6 +1,6 @@
 # TelemuneSmartAi — Product & Technical Guide
 
-18 Nov 2026 · Dhananjay · Version 2: Spring Boot backend + web frontend, agent templates, caller messages
+18 Nov 2026 · Dhananjay · Version 2.1: Spring Boot backend + web frontend, clean main page with a My agents menu, agent templates, availability, caller messages
 
 ## Contents
 
@@ -8,7 +8,7 @@
 2. [Getting started](#getting-started)
 3. [Accounts, roles and sign-up](#accounts-roles-and-sign-up)
 4. [Agents](#agents)
-5. [Agent setup card](#agent-setup-card)
+5. [Main page and the My agents menu](#main-page-and-the-my-agents-menu)
 6. [Making a call](#making-a-call)
 7. [After the call: summaries, recordings and history](#after-the-call-summaries-recordings-and-history)
 8. [Admin dashboard](#admin-dashboard)
@@ -150,15 +150,15 @@ Safety rules travel with the types: the hospital agent never diagnoses and sends
 
 ### Creating and switching agents
 
-1. At the top of the setup card, **My agents** shows one chip per agent; the active one is highlighted and ★ marks the default.
-2. **＋ New agent** opens a dialog:
+1. On the main page, the **Agent for this call** dropdown switches agents. **🤖 My agents** in the menu lists them all; ★ marks the one that opens first.
+2. **＋ New agent** (on the main page or in My agents) opens a dialog:
     - pick the **type** (for example Call Assistant) and a **template** (the type's usual one is pre-selected, or "No template: free conversation");
     - type a **name** (for example "Brown");
     - **Works for**: the person it answers for (for example "DJ"). Required for the Call Assistant, optional for others;
     - **Organization** (for example "Telemune" or "City Hospital"), **Availability for meetings** ("Weekdays 3 to 6 pm IST") and, optionally, what it's for.
-    - A preview shows the first line the agent will say. **Create agent** saves it.
-3. Click a chip to switch. The whole setup card reloads with that agent's settings. Switching is locked during a call.
-4. **✎ About** edits the description, **☆ Default** makes the agent open first next time, **🗑** deletes it (its past calls stay in Call summaries).
+    - A preview shows the first line the agent will say. **Create agent** saves it and opens it in My agents, where you set its availability, calendar, emergency contacts and voice.
+3. Switching loads that agent's settings everywhere. Switching is locked during a call.
+4. In My agents, **☆ Default** makes the agent open first next time and **🗑** deletes it (its past calls stay in Call summaries).
 
 The app remembers the last agent each user had open. A new account starts with one Personal Assistant agent.
 
@@ -168,49 +168,61 @@ The app remembers the last agent each user had open. A new account starts with o
 | --- | --- |
 | Name, language, voice | Saved playbooks (any agent can pick one) |
 | LLM, speech-to-text and text-to-speech models | Call summaries list and totals (each call is labelled with its agent) |
-| Selected playbook, template, works for, organization, availability, greeting | Calendar events (each records which agent added it) |
-| Calendar on/off, emergency on/off and numbers | Account and password |
+| Selected playbook, template, works for, organization, availability, meeting length, greeting | Calendar events (each records which agent added it) |
+| Calendar on/off, emergency on/off and contacts (phone or email) | Account and password |
 | Messages callers left with it | |
 
-## Agent setup card
+## Main page and the My agents menu
 
-The card on the left configures the selected agent, and every change saves itself within a second: there is no Save button.
+The app has a menu at the top with three entries: **🎙 Call** (the main page), **🤖 My agents** (create and edit agents) and **📨 Messages** (messages callers left; a red badge shows how many are new).
 
-A small pill in the card's header shows **Saving…**, then **✓ Saved** (or a warning if something failed). The next reply already uses the new setup.
+### The main page (🎙 Call)
 
-### Parts of the card, top to bottom
+The main page only has what you need to make a call:
 
-1. **My agents**: switch, create, describe, set default or delete agents.
-2. **AI name**: the name the agent uses for itself; also shown on the avatar.
-3. **🎭 Persona & greeting**: the template, who the agent works for, the organization, availability for meetings, and the first line of every call (empty = the template's greeting). Text can use `{agent}`, `{owner}` and `{org}`. A preview shows exactly what the agent will say first.
-4. **AI models**, in one row:
-    - **LLM** (thinks and writes replies), default `gpt-5.5`.
-    - **STT** (hears the caller), default `gpt-4o-transcribe`, or "Browser captions only" (free, less accurate).
-    - **TTS** (speaks), default `gpt-4o-mini-tts` (supports emotions). The lists come live from your OpenAI account.
-5. **Voice & language**: one of 16 languages and one of 10 voices (Marin, Cedar, Alloy, Coral, Shimmer, Sage, Ballad, Ash, Echo, Verse); ▶ plays a sample.
-6. **Playbook**: your own call script (next section). A selected playbook takes the place of the template.
-7. **Calendar**: a switch. When on, the agent can add confirmed bookings and meetings during a call; the events list and .ics export sit inside this section. With it off, meeting requests are taken as messages.
-8. **📨 Messages**: messages callers left with this agent, newest first, with caller name, a tap-to-call number, an **urgent** badge, ✓ Done and 🗑.
-9. **Emergency**: a switch plus emergency numbers (below).
+1. **Agent for this call**: a dropdown at the top of the call card lists your agents ("Brown · for DJ"). ＋ creates a new one.
+2. **Start call**: the green button. Mute and record (●) sit next to it.
+3. **About this agent**: a short card under it shows the basics: works for, organization, availability, language and voice, and the AI models.
+4. **Playbook**: pick a script for this call, or keep "Default: the agent's template".
+5. Small chips show whether the calendar and emergency detection are on and how many new messages are waiting; tap one to open that setting.
+6. **✎ Edit agent** opens the agent in My agents.
+
+On the right are the conversation and the call summaries.
+
+### My agents (create and edit)
+
+**🤖 My agents** shows your agents on the left (★ = the one that opens first) with **＋ New agent** below them. The selected agent's settings are on the right, under its name. The header holds **🎙 Call** (back to the main page with this agent), **☆ Default** and **🗑 Delete**.
+
+Every change saves itself within a second: there is no Save button. A small pill in the header shows **Saving…**, then **✓ Saved**. The next reply already uses the new setup.
+
+| Tab | What you set |
+| --- | --- |
+| 👤 Profile | Template; **Works for** (required for a Call Assistant); Organization; what it's for; the first line of every call, with a live preview. Text can use `{agent}`, `{owner}` and `{org}` |
+| 🧠 Voice & AI | Language (16) and voice (10, ▶ plays a sample); LLM, speech-to-text and text-to-speech models (lists come live from your OpenAI account) |
+| 🕒 Availability | Days (tap Mon … Sun, or Weekdays / Every day), From and To time, time zone and an optional note. The agent only offers meeting times inside these hours, and says when the person is back |
+| 📅 Calendar | Switch on to let the agent book confirmed meetings; meeting length (15 minutes to 2 hours); upcoming events with .ics export |
+| 📨 Messages | Messages callers left: name, tap-to-call number, urgent badge, ✓ Done and 🗑 |
+| 🚨 Emergency | Switch, plus emergency contacts by **phone or email** (below) |
+| 📘 Playbooks | Your own call scripts: add, pick, remove |
 
 ### Playbooks
 
-A playbook tells the agent its role, goal, steps, rules and what the summary should focus on.
+A playbook is your own script: role, goal, steps, rules and what the summary should focus on.
 
 - With no playbook selected, the agent runs its template, or its type's default role if it has no template.
-- **＋ Add** → pick an agent type → pick a ready-made template or Custom → edit the fields → save.
-- Click a playbook to use it; the "Default" row then hides. Click the selected playbook again to go back to default. 🗑 removes one.
-- Playbooks belong to the user, so all of their agents can use them; each agent remembers its own selection.
+- **📘 Playbooks → ＋ Add playbook** → pick an agent type → pick a ready-made script or Custom → edit the fields → save.
+- Choose the playbook for a call from the **Playbook** dropdown on the main page or in the Playbooks tab. Playbooks belong to the user, so all of their agents can use them; each agent remembers its own choice.
 
-### Emergency numbers
+### Emergency contacts
 
-Turn Emergency on and an **＋ Add emergency number** form appears:
+Turn Emergency on and an **＋ Add emergency contact** form appears:
 
-1. **Related to**: Ambulance, Police, Fire, Women helpline, Mental-health helpline, Child helpline, Disaster, All emergencies or Other.
-2. **Number**: filled in for the chosen service (108, 100, 101, 1091, 14416, 1098, 1078, 112) and editable.
-3. **Keywords**: tap suggestions or type your own (for example "chest pain", "bachao", "fire").
+1. **Related to**: Ambulance, Police, Fire, Women helpline, Mental-health helpline, Child helpline, Disaster, All emergencies or Other (give it a name).
+2. **Contact by**: 📞 Phone or ✉️ Email.
+3. **Number** or **Email**: a phone number is filled in for the chosen service (108, 100, 101, 1091, 14416, 1098, 1078, 112) and editable; for email, type the address (for example the office security desk).
+4. **Keywords**: tap suggestions or type your own (for example "chest pain", "bachao", "intruder").
 
-Adding the same service again updates it instead of duplicating it. Saved numbers sit in a collapsed "Saved numbers" list. During a call, a matching word shows a red 🚨 banner with a tap-to-call link and the agent leads its reply with that number. The agent also spots emergencies described in other words or languages.
+Adding the same service again updates it instead of duplicating it. During a call, a matching word shows a red 🚨 banner with a tap-to-call link (or an email link), and the agent leads its reply with that contact. The agent also spots emergencies described in other words or languages.
 
 ## Making a call
 
@@ -222,7 +234,7 @@ The agent always speaks first, and the loop repeats for every turn; saying goodb
 
 ### Step by step
 
-1. **Start call.** Press the green button. The app opens the microphone, starts recording (if ● is on), clears the previous conversation and starts the visualizer.
+1. **Start call.** Pick the agent in **Agent for this call**, then press the green button. The app opens the microphone, starts recording (if ● is on), clears the previous conversation and starts the visualizer.
 2. **Greeting.** The agent greets you first with its greeting, in its language, for example "Hello, this is Brown, DJ's assistant. DJ isn't available to take your call right now, but I can schedule a meeting or pass a message on."
 3. **Listening.** Your speech is recorded from the first word. Live captions appear in an italic bubble while you talk (Chrome and Edge), and a voice detector checks the mic level every 50 ms.
 4. **Transcribing.** When you've been silent for 2 seconds, the recording is sent to OpenAI `gpt-4o-transcribe`, with a hint about the language and the agent's last sentence so names and numbers come out right. The bubble is replaced with the accurate text; a ✏️ mark shows if it corrected the captions. Pure noise is ignored.
@@ -351,8 +363,8 @@ The tables are defined in `db/schema.sql` and the ready-made types and templates
 | `app_config` | Shared settings, one JSON document per section | section (branding, agent, models, speechToText, conversation, history, calendar, emergency, auth), value |
 | `agent_types` | The agent types | type_key, name, icon, description, role (persona), greeting, needs_owner, default_calendar, sort_order, active |
 | `agent_templates` | Ready-made scripts per type | id, type_key, name, role (persona), greeting, goal, steps, rules, summary_focus, is_default, active |
-| `agents` | Each agent's own setup | id, user_id, name, agent_type, template_id, owner_name, organization, owner_availability, greeting, description, language, voice, chat_model, tts_model, stt_engine, stt_model, playbook_id, calendar_enabled, emergency_enabled, is_default |
-| `emergency_rules` | Emergency numbers per agent | agent_id, label, number, keywords (JSON), sort_order |
+| `agents` | Each agent's own setup | id, user_id, name, agent_type, template_id, owner_name, organization, owner_availability, availability_plan, meeting_minutes, greeting, description, language, voice, chat_model, tts_model, stt_engine, stt_model, playbook_id, calendar_enabled, emergency_enabled, is_default |
+| `emergency_rules` | Emergency contacts per agent | agent_id, label, contact_type (phone or email), number (or email), keywords (JSON), sort_order |
 | `playbooks` | Users' saved call scripts | id, user_id, agent_type, name, role, goal, steps, rules, summary_focus |
 | `calls` | Every finished call | id, user_id, agent_id, agent_name, started_at, ended_at, duration, turns, tokens, avg_response_ms, stats, transcript, recording file details |
 | `call_summaries` | The AI summary and the full summary file text | call_id, summary, full_text |
