@@ -22,7 +22,7 @@
     "defaultPlaybookId": ""
   },
   "models": {
-    "chat": "gpt-5.5",
+    "chat": "gpt-4.1-mini",
     "tts": "gpt-4o-mini-tts",
     "reasoningEffort": "none",
     "maxReplyTokens": 1024,
@@ -38,7 +38,9 @@
   "conversation": {
     "responseDelayMs": 1000,
     "hangupDelayMs": 800,
-    "historyTurnsSentToModel": 30
+    "historyTurnsSentToModel": 30,
+    "silenceRetrySeconds": 8,
+    "silenceRetries": 2
   },
   "history": {
     "pageSize": 5,

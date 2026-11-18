@@ -234,6 +234,10 @@
         <input type="number" id="setDays" min="1" max="365" aria-label="Remember days" /></div>
       <div class="set-row"><div>Agents per user<small>Most agents one user can create.</small></div>
         <input type="number" id="setAgents" min="1" max="200" aria-label="Agents per user" /></div>
+      <div class="set-row"><div>Re-ask after silence (seconds)<small>If the caller says nothing this long, the agent checks they're still there. 0 = never.</small></div>
+        <input type="number" id="setSilence" min="0" max="60" aria-label="Re-ask after silence, seconds" /></div>
+      <div class="set-row"><div>Re-asks before hanging up<small>After this many check-ins with no answer, the agent says goodbye and ends the call.</small></div>
+        <input type="number" id="setRetries" min="0" max="10" aria-label="Re-asks before hanging up" /></div>
       <p class="sub" style="margin:8px 0 0">Stored in MySQL (<code>app_config</code>). Changes apply straight away.</p>
     </section>
     <section class="card" aria-labelledby="loginTitle">

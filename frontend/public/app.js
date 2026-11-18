@@ -709,9 +709,10 @@ async function speakNext() {
 // Agent finished talking: hang up if the caller said goodbye, otherwise listen again.
 function afterAgentTurn() {
   if (!state.inCall) return;
-  if (state.pendingHangup) {
+  if (state.pendingHangup || state.silenceEnding) {
     setPhase("idle", "Ending call…");
-    setTimeout(() => endCall("caller said goodbye"), CONFIG.hangupDelayMs);
+    const reason = state.silenceEnding ? "no answer from the caller" : "caller said goodbye";
+    setTimeout(() => endCall(reason), CONFIG.hangupDelayMs);
     return;
   }
   startListening();
@@ -869,6 +870,9 @@ function vadTick() {
   // the reply wait ends. Speaking again throws it away.
   if (u.spec && u.spec.voiceAt !== u.lastVoiceAt) u.spec = null;
   if (spoke && u.lastVoiceAt && !u.spec && u.recorder && sttOn() && t - u.lastVoiceAt >= 400) startEarlyTranscribe(u);
+  // Nobody has said anything for conversation.silenceRetrySeconds: the agent checks in (or hangs up after the re-asks).
+  const retryS = Number(CONFIG.silenceRetrySeconds) || 0;
+  if (retryS > 0 && !spoke && state.listenSince && t - state.listenSince >= retryS * 1000) return silencePrompt(retryS);
   if (spoke && u.lastVoiceAt && t - u.lastVoiceAt >= CONFIG.responseDelayMs) return commitUtterance();
   if (t - u.startedAt > (stt.maxUtteranceSeconds ?? 60) * 1000) {
     if (spoke) return commitUtterance();
@@ -889,8 +893,21 @@ function startEarlyTranscribe(u) {
   u.spec = spec;
 }
 
+// The caller stayed silent: ask the agent to check in ("[no response]"), or, after conversation.silenceRetries
+// check-ins, to say goodbye and hang up ("[no response, end call]"). Both settings live in MySQL (app_config).
+function silencePrompt(seconds) {
+  state.silenceCount = (state.silenceCount || 0) + 1;
+  const retries = Number.isFinite(Number(CONFIG.silenceRetries)) ? Number(CONFIG.silenceRetries) : 2;
+  const last = state.silenceCount > retries;
+  stopListening();
+  state.silenceEnding = last; // hang up after this goodbye even if the model forgets <hangup:yes>
+  addDivider(last ? `🔇 Still no answer · ending the call` : `🔇 No answer for ${seconds} s · checking in (${state.silenceCount} of ${retries})`);
+  sendUserText(last ? "[no response, end call]" : "[no response]", { hidden: true });
+}
+
 function startListening() {
   if (!state.inCall) return;
+  state.listenSince = now();
   clearInterval(state.vadTimer);
   discardUtterance(); // the barge-in recording made while the agent spoke (nobody talked over it)
   setPhase("listening");
@@ -931,6 +948,7 @@ function bargeIn() {
   stopSpeaking();
   state.streamDone = true;
   state.pendingHangup = false;
+  state.silenceEnding = false; // they spoke after all: keep the call going
   setPhase("listening");
   if (u) { u.barge = false; u.speechMs = Number(CONFIG.bargeInMs) || 300; u.lastVoiceAt = now(); }
   else startUtterance();
@@ -1038,6 +1056,8 @@ function renderTiming(turn) {
 }
 
 async function sendUserText(text, { hidden = false, bubble = null, t0 = null } = {}) {
+  if (!hidden) { state.silenceCount = 0; state.silenceEnding = false; } // the caller spoke: start the silence count again
+  state.listenSince = 0;
   stopListening();
   stopSpeaking();
   if (state.abort) state.abort.abort();
@@ -1070,7 +1090,7 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
         return "";
       }
       if (k === "hangup") {
-        if (/^y/i.test(v.trim()) && !hidden) { turn.hangup = true; state.pendingHangup = state.inCall; }
+        if (/^y/i.test(v.trim()) && (!hidden || text.startsWith("[no response"))) { turn.hangup = true; state.pendingHangup = state.inCall; }
         return "";
       }
       v = v.trim();
@@ -1230,6 +1250,8 @@ async function startCall() {
   setupMixer();
   clearChat();
   state.pendingHangup = false;
+  state.silenceCount = 0;
+  state.silenceEnding = false;
   state.srFallback = 0;
   state.inCall = true; renderAgents();
   state.muted = false;
@@ -1277,7 +1299,7 @@ async function endCall(endedBy = "ended by you") {
 
 // ---------- call summary ----------
 async function summarizeCall(duration, recording, endedBy) {
-  const turns = state.history.filter((m) => m.content !== "[call connected]");
+  const turns = state.history.filter((m) => !/^\[(call connected|no response[^\]]*)\]$/.test(m.content)); // app markers, not the caller's words
   const callerTurns = state.turns.filter((t) => !t.hidden);
   const pb = activePlaybook();
   const times = callerTurns.map((t) => t.firstVoice ?? t.firstText).filter((x) => x != null);

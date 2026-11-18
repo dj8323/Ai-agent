@@ -196,7 +196,7 @@ public class VoiceController {
     StringBuilder transcript = new StringBuilder();
     for (Map<String, Object> m : cleanTurns(body.get("messages"), cfg)) {
       String content = (String) m.get("content");
-      if ("[call connected]".equals(content)) continue;
+      if (content.matches("^\\[(call connected|no response[^\\]]*)\\]$")) continue; // app markers, not the caller's words
       String clean = content.replaceAll("(?i)<[a-z]+:[^>]*>|\\[[a-z]+]", "").trim();
       transcript.append("user".equals(m.get("role")) ? "Caller: " : "Agent: ").append(clean).append("\n");
     }

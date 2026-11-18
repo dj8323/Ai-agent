@@ -148,6 +148,10 @@ public final class Prompts {
         + "- Example: <intent:refund for wrong charge><mood:frustrated><lang:English>[empathetic] Oh no, that's annoying. [curious] Which number was charged?\n"
         + "- Hang-up example: <intent:end call><mood:satisfied><lang:English><hangup:yes>[grateful] Glad I could help, take care, bye!\n"
         + calendarPrompt(cfg) + messagePrompt(owner) + emergencyPrompt(cfg)
+        + "\nIf the caller's message is \"[no response]\", the caller has said nothing for a while: use <intent:no response><mood:neutral><lang:"
+        + language + "> and gently check they are still there in one short line, or briefly repeat your last question; don't start a new topic."
+        + "\nIf the caller's message is \"[no response, end call]\", they are still silent after you checked: use <intent:end call><mood:neutral><lang:"
+        + language + "><hangup:yes> and say one short, polite goodbye (they can call back any time).\n"
         + "\nIf the caller's message is \"[call connected]\", the call has just started: use <intent:call start><mood:neutral><lang:" + language + "> and " + greet + "\n"
         + "Today is " + today + ".";
   }

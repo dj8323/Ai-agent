@@ -298,6 +298,8 @@ async function loadSettings() {
   $("setHours").value = config.auth.sessionHours;
   $("setDays").value = config.auth.rememberDays;
   $("setAgents").value = config.agent.maxAgentsPerUser;
+  $("setSilence").value = config.conversation.silenceRetrySeconds ?? 8;
+  $("setRetries").value = config.conversation.silenceRetries ?? 2;
 }
 async function saveSection(section, patch, label) {
   try {
@@ -315,6 +317,9 @@ $("setSignup").onchange = () => saveSection("auth", { allowSignup: $("setSignup"
 $("setHours").onchange = () => saveSection("auth", { sessionHours: num("setHours", 1, 168) }, "Session length");
 $("setDays").onchange = () => saveSection("auth", { rememberDays: num("setDays", 1, 365) }, "Keep me signed in");
 $("setAgents").onchange = () => saveSection("agent", { maxAgentsPerUser: num("setAgents", 1, 200) }, "Agents per user");
+const num0 = (id, max) => Math.min(max, Math.max(0, Math.round(Number($(id).value) || 0)));
+$("setSilence").onchange = () => saveSection("conversation", { silenceRetrySeconds: num0("setSilence", 60) }, "Re-ask after silence");
+$("setRetries").onchange = () => saveSection("conversation", { silenceRetries: num0("setRetries", 10) }, "Re-asks before hanging up");
 
 // ---------- activity log ----------
 const ACTIONS = {
