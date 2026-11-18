@@ -160,9 +160,9 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 
 - Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions /
   fallback. The agent replies after `conversation.responseDelayMs` of silence.
-- **One page, two views** switched by the **☰ Menu** dropdown (`#menuBtn`/`#menuPanel`; hash routing, `route()` in
-  app.js): **🎙 Call** (`#call`, the main page) and **🤖 My agents** (`#agents/<tab>`), plus ＋ New agent. My agents
-  (`#manageView`) is a full-width page; CSS `body[data-view]` hides the other view.
+- Top menu buttons (`.topnav`): **🎙 Call** (`#call`, the main page) and **🤖 My agents** (`#agents/<tab>`, hash routing,
+  `route()` in app.js). My agents (`#manageView`) is a pop-up window (`#agentsModal`) over the call page; ✕, Escape or a
+  click outside closes it (back to `#call`). Dialogs opened from it (New agent, type change, playbook) sit on top.
 - Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,
   organization, availability, language · voice, AI models, playbook picker `#pbPick`, feature chips). ✎ Edit agent →
   `#agents/profile`. Keep it simple: anything that edits an agent belongs in My agents.

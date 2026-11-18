@@ -2025,27 +2025,24 @@ function route() {
   const [view, tab] = location.hash.replace(/^#/, "").split("/");
   const agents = view === "agents";
   document.body.dataset.view = agents ? "agents" : "call";
+  $("agentsModal").classList.toggle("open", agents);
   $("navCall").setAttribute("aria-current", agents ? "false" : "page");
-  $("menuWhere").textContent = agents ? "My agents" : "Call";
   $("navAgents").setAttribute("aria-current", agents ? "page" : "false");
   if (agents) {
     showTab(tab || state.tab);
     if (state.tab === "calendar" && SETTINGS.calendar?.enabled) loadCalendar().catch(() => {});
   }
-  window.scrollTo({ top: 0 });
 }
 document.querySelectorAll(".tabs [data-tab]").forEach((b) => (b.onclick = () => (location.hash = `agents/${b.dataset.tab}`)));
-// ☰ Menu dropdown
-function setMenu(open) {
-  $("menuPanel").hidden = !open;
-  $("menuBtn").setAttribute("aria-expanded", String(open));
-  if (open) $("menuPanel").querySelector("button")?.focus();
-}
-$("menuBtn").addEventListener("click", (e) => { e.stopPropagation(); setMenu($("menuPanel").hidden); });
-document.addEventListener("click", (e) => { if (!e.target.closest(".app-menu")) setMenu(false); });
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("menuPanel").hidden) { setMenu(false); $("menuBtn").focus(); } });
-document.querySelectorAll(".menu-panel [data-go]").forEach((b) => (b.onclick = () => { setMenu(false); location.hash = b.dataset.go; }));
-$("navNew").addEventListener("click", () => { setMenu(false); openAgentDialog(); });
+document.querySelectorAll(".topnav [data-go]").forEach((b) => (b.onclick = () => (location.hash = b.dataset.go)));
+// My agents is a pop-up window over the call page: ✕, Escape or a click outside closes it.
+$("mgClose").addEventListener("click", () => (location.hash = "call"));
+$("agentsModal").addEventListener("click", (e) => { if (e.target === $("agentsModal")) location.hash = "call"; });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !$("agentsModal").classList.contains("open")) return;
+  if ([...document.querySelectorAll(".overlay.open")].some((o) => o !== $("agentsModal"))) return; // a dialog on top closes first
+  location.hash = "call";
+});
 window.addEventListener("hashchange", route);
 route();
 

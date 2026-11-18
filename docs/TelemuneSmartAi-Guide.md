@@ -175,7 +175,7 @@ The app remembers the last agent each user had open. A new account starts with o
 
 ## Main page and the My agents menu
 
-A **☰ Menu** button at the top right opens the menu: **🎙 Make a call** (the main page), **🤖 My agents** (create and edit agents) and **＋ New agent**. The button also shows which page you are on.
+The menu at the top right has two buttons: **🎙 Call** (the main page) and **🤖 My agents**, which opens a pop-up window over the call page to create and edit agents.
 
 ### The main page (🎙 Call)
 
@@ -192,7 +192,7 @@ On the right are the conversation and the call summaries.
 
 ### My agents (create and edit)
 
-**🤖 My agents** is its own page: your agents are listed on the left (★ = the one that opens first) with **＋ New agent** below them. The selected agent's settings are on the right, under its name. The header holds **🎙 Call** (back to the main page with this agent), **☆ Default** and **🗑 Delete**.
+**🤖 My agents** opens as a pop-up window over the call page (close it with ✕, Escape or a click outside). Your agents are listed on the left (★ = the one that opens first) with **＋ New agent** below them. The selected agent's settings are on the right, under its name. The header holds **🎙 Call** (back to the main page with this agent), **☆ Default** and **🗑 Delete**.
 
 Every change saves itself within a second: there is no Save button. A small pill in the header shows **Saving…**, then **✓ Saved**. The next reply already uses the new setup.
 
