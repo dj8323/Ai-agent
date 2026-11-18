@@ -120,6 +120,9 @@ public class VoiceController {
           + J.str(emg.get("number"), 20) + " right now."));
     }
     Map<String, Object> req = chatBody(cfg, messages);
+    log.info("Chat turn: agent \"{}\", lang {}, playbook {}, {} turns, prompt {} chars{}", name, lang.isEmpty() ? "-" : lang,
+        pb == null ? "-" : pb.get("name"), turns.size(), system.length(), J.blank(emg.get("number")) ? "" : ", EMERGENCY " + J.str(emg.get("label"), 40));
+    log.debug("Caller said: \"{}\"", J.str(turns.get(turns.size() - 1).get("content"), 500));
     req.put("stream", true);
     req.put("stream_options", J.map("include_usage", true)); // last chunk carries token usage
 
@@ -131,17 +134,23 @@ public class VoiceController {
     ServletOutputStream out = res.getOutputStream();
     out.flush();
     AtomicBoolean alive = new AtomicBoolean(true);
+    StringBuilder reply = new StringBuilder();
     try {
       openai.chatStream(req, chunk -> {
         for (Object c : J.list(chunk.get("choices"))) {
           Object text = J.get(J.obj(c), "delta.content");
-          if (text instanceof String s && !s.isEmpty()) sse(out, "delta", J.map("text", s));
+          if (text instanceof String s && !s.isEmpty()) {
+            reply.append(s);
+            sse(out, "delta", J.map("text", s));
+          }
         }
         if (chunk.get("usage") instanceof Map<?, ?>) sse(out, "usage", usage(chunk.get("usage")));
       }, alive::get);
       sse(out, "done", J.map());
+      log.debug("Agent replied: \"{}\"", J.str(reply.toString(), 800));
     } catch (UncheckedIOException e) {
       alive.set(false); // the caller hung up
+      log.info("Chat stream closed by the browser (caller interrupted or hung up) after {} chars", reply.length());
     } catch (OpenAiClient.OpenAiException e) {
       log.warn("chat failed: {} {}", e.status, e.getMessage());
       try {
@@ -188,6 +197,8 @@ public class VoiceController {
       }
       if (hit != null && !hit.isEmpty()) { text = hit; translated = true; }
     }
+    log.info("Greeting ready: lang {}, {}", lang.isEmpty() ? "-" : lang, english ? "English" : translated ? "translated" : "translation failed, English used");
+    log.debug("Greeting text: \"{}\"", text);
     return J.map("text", text, "language", english || translated ? language : "English", "emotion", "cheerful");
   }
 
@@ -217,6 +228,7 @@ public class VoiceController {
     Map<String, Object> cfgModels = J.map("role", "user", "content", "Call duration: " + (J.blank(body.get("duration")) ? "unknown" : J.str(body.get("duration"))) + "\n\nTranscript:\n" + transcript);
     Map<String, Object> req = chatBody(cfg, List.of(J.map("role", "system", "content", sys), cfgModels));
     req.put("max_completion_tokens", J.num(J.get(cfg, "models.maxSummaryTokens")));
+    log.info("Summary requested: transcript {} chars, duration {}", transcript.length(), J.blank(body.get("duration")) ? "-" : body.get("duration"));
     try {
       Map<String, Object> outRes = openai.chat(req);
       Object content = J.get(J.obj(J.list(outRes.get("choices")).stream().findFirst().orElse(null)), "message.content");
@@ -271,6 +283,7 @@ public class VoiceController {
     res.setContentType("audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
     if (cached != null) {
+      log.debug("Speech from cache ({} KB)", cached.length / 1024);
       res.setHeader("X-Cache", "hit");
       res.setContentLength(cached.length);
       res.getOutputStream().write(cached);
@@ -297,6 +310,7 @@ public class VoiceController {
       }
     } catch (IOException e) {
       // the caller hung up or interrupted: stop reading from OpenAI
+      log.debug("Speech stream stopped by the browser (barge-in or hang-up) after {} KB", copy.size() / 1024);
     }
   }
 
@@ -310,7 +324,10 @@ public class VoiceController {
     } catch (IllegalArgumentException e) {
       throw ApiException.bad("Bad request");
     }
-    if (audio.length < 1000) return ResponseEntity.ok(J.map("text", "")); // too short to contain speech
+    if (audio.length < 1000) { // too short to contain speech
+      log.debug("Transcribe skipped: only {} bytes of audio", audio.length);
+      return ResponseEntity.ok(J.map("text", ""));
+    }
     String mime = J.str(body.get("mime")).split(";")[0].trim();
     if (mime.isEmpty()) mime = "audio/webm";
     String ext = AUDIO_EXT.getOrDefault(mime, "webm");

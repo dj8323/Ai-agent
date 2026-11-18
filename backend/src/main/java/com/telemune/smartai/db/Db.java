@@ -49,6 +49,10 @@ public class Db {
     addColumn("agents", "availability_plan", "JSON NULL AFTER greeting");
     addColumn("agents", "meeting_minutes", "INT NULL AFTER availability_plan");
     addColumn("agents", "speech_speed", "DECIMAL(3,2) NULL AFTER meeting_minutes");
+    addColumn("api_logs", "request_id", "VARCHAR(16) NULL AFTER id");
+    addColumn("activity_logs", "request_id", "VARCHAR(16) NULL AFTER id");
+    addIndex("api_logs", "idx_api_request", "request_id");
+    addIndex("activity_logs", "idx_activity_request", "request_id");
     addColumn("emergency_rules", "contact_type", "VARCHAR(10) NOT NULL DEFAULT 'phone' AFTER label");
     // Emergency contacts can be an email address now: widen the old VARCHAR(20).
     Long len = jdbc.queryForObject("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
@@ -66,6 +70,16 @@ public class Db {
     }
   }
 
+  private void addIndex(String table, String index, String columns) {
+    Long n = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?",
+        Long.class, table, index);
+    if (n != null && n == 0) {
+      jdbc.execute("ALTER TABLE " + table + " ADD INDEX " + index + " (" + columns + ")");
+      log.info("Added index {}.{}", table, index);
+    }
+  }
+
   private void runScript(String path) throws Exception {
     String sql = new String(new ClassPathResource(path).getInputStream().readAllBytes(), StandardCharsets.UTF_8);
     for (String st : split(sql)) {
@@ -74,6 +88,7 @@ public class Db {
       if (head.startsWith("CREATE DATABASE") || head.startsWith("USE ")) continue;
       jdbc.execute(st);
     }
+    log.debug("Ran {} ({} statements)", path, split(sql).size());
   }
 
   /** Split a SQL script on ; outside quotes, dropping -- comments. */
@@ -107,30 +122,89 @@ public class Db {
   }
 
   // ---------- helpers ----------
+  // Every statement is logged to sql.log (logger "SQL", DEBUG): time, rows, the SQL and its arguments.
+  // Slow ones (over SLOW_MS) also go to app.log as WARN; failed ones go to app.log + error.log as ERROR.
+
+  private static final Logger sqlLog = LoggerFactory.getLogger("SQL");
+  private static final long SLOW_MS = 500;
+
+  private <T> T timed(String sql, Object[] args, Supplier<T> run, java.util.function.Function<T, Object> rows) {
+    long t0 = System.nanoTime();
+    try {
+      T out = run.get();
+      long ms = (System.nanoTime() - t0) / 1_000_000;
+      if (sqlLog.isDebugEnabled()) sqlLog.debug("{} ms, rows={} | {} | args={}", ms, rows.apply(out), flat(sql), args(args));
+      if (ms > SLOW_MS) log.warn("Slow SQL ({} ms): {} | args={}", ms, flat(sql), args(args));
+      return out;
+    } catch (RuntimeException e) {
+      long ms = (System.nanoTime() - t0) / 1_000_000;
+      sqlLog.debug("{} ms, FAILED | {} | args={} | {}", ms, flat(sql), args(args), e.getMessage());
+      log.error("SQL failed ({} ms): {} | args={} | {}", ms, flat(sql), args(args), rootMessage(e));
+      throw e;
+    }
+  }
+
+  private static String flat(String sql) {
+    return sql.replaceAll("\\s+", " ").trim();
+  }
+
+  private static String rootMessage(Throwable e) {
+    Throwable c = e;
+    while (c.getCause() != null && c.getCause() != c) c = c.getCause();
+    return c.getMessage();
+  }
+
+  /** Arguments for the log: secrets masked (password hashes, session token hashes), long text cut. */
+  static String args(Object[] args) {
+    if (args == null || args.length == 0) return "[]";
+    StringBuilder sb = new StringBuilder("[");
+    for (int i = 0; i < args.length; i++) {
+      if (i > 0) sb.append(", ");
+      Object a = args[i];
+      if (a == null) sb.append("null");
+      else if (a instanceof String s) {
+        if (s.startsWith("scrypt$") || s.matches("[0-9a-f]{64}")) sb.append("'***'");
+        else sb.append('\'').append(s.length() > 200 ? s.substring(0, 200) + "…(" + s.length() + " chars)" : s).append('\'');
+      } else if (a instanceof byte[] b) sb.append("<").append(b.length).append(" bytes>");
+      else sb.append(a);
+    }
+    return sb.append(']').toString();
+  }
 
   public List<Map<String, Object>> query(String sql, Object... args) {
-    return jdbc.queryForList(sql, args);
+    return timed(sql, args, () -> jdbc.queryForList(sql, args), List::size);
   }
 
   public Map<String, Object> one(String sql, Object... args) {
-    List<Map<String, Object>> rows = jdbc.queryForList(sql, args);
+    List<Map<String, Object>> rows = query(sql, args);
     return rows.isEmpty() ? null : rows.get(0);
   }
 
   public long count(String sql, Object... args) {
-    Number n = jdbc.queryForObject(sql, Number.class, args);
+    Number n = timed(sql, args, () -> jdbc.queryForObject(sql, Number.class, args), x -> x);
     return n == null ? 0 : n.longValue();
   }
 
   public int exec(String sql, Object... args) {
-    return jdbc.update(sql, args);
+    return timed(sql, args, () -> jdbc.update(sql, args), x -> x);
   }
 
   public <T> T tx(Supplier<T> fn) {
-    return txt.execute(status -> fn.get());
+    sqlLog.debug("BEGIN transaction");
+    try {
+      T out = txt.execute(status -> fn.get());
+      sqlLog.debug("COMMIT");
+      return out;
+    } catch (RuntimeException e) {
+      sqlLog.debug("ROLLBACK ({})", e.getMessage());
+      throw e;
+    }
   }
 
   public void tx(Runnable fn) {
-    txt.executeWithoutResult(status -> fn.run());
+    tx(() -> {
+      fn.run();
+      return null;
+    });
   }
 }

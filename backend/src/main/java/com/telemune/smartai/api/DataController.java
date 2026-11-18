@@ -128,6 +128,8 @@ public class DataController {
       }
     }
     Map<String, Object> rec = calls.saveRecording(id, req.getContentType(), buf.toByteArray(), ctx.dataUserId);
+    org.slf4j.LoggerFactory.getLogger(DataController.class).info("Recording for call {}: {} KB ({}){}", id, buf.size() / 1024, req.getContentType(),
+        rec == null ? " - call not found, not saved" : " saved");
     return rec == null ? ResponseEntity.status(404).body(J.map("error", "Not found")) : ResponseEntity.ok(rec);
   }
 

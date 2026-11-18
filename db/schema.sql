@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
 -- No foreign keys, so the history stays even after a user is deleted.
 CREATE TABLE IF NOT EXISTS activity_logs (
   id         BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  request_id VARCHAR(16)  NULL,          -- same id as [reqId] in logs/*.log and the X-Request-Id header
   user_id    VARCHAR(16)  NULL,
   username   VARCHAR(64)  NOT NULL DEFAULT '',
   action     VARCHAR(40)  NOT NULL,
@@ -184,12 +185,14 @@ CREATE TABLE IF NOT EXISTS activity_logs (
   ip         VARCHAR(64)  NOT NULL DEFAULT '',
   created_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   INDEX idx_activity_created (created_at),
-  INDEX idx_activity_user (user_id, created_at)
+  INDEX idx_activity_user (user_id, created_at),
+  INDEX idx_activity_request (request_id)
 );
 
 -- Every API request: method, path, status and how long it took.
 CREATE TABLE IF NOT EXISTS api_logs (
   id          BIGINT       NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  request_id  VARCHAR(16)  NULL,         -- same id as [reqId] in logs/*.log and the X-Request-Id header
   user_id     VARCHAR(16)  NULL,
   agent_id    VARCHAR(16)  NULL,
   method      VARCHAR(8)   NOT NULL,
@@ -199,7 +202,8 @@ CREATE TABLE IF NOT EXISTS api_logs (
   ip          VARCHAR(64)  NOT NULL DEFAULT '',
   created_at  DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   INDEX idx_api_created (created_at),
-  INDEX idx_api_user (user_id, created_at)
+  INDEX idx_api_user (user_id, created_at),
+  INDEX idx_api_request (request_id)
 );
 
 -- Agent types (Personal, Call assistant, Hospital, Banking …). Admins edit them in the dashboard (🧩 Agent templates).

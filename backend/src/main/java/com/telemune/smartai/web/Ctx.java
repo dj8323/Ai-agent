@@ -10,6 +10,8 @@ import java.util.Map;
  */
 public class Ctx {
   public final String ip;
+  /** Short id of this request: in every log line ([reqId]), the X-Request-Id header, api_logs and activity_logs. */
+  public String requestId;
   public Map<String, Object> user;
   public String token;
   public String dataUserId;

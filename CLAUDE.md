@@ -72,7 +72,15 @@ Branding: "TelemuneSmartAi", footer "Powered by Telemune © 2027 · Designed by 
 NO_OPEN=1 ./runScript.sh  # same, without opening a browser
 ```
 
-- URL: http://localhost:8323. Backend log: `logs/backend.log`. Ctrl+C stops both.
+- URL: http://localhost:8323. Ctrl+C stops both.
+- **Logs** (`backend/src/main/resources/logback-spring.xml`, times UTC): `logs/error.log` (WARN+), `app.log` (INFO: every
+  request `← METHOD path status in N ms`, sign-ins, activity, OpenAI calls with timings/tokens), `debug.log` (DEBUG:
+  caller words, replies, details), `sql.log` (logger `SQL`: every statement + args, hashes masked), `backend.log`
+  (console). Line = time · level · [requestId] · [user] · [agentId]. The request id (MDC, set in `ApiFilter`) is also the
+  `X-Request-Id` header and `api_logs.request_id` / `activity_logs.request_id`. Levels: `LOG_LEVEL`, `SQL_LOG` in .env, or
+  live via admin `GET/PUT /api/admin/log-level`. Slow SQL > 500 ms and slow requests > 3 s → WARN. Rotated into
+  `logs/archive/`. Troubleshooting guide with all tables and SQL queries: `docs/Troubleshooting.md`. New code: log
+  actions at INFO, details at DEBUG, never log secrets or the OpenAI key.
 - Build only: `cd backend && mvn -q -DskipTests package` → `backend/target/smartai-backend.jar`
   (run it from the project folder: it reads `.env`, `config.json` and `data/` from the working directory).
 - Needs `OPENAI_API_KEY` and `MYSQL_*` in `.env` (copy `.env.example`). `.env` is the only place for secrets.
@@ -108,6 +116,7 @@ frontend/public/app.js       Menu/tab routing, agent picker + summary, persona/a
                              speech in/out, tag parsing, messages, calendar, playbooks, call summaries.
 frontend/public/telemune-mark.png / telemune-logo.svg   Logo (CSS mask, theme gradient) / favicon.
 runScript.sh           One-command start of both apps.
+docs/Troubleshooting.md  Log files, tracing a request, common problems, every table, ready SQL queries.
 docs/                  TelemuneSmartAi-Guide.md (+ PDF, images/). Keep it in step when features change. PDF rebuild:
                        node docs/md2html.mjs docs/TelemuneSmartAi-Guide.md /tmp/guide.html, then Chrome headless
                        --print-to-pdf=docs/TelemuneSmartAi-Guide.pdf file:///tmp/guide.html
@@ -136,6 +145,7 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 | GET | `/api/admin/overview`, `/api/admin/logs?page&user`, `/api/admin/logins?page` | admin: totals + users / activity / sign-ins |
 | POST/GET/PATCH/DELETE | `/api/admin/users[/:id]` | admin: users |
 | GET / PUT | `/api/admin/config[/:section]` | admin: app_config |
+| GET / PUT | `/api/admin/log-level` | admin: current log levels / change {logger: com.telemune or SQL, level} until restart |
 | GET | `/api/admin/templates` | admin: all types + templates (+ how many agents use each) |
 | POST / PUT | `/api/admin/types`, `/api/admin/types/:key` | admin: add / edit a type |
 | POST / PUT / DELETE | `/api/admin/templates[/:id]` | admin: add / edit / delete a template |

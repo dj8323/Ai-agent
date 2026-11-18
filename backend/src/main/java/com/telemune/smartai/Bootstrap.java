@@ -48,6 +48,8 @@ public class Bootstrap {
     log.info("{} backend running at http://{}:{}  (MySQL: {}, chat: {}, voice: {})", J.get(cfg, "branding.appName"),
         env.getProperty("server.address", "localhost"), env.getProperty("local.server.port"), env.getProperty("MYSQL_DATABASE", "ai-agent"),
         J.get(cfg, "models.chat"), J.get(cfg, "models.tts"));
+    log.info("Logs: {}/app.log (INFO), debug.log (level {}), sql.log (level {}), error.log (WARN+). Times are UTC.",
+        env.getProperty("LOG_DIR", "logs"), env.getProperty("LOG_LEVEL", "DEBUG"), env.getProperty("SQL_LOG", "DEBUG"));
     if (!openai.hasKey()) log.warn("OPENAI_API_KEY is not set — calls will fail until you add it to .env");
   }
 }

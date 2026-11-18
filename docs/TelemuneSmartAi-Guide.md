@@ -499,6 +499,22 @@ The auth, agent-limit and silence settings are editable in the admin dashboard; 
 - The app currently runs over plain http on localhost. Before others use it over a network, put it behind https so passwords are not sent in the clear.
 - Change the default admin password (admin@123) after first sign-in.
 
+### Logs
+
+The backend writes four log files in `logs/` (times in UTC, like the database):
+
+| File | What's in it |
+| --- | --- |
+| `error.log` | Problems only (failed sign-ins, errors, OpenAI and database failures). Look here first |
+| `app.log` | Every request with its status and time, sign-ins, user actions, every OpenAI call with timings and tokens |
+| `debug.log` | Everything in app.log plus details: what the caller said, what the agent replied |
+| `sql.log` | Every database query with its values (passwords and tokens hidden) |
+
+Every line has a **request id**, e.g. `[08c2f1f2]`. The browser gets the same id in the `X-Request-Id` header, and it is
+saved in the `api_logs` and `activity_logs` tables, so `grep 08c2f1f2 logs/*.log` shows one request from start to end.
+Set `LOG_LEVEL=INFO` / `SQL_LOG=INFO` in `.env` for less detail. **docs/Troubleshooting.md** lists every table and
+ready-made SQL queries for sign-in, error, speed, call and agent problems.
+
 ### Troubleshooting
 
 | Symptom | Fix |
@@ -507,6 +523,7 @@ The auth, agent-limit and silence settings are editable in the admin dashboard; 
 | "The backend isn't running" page or error | Start everything with `./runScript.sh` |
 | "Backend build failed" | Install a JDK 21+ and Maven, then run `./runScript.sh` again |
 | "Server is missing a valid OPENAI_API_KEY" | Add the key to `.env` and restart |
+| Anything else | Open `logs/error.log`, take the request id from the line, then `grep <id> logs/*.log` (see docs/Troubleshooting.md) |
 | "Rate limited or out of credit" | Check OpenAI billing |
 | Microphone doesn't work | Use Chrome or Edge at http://localhost (the Claude in-app browser blocks the mic) |
 | Agent cuts in too early or waits too long | Change `conversation.responseDelayMs` |

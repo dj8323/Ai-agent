@@ -12,6 +12,8 @@ import com.telemune.smartai.service.TemplateService;
 import com.telemune.smartai.util.J;
 import com.telemune.smartai.web.ApiException;
 import com.telemune.smartai.web.Ctx;
+import org.springframework.boot.logging.LogLevel;
+import org.springframework.boot.logging.LoggingSystem;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,9 +45,11 @@ public class AdminController {
   private final CalendarService calendar;
   private final MessageService messages;
   private final LogService logs;
+  private final LoggingSystem logging;
 
   public AdminController(AuthService auth, AgentService agents, AppConfigService config, TemplateService templates, PlaybookService playbooks,
-                         CallService calls, CalendarService calendar, MessageService messages, LogService logs) {
+                         CallService calls, CalendarService calendar, MessageService messages, LogService logs, LoggingSystem logging) {
+    this.logging = logging;
     this.auth = auth;
     this.agents = agents;
     this.config = config;
@@ -218,5 +222,30 @@ public class AdminController {
     Map<String, Object> t = templates.deleteTemplate(id);
     logs.activity(ctx, "template.delete", (String) t.get("name"), J.map("id", id));
     return J.map("ok", true);
+  }
+
+  // ---------- log levels (live, until the next restart; the start level comes from LOG_LEVEL / SQL_LOG in .env) ----------
+  private static final List<String> LOGGERS = List.of("com.telemune", "SQL");
+
+  @GetMapping("/log-level")
+  Map<String, Object> logLevels() {
+    Map<String, Object> out = new LinkedHashMap<>();
+    for (String name : LOGGERS) {
+      var c = logging.getLoggerConfiguration(name);
+      out.put(name, c == null || c.getEffectiveLevel() == null ? null : c.getEffectiveLevel().name());
+    }
+    return out;
+  }
+
+  /** Body {logger: "com.telemune" (app) or "SQL", level: "DEBUG" | "INFO" | "WARN" | "ERROR"}. */
+  @PutMapping("/log-level")
+  Map<String, Object> setLogLevel(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    String name = J.str(body.get("logger"));
+    String level = J.str(body.get("level")).toUpperCase();
+    if (!LOGGERS.contains(name)) throw ApiException.bad("logger must be one of " + LOGGERS);
+    if (!List.of("TRACE", "DEBUG", "INFO", "WARN", "ERROR").contains(level)) throw ApiException.bad("level must be DEBUG, INFO, WARN or ERROR");
+    logging.setLogLevel(name, LogLevel.valueOf(level));
+    logs.activity(ctx, "log.level", name, J.map("level", level));
+    return logLevels();
   }
 }

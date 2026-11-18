@@ -24,6 +24,7 @@ import java.util.regex.Pattern;
  */
 @Service
 public class AuthService {
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthService.class);
   public static final int ROLE_ADMIN = 1;
   public static final int ROLE_USER = 2;
   public static final String COOKIE = "tsa_session";
@@ -194,6 +195,8 @@ public class AuthService {
   }
 
   private void noteAttempt(String username, String userId, String ip, String ua, boolean ok, String reason) {
+    if (ok) log.info("Sign-in OK: {} (user {}) from {} - {}", username, userId, ip, reason);
+    else log.warn("Sign-in FAILED: {} from {} - {}", username, ip, reason);
     db.exec("INSERT INTO login_attempts (username, user_id, ip, user_agent, success, reason) VALUES (?, ?, ?, ?, ?, ?)",
         J.str(username, 64), userId, J.str(ip, 64), J.str(ua, 255), ok ? 1 : 0, J.str(reason, 80));
   }
@@ -227,6 +230,7 @@ public class AuthService {
   }
 
   public void logout(String token) {
+    log.info("Sign-out");
     if (token != null) db.exec("DELETE FROM sessions WHERE token_hash = ?", sha(token));
   }
 

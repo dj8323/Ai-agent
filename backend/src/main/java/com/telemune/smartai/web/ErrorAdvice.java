@@ -18,16 +18,20 @@ public class ErrorAdvice {
 
   @ExceptionHandler(ApiException.class)
   ResponseEntity<Map<String, Object>> api(ApiException e) {
+    if (e.status >= 500) log.error("API error {}: {}", e.status, e.getMessage(), e);
+    else log.info("API answered {}: {}", e.status, e.getMessage());
     return ResponseEntity.status(e.status).body(Map.of("error", e.getMessage()));
   }
 
   @ExceptionHandler(HttpMessageNotReadableException.class)
   ResponseEntity<Map<String, Object>> badJson(HttpMessageNotReadableException e) {
+    log.warn("Bad JSON in request body: {}", e.getMostSpecificCause().getMessage());
     return ResponseEntity.badRequest().body(Map.of("error", "Bad JSON"));
   }
 
   @ExceptionHandler(NoResourceFoundException.class)
   ResponseEntity<Map<String, Object>> notFound(NoResourceFoundException e) {
+    log.info("Unknown API route /{}", e.getResourcePath());
     return ResponseEntity.status(404).body(Map.of("error", "Unknown API route /" + e.getResourcePath()));
   }
 
@@ -38,7 +42,7 @@ public class ErrorAdvice {
 
   @ExceptionHandler(Exception.class)
   ResponseEntity<Map<String, Object>> other(Exception e) {
-    log.error("Request failed", e);
+    log.error("Request failed with an unexpected error: {}", e.toString(), e);
     return ResponseEntity.status(500).body(Map.of("error", "Server error"));
   }
 }

@@ -27,20 +27,22 @@ public class LogService {
 
   public void activity(Ctx ctx, String action, String target, Object details, String userId, String username) {
     try {
-      db.exec("INSERT INTO activity_logs (user_id, username, action, target, details, ip) VALUES (?, ?, ?, ?, ?, ?)",
-          userId, J.str(username, 64), J.str(action, 40), J.str(target, 120), details == null ? null : J.json(details),
+      log.info("Activity {} \"{}\" by {} {}", action, target, username == null || username.isEmpty() ? "-" : username,
+          details == null ? "" : J.json(details));
+      db.exec("INSERT INTO activity_logs (request_id, user_id, username, action, target, details, ip) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          ctx == null ? null : ctx.requestId, userId, J.str(username, 64), J.str(action, 40), J.str(target, 120), details == null ? null : J.json(details),
           ctx == null ? "" : J.str(ctx.ip, 64));
     } catch (Exception e) {
-      log.warn("activity log failed: {}", e.getMessage());
+      log.warn("Could not write activity_logs: {}", e.getMessage());
     }
   }
 
   public void request(Ctx ctx, String method, String path, int status, long ms) {
     try {
-      db.exec("INSERT INTO api_logs (user_id, agent_id, method, path, status, duration_ms, ip) VALUES (?, ?, ?, ?, ?, ?, ?)",
-          ctx.userId(), ctx.agentId(), method, J.str(path, 200), status, ms, J.str(ctx.ip, 64));
+      db.exec("INSERT INTO api_logs (request_id, user_id, agent_id, method, path, status, duration_ms, ip) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+          ctx.requestId, ctx.userId(), ctx.agentId(), method, J.str(path, 200), status, ms, J.str(ctx.ip, 64));
     } catch (Exception e) {
-      log.warn("api log failed: {}", e.getMessage());
+      log.warn("Could not write api_logs: {}", e.getMessage());
     }
   }
 

@@ -9,6 +9,9 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -18,6 +21,7 @@ import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ThreadLocalRandom;
 
 /**
  * Runs before every /api request:
@@ -29,6 +33,9 @@ import java.util.Set;
 @Component
 @Order(1)
 public class ApiFilter extends OncePerRequestFilter {
+  private static final Logger log = LoggerFactory.getLogger(ApiFilter.class);
+  /** Requests slower than this are logged as WARN (chat streams and speech are long by nature, so they're left out). */
+  private static final long SLOW_MS = 3000;
   private static final Set<String> PUBLIC = Set.of("POST /api/login", "POST /api/signup", "POST /api/logout", "GET /api/auth-options", "GET /api/health");
 
   private final AuthService auth;
@@ -57,6 +64,7 @@ public class ApiFilter extends OncePerRequestFilter {
   }
 
   private static void json(HttpServletResponse res, int status, String error) throws IOException {
+    log.info("Refused {}: {}", status, error);
     res.setStatus(status);
     res.setContentType("application/json");
     res.setCharacterEncoding("UTF-8");
@@ -74,7 +82,15 @@ public class ApiFilter extends OncePerRequestFilter {
     String path = req.getRequestURI();
     String method = req.getMethod();
     Ctx ctx = new Ctx(clientIp(req));
+    ctx.requestId = String.format("%08x", ThreadLocalRandom.current().nextInt());
     req.setAttribute("ctx", ctx);
+    res.setHeader("X-Request-Id", ctx.requestId);
+    MDC.put("reqId", ctx.requestId);
+    if (log.isDebugEnabled()) {
+      String q = req.getQueryString();
+      log.debug("→ {} {}{} from {} ({})", method, path, q == null ? "" : "?" + q.replaceAll("(?i)(password|token)=[^&]*", "$1=***"), ctx.ip,
+          J.str(req.getHeader("User-Agent"), 80));
+    }
     try {
       if (PUBLIC.contains(method + " " + path)) {
         chain.doFilter(req, res);
@@ -103,6 +119,7 @@ public class ApiFilter extends OncePerRequestFilter {
       }
       ctx.user = user;
       ctx.token = token;
+      MDC.put("user", ctx.username());
       ctx.dataUserId = ctx.userId();
       if (path.startsWith("/api/admin/") && !ctx.isAdmin()) {
         json(res, 403, "Admins only.");
@@ -121,10 +138,20 @@ public class ApiFilter extends OncePerRequestFilter {
         String wanted = req.getHeader("X-Agent-Id");
         if (wanted == null || wanted.isBlank()) wanted = req.getParameter("agentId");
         ctx.agent = agents.resolve(ctx.dataUserId, wanted);
+        if (ctx.agent != null) MDC.put("agent", ctx.agentId());
+        if (!ctx.dataUserId.equals(ctx.userId())) log.info("Admin reading the data of user {}", ctx.dataUserId);
       }
       chain.doFilter(req, res);
     } finally {
-      logs.request(ctx, method, path, res.getStatus(), (System.nanoTime() - t0) / 1_000_000);
+      long ms = (System.nanoTime() - t0) / 1_000_000;
+      int status = res.getStatus();
+      boolean streaming = path.equals("/api/chat") || path.startsWith("/api/tts") || path.equals("/api/transcribe");
+      if (status >= 500) log.error("← {} {} {} in {} ms", method, path, status, ms);
+      else if (status >= 400) log.warn("← {} {} {} in {} ms", method, path, status, ms);
+      else if (ms > SLOW_MS && !streaming) log.warn("← {} {} {} in {} ms (slow)", method, path, status, ms);
+      else log.info("← {} {} {} in {} ms", method, path, status, ms);
+      logs.request(ctx, method, path, status, ms);
+      MDC.clear();
     }
   }
 }

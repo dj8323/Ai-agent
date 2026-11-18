@@ -112,3 +112,10 @@ The admin can change sign-up, session length and agents-per-user in the dashboar
 
 ---
 Powered by Telemune © 2027 · Designed by DJ
+
+## Logs & troubleshooting
+
+Logs are in `logs/`: `error.log` (problems first), `app.log` (every request, sign-in, action and OpenAI call),
+`debug.log` (full detail), `sql.log` (every SQL statement). Each line carries a request id that is also in the
+`X-Request-Id` header and the `api_logs` / `activity_logs` tables. See [docs/Troubleshooting.md](docs/Troubleshooting.md)
+for the tables and ready SQL queries.
