@@ -106,7 +106,7 @@ Everyone must sign in, and each person sees only their own agents and calls; onl
 
 1. On the login page, open the **Create account** tab.
 2. Enter full name, a username (suggested from the name; 3–32 letters, numbers, dot, dash or underscore), an optional email and a password of at least 6 characters, twice.
-3. The new account is a **User** and is signed in straight away. It starts with **no agents**: the **📚 Tutorials** window opens on "Create your first agent", and the main page shows a **＋ Create my first agent** button.
+3. The new account is a **User** and is signed in straight away. It starts with **no agents**: the "Create your first agent" **guided tour** starts by itself, and the main page shows a **＋ Create my first agent** button.
 
 The admin can turn self sign-up off in **Admin dashboard → App settings**; the tab then disappears. At most 5 accounts can be created per computer per hour.
 
@@ -180,7 +180,9 @@ The menu at the top right has three buttons: **🎙 Call** (the main page), **�
 
 ### 📚 Tutorials
 
-**📚 Tutorials** opens short, step-by-step guides in a pop-up window: Welcome, Create your first agent, Make a call, Profile & greeting, Availability & calendar, Voice, speed & AI, Emergency contacts, Playbooks, Call summaries, Manage your agents, Your account, and Tips & troubleshooting (admins also see **For admins**). Each guide has **Show me** buttons that open the right screen, and **Next** goes to the following guide. The window opens by itself the first time a user with no agents signs in.
+**📚 Tutorials** are **guided tours**: you do each step yourself on the real page while the tour shows you where. The thing to click or fill in is highlighted, a small card says what to do, and the tour **waits for you**, moving on by itself once you've done it (for steps that only explain, press **Next**). **Back** goes one step back, **Skip tour** stops, and **Show me again** brings back a highlight you've scrolled or clicked away from. When a tour ends, the card suggests the next one.
+
+Tours: Create your first agent, Make a call, Profile & greeting, Availability & calendar, Voice, speed & AI, Emergency contacts, Playbooks, Call summaries and Your account. Open **📚 Tutorials** to pick one; tours you've finished get a ✓. A user with no agents gets "Create your first agent" automatically the first time they sign in.
 
 ### The main page (🎙 Call)
 

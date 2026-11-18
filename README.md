@@ -79,7 +79,7 @@ emergency numbers, so changing one never changes another, or anyone else's.
 
 ## Main page and menu
 
-The top menu has **🎙 Call** (main page), **🤖 My agents** and **📚 Tutorials** (step-by-step guides for everything on the site). New accounts start with no agents and are shown how to create their first one. The main page is kept simple: pick the
+The top menu has **🎙 Call** (main page), **🤖 My agents** and **📚 Tutorials** (guided tours: the page highlights each step and waits while you do it). New accounts start with no agents and a guided tour walks them through creating the first one. The main page is kept simple: pick the
 agent for the call, press Start call, and see its basics (works for, organization, availability, language, voice,
 models, playbook). Everything else is edited under **🤖 My agents**, in tabs: Profile · Voice & AI · Availability
 (days, hours, time zone) · Calendar (on/off, meeting length) · Emergency (contacts by phone or email) ·

@@ -179,8 +179,12 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 
 - Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions /
   fallback. The agent replies after `conversation.responseDelayMs` of silence.
-- **📚 Tutorials** (`#learn/<topic>`, pop-up `#learnModal`): the `TUTORIALS` array in app.js (id, icon, title, intro,
-  steps, tips, actions with `go` = hash or `do` = newAgent/admin; `adminOnly`). Keep it in step when features change.
+- **📚 Tutorials = guided tours** (`#learn` opens the launcher pop-up `#learnModal` / `#tourGrid`): the `TOURS` array in
+  app.js; each step has `target` (selector/array/fn), `title`, `text`, and `done()` (auto-advance when the user did it) or
+  Next; also `ready`, `clickIn`, `before` (goTab/goCall), `warn`. Engine: `startTour` → `tourGo` → `tourTick` (200 ms:
+  ring `.tour-ring` + card `.tour-card` placement, "Show me again") → `finishTour` (done ids in localStorage
+  `tsa-tours-<userId>`, offers the next tour). Users with no agents get `startTour("first-agent")` on load. Keep the
+  tours in step when element ids or flows change.
 - Top menu buttons (`.topnav`): **🎙 Call** (`#call`, the main page), **🤖 My agents** (`#agents/<tab>`, hash routing,
   `route()` in app.js). My agents (`#manageView`) is a pop-up window (`#agentsModal`) over the call page; ✕, Escape or a
   click outside closes it (back to `#call`). Dialogs opened from it (New agent, type change, playbook) sit on top.
