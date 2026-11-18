@@ -174,7 +174,7 @@ The app remembers the last agent each user had open. A new account starts with o
 
 ## Main page and the My agents menu
 
-The app has a menu at the top with three entries: **🎙 Call** (the main page), **🤖 My agents** (create and edit agents) and **📨 Messages** (messages callers left; a red badge shows how many are new).
+The app has a menu at the top with two entries: **🎙 Call** (the main page) and **🤖 My agents** (create and edit agents).
 
 ### The main page (🎙 Call)
 
@@ -184,7 +184,7 @@ The main page only has what you need to make a call:
 2. **Start call**: the green button. Mute and record (●) sit next to it.
 3. **About this agent**: a short card under it shows the basics: works for, organization, availability, language and voice, and the AI models.
 4. **Playbook**: pick a script for this call, or keep "Default: the agent's template".
-5. Small chips show whether the calendar and emergency detection are on and how many new messages are waiting; tap one to open that setting.
+5. Small chips show whether the calendar and emergency detection are on; tap one to open that setting.
 6. **✎ Edit agent** opens the agent in My agents.
 
 On the right are the conversation and the call summaries.
@@ -201,7 +201,6 @@ Every change saves itself within a second: there is no Save button. A small pill
 | 🧠 Voice & AI | Language (16) and voice (10, ▶ plays a sample); LLM, speech-to-text and text-to-speech models (lists come live from your OpenAI account) |
 | 🕒 Availability | Days (tap Mon … Sun, or Weekdays / Every day), From and To time, time zone and an optional note. The agent only offers meeting times inside these hours, and says when the person is back |
 | 📅 Calendar | Switch on to let the agent book confirmed meetings; meeting length (15 minutes to 2 hours); upcoming events with .ics export |
-| 📨 Messages | Messages callers left: name, tap-to-call number, urgent badge, ✓ Done and 🗑 |
 | 🚨 Emergency | Switch, plus emergency contacts by **phone or email** (below) |
 | 📘 Playbooks | Your own call scripts: add, pick, remove |
 
@@ -259,7 +258,7 @@ The agent has 20 emotions: neutral, happy, excited, cheerful, calm, empathetic, 
 ### During a call, if enabled
 
 - **Calendar**: once a booking or meeting is confirmed, the agent adds it (with the caller's name in the title), a 📅 chip appears on the reply and the event shows in the Calendar section.
-- **Messages**: when the caller wants to leave a message, the agent takes their name, callback number and message, reads it back, and after they confirm saves it: a "📨 message saved for DJ" chip appears and it shows in the 📨 Messages section. Urgent messages are marked.
+- **Messages**: when the caller wants to leave a message, the agent takes their name, callback number and message, reads it back, and after they confirm saves it: a "📨 message saved for DJ" chip appears, and the message is saved with the call (in its transcript and summary file). Urgent messages are marked.
 - **Emergency**: a matching keyword shows a red banner with the number to call, and the agent tells you to call it first.
 
 You can also type a message in the box under the chat instead of speaking.

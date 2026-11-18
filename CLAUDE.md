@@ -150,7 +150,8 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
   `[emotion]` and sends each sentence to TTS. `stripTags()` removes all tags before display/speech.
 - `<calendar:TITLE|YYYY-MM-DDTHH:MM|MINUTES>` (calendar on) → POST `/api/calendar` → 📅 chip.
 - `<message:CALLER NAME|CALLBACK NUMBER|normal or urgent|MESSAGE>` → `saveCallerMessage()` → POST `/api/messages` →
-  📨 chip and the 📨 Messages section; also stored in the call transcript and `stats.messages`.
+  📨 chip; also stored in the call transcript and `stats.messages`. There is no Messages screen for users (removed on
+  request); the admin dashboard still counts new messages, and `/api/messages` still lists them.
 - `<hangup:yes>` → finish speaking → `hangupDelayMs` → `endCall("caller said goodbye")`.
 - The first turn is a hidden `[call connected]` user message; the prompt tells the agent to say its greeting.
 - If you change `Prompts.system()`, keep these tags or update the parser.
@@ -160,14 +161,14 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 - Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions /
   fallback. The agent replies after `conversation.responseDelayMs` of silence.
 - **One page, two views** switched by the top menu (hash routing, `route()` in app.js): **🎙 Call** (`#call`, the main
-  page) and **🤖 My agents** (`#agents/<tab>`); **📨 Messages** = `#agents/messages` (badge = new messages, all agents).
+  page) and **🤖 My agents** (`#agents/<tab>`).
   CSS: `body[data-view]` hides the other view.
 - Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,
   organization, availability, language · voice, AI models, playbook picker `#pbPick`, feature chips). ✎ Edit agent →
   `#agents/profile`. Keep it simple: anything that edits an agent belongs in My agents.
 - My agents = agent list (`#agentChips`, ＋ New agent) + the setup card with tabs: Profile (template, works for,
   organization, what it's for, greeting + preview) · Voice & AI · Availability (day buttons, from/to, time zone, note) ·
-  Calendar (switch, meeting length, events) · Messages · Emergency · Playbooks. Hero: name, 🎙 Call, ☆ Default, 🗑.
+  Calendar (switch, meeting length, events) · Emergency · Playbooks. Hero: name, 🎙 Call, ☆ Default, 🗑.
 - Everything auto-saves (no Save button; `markDirty()` → `autoSave()` → POST `/api/settings`; persona payload carries
   description, availability text + availabilityPlan; calendar carries defaultDurationMin).
 - Emergency contacts `{label, type: phone|email, number, keywords[]}` per agent (`emergency_rules.contact_type`);

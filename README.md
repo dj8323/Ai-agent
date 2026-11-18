@@ -46,7 +46,7 @@ steps, rules) come from MySQL and the admin can edit them; agents use them live.
 Example, a Call Assistant named Brown working for DJ:
 *"Hello, this is Brown, DJ's assistant. DJ isn't available to take your call right now, but I can schedule a meeting
 or pass a message on. Which would you like?"* It books the meeting into the calendar or takes the caller's message
-(name, number, urgency), which shows up in **📨 Messages**.
+(name, number, urgency), which is saved with the call.
 
 Every agent keeps its own name, voice, language, models, persona and greeting, playbook, calendar, messages and
 emergency numbers, so changing one never changes another, or anyone else's.
@@ -79,10 +79,10 @@ emergency numbers, so changing one never changes another, or anyone else's.
 
 ## Main page and menu
 
-The top menu has **🎙 Call** (main page), **🤖 My agents** and **📨 Messages**. The main page is kept simple: pick the
+The top menu has **🎙 Call** (main page) and **🤖 My agents**. The main page is kept simple: pick the
 agent for the call, press Start call, and see its basics (works for, organization, availability, language, voice,
 models, playbook). Everything else is edited under **🤖 My agents**, in tabs: Profile · Voice & AI · Availability
-(days, hours, time zone) · Calendar (on/off, meeting length) · Messages · Emergency (contacts by phone or email) ·
+(days, hours, time zone) · Calendar (on/off, meeting length) · Emergency (contacts by phone or email) ·
 Playbooks.
 
 ## Agent settings (🤖 My agents)
@@ -95,7 +95,6 @@ the next reply uses the new setup.
 
 - **Calendar on:** confirmed bookings and reminders go into the 📅 Calendar card (download one event or all as `.ics`
   for Google Calendar / Outlook / Apple Calendar).
-- **📨 Messages:** messages callers left, with a tap-to-call number, an urgent badge, ✓ Done and 🗑.
 - **Emergency:** if the caller says a keyword, a red 🚨 banner shows the number with a call link, and the agent tells
   them to call it right away.
 
