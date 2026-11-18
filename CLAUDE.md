@@ -103,7 +103,9 @@ public/telemune-logo.svg   Same mark, gradient baked in — the browser-tab icon
 public/logo.svg            Old waveform logo, no longer used.
 runScript.sh       One-command start.
 docs/              TelemuneSmartAi-Guide.md (full product + technical guide) and images/ (call-flow, architecture).
-                   Keep it in step when features change.
+                   Keep it in step when features change. PDF copy: TelemuneSmartAi-Guide.pdf, rebuilt with
+                   node docs/md2html.mjs docs/TelemuneSmartAi-Guide.md /tmp/guide.html, then Chrome headless
+                   --print-to-pdf=docs/TelemuneSmartAi-Guide.pdf file:///tmp/guide.html
 data/              Call recordings only (data/users/<userId>/recordings/). Never wipe it.
 ```
 
