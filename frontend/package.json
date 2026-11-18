@@ -1,0 +1,10 @@
+{
+  "name": "telemune-smart-ai-frontend",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TelemuneSmartAi web app: pages + /api proxy to the Spring Boot backend. No dependencies.",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

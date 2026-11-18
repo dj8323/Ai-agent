@@ -1,7 +1,7 @@
 // TelemuneSmartAi admin dashboard (role 1 only; the server refuses everyone else).
 const $ = (id) => document.getElementById(id);
 const esc = (v) => String(v ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const state = { me: null, users: [], viewing: null, callPage: 1, logPage: 1, config: null };
+const state = { me: null, users: [], viewing: null, callPage: 1, logPage: 1, loginPage: 1, config: null, types: {}, typeKey: null, draft: false };
 
 const _fetch = window.fetch.bind(window);
 window.fetch = async (...args) => {
@@ -95,6 +95,8 @@ async function loadOverview() {
     kpi("⚡ Avg reply", fmtS(t.avgResponseMs), "time to voice"),
     kpi("📘 Playbooks", t.playbooks, `${t.events} calendar events`),
     kpi("🎙 Recordings", t.recordings, "saved"),
+    kpi("📨 Messages", t.messages, "new, waiting for the owner"),
+    kpi("🧩 Templates", t.templates, "agent scripts in the DB"),
   ].join("");
   $("apiLine").textContent = apiNow ? `API last 24h: ${fmtNum(apiNow.requests)} requests · ${apiNow.errors} errors · avg ${apiNow.avgMs ?? "—"} ms` : "";
   renderUsers();
@@ -321,6 +323,9 @@ const ACTIONS = {
   "agent.create": "🤖 created agent", "agent.update": "🤖 edited agent", "agent.delete": "🗑 deleted agent", "agent.settings": "⚙️ agent setup",
   "playbook.add": "📘 added playbook", "playbook.delete": "📘 removed playbook", "call.save": "📞 call saved", "call.delete": "🗑 call deleted",
   "calendar.add": "📅 event added", "calendar.delete": "📅 event removed", "config.update": "⚙️ app settings",
+  "message.add": "📨 message taken", "message.done": "📨 message done", "message.new": "📨 message reopened", "message.delete": "🗑 message deleted",
+  "type.create": "🧩 added type", "type.update": "🧩 edited type", "template.create": "🧩 added template", "template.update": "🧩 edited template",
+  "template.delete": "🗑 removed template",
 };
 async function loadLog() {
   const data = await api(`/api/admin/logs?page=${state.logPage}`);
@@ -343,12 +348,175 @@ async function loadLog() {
   }
 }
 
+// ---------- sign-in attempts (login_attempts) ----------
+async function loadLogins() {
+  const data = await api(`/api/admin/logins?page=${state.loginPage}`);
+  $("logins").innerHTML = data.items.length ? data.items.map((l) => `
+    <div class="lrow">
+      <span class="w"><b>${esc(l.username || "—")}</b> · <span class="${l.success ? "ok" : "bad"}">${l.success ? "✓" : "✕"} ${esc(l.reason)}</span></span>
+      <span class="m">${esc(fmtDate(l.at))}${l.ip && !/^(::1|127\.0\.0\.1|::ffff:127\.0\.0\.1|0:0:0:0:0:0:0:1)$/.test(l.ip) ? ` · ${esc(l.ip.replace("::ffff:", ""))}` : ""}</span>
+    </div>`).join("") : '<div class="empty">No sign-ins yet.</div>';
+  const pager = $("loginPager");
+  pager.innerHTML = "";
+  if (data.pages > 1) {
+    const prev = document.createElement("button"); prev.className = "btn btn-ghost"; prev.textContent = "← Newer"; prev.disabled = data.page <= 1;
+    const next = document.createElement("button"); next.className = "btn btn-ghost"; next.textContent = "Older →"; next.disabled = data.page >= data.pages;
+    const label = document.createElement("span"); label.textContent = `${data.page} / ${data.pages}`;
+    prev.onclick = () => { state.loginPage--; loadLogins(); };
+    next.onclick = () => { state.loginPage++; loadLogins(); };
+    pager.append(prev, label, next);
+  }
+}
+
+// ---------- agent types & templates (agent_types / agent_templates) ----------
+// Same placeholder rules as the backend, for the live preview.
+function renderTpl(text, v) {
+  const fb = { agent: "the assistant", owner: "the person you work for", org: "the company" };
+  return String(text || "")
+    .replace(/\[\[([\s\S]*?)\]\]/g, (_, inner) => ([...inner.matchAll(/\{(agent|owner|org)\}/g)].every((m) => v[m[1]]) ? inner : ""))
+    .replace(/\{(agent|owner|org)\}/g, (_, k) => v[k] || fb[k]).replace(/[ \t]{2,}/g, " ").trim();
+}
+const SAMPLE = { agent: "Brown", owner: "DJ", org: "Telemune" };
+
+async function loadTemplates(keepKey) {
+  const { types } = await api("/api/admin/templates");
+  state.types = types;
+  if (!keepKey || !types[state.typeKey]) state.typeKey = state.typeKey && types[state.typeKey] ? state.typeKey : Object.keys(types)[0];
+  renderTypeList();
+  renderTypeEditor();
+}
+
+function renderTypeList() {
+  const box = $("typeList");
+  box.innerHTML = "";
+  for (const [key, t] of Object.entries(state.types)) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "row"; b.setAttribute("aria-pressed", String(key === state.typeKey));
+    b.innerHTML = `<span class="ic" aria-hidden="true">${esc(t.icon)}</span><span class="grow"><span class="t ellipsis" style="display:block">${esc(t.name)}</span>
+      <span class="s">${t.templates.length} template${t.templates.length === 1 ? "" : "s"}${t.needsOwner ? " · works for a person" : ""}</span></span>${t.active ? "" : '<span class="off-tag">off</span>'}`;
+    b.onclick = () => { state.typeKey = key; state.draft = false; renderTypeList(); renderTypeEditor(); };
+    box.appendChild(b);
+  }
+}
+
+const sw = (id, label, on) => `<label><span class="sw"><input type="checkbox" id="${id}" ${on ? "checked" : ""} /><span></span></span>${label}</label>`;
+
+function renderTypeEditor() {
+  const t = state.types[state.typeKey];
+  const box = $("typeEditor");
+  if (!t) { box.innerHTML = '<div class="empty">Pick a type.</div>'; return; }
+  box.innerHTML = `
+    <form class="box" id="typeForm">
+      <h4>${esc(t.icon)} Agent type · <code>${esc(t.key)}</code></h4>
+      <div class="f2"><div><label for="tyName">Name</label><input type="text" id="tyName" maxlength="60" value="${esc(t.name)}" required /></div>
+        <div><label for="tyIcon">Icon</label><input type="text" id="tyIcon" maxlength="16" value="${esc(t.icon)}" /></div></div>
+      <label for="tyDesc">Description (shown when creating an agent)</label><input type="text" id="tyDesc" maxlength="300" value="${esc(t.description)}" />
+      <label for="tyRole">Persona when no template is picked</label><textarea id="tyRole" maxlength="300" rows="2">${esc(t.role)}</textarea>
+      <label for="tyGreet">Greeting (first line of every call, unless the template or agent has its own)</label><textarea id="tyGreet" maxlength="400" rows="2">${esc(t.greeting)}</textarea>
+      <div class="preview-line" id="tyPreview"></div>
+      <div class="switches">${sw("tyOwner", "Ask “works for whom?” (required)", t.needsOwner)}${sw("tyCal", "Calendar on for new agents", t.defaultCalendar)}${sw("tyActive", "Available to users", t.active)}</div>
+      <div class="form-actions"><button class="btn btn-grad" type="submit">💾 Save type</button></div>
+    </form>
+    <div id="tplList"></div>`;
+  const preview = () => ($("tyPreview").textContent = `Example: “${renderTpl($("tyGreet").value, SAMPLE)}”`);
+  $("tyGreet").oninput = preview;
+  preview();
+  $("typeForm").onsubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await api(`/api/admin/types/${encodeURIComponent(t.key)}`, { method: "PUT", body: JSON.stringify({
+        name: $("tyName").value, icon: $("tyIcon").value, description: $("tyDesc").value, role: $("tyRole").value, greeting: $("tyGreet").value,
+        needsOwner: $("tyOwner").checked, defaultCalendar: $("tyCal").checked, active: $("tyActive").checked }) });
+      toast("✓ Type saved");
+      await loadTemplates(true);
+      loadLog();
+    } catch (err) { toast("⚠ " + err.message); }
+  };
+  const list = $("tplList");
+  const items = state.draft ? [{ id: null, name: "", role: "", greeting: "", goal: "", steps: [], rules: [], summary: "", isDefault: false, active: true, agents: 0 }, ...t.templates] : t.templates;
+  if (!items.length) list.innerHTML = '<div class="empty">No templates yet for this type. Add one with ＋ New template.</div>';
+  for (const tp of items) list.appendChild(templateForm(t, tp));
+}
+
+function templateForm(t, tp) {
+  const d = document.createElement("details");
+  d.className = "tpl";
+  d.open = !tp.id;
+  const uid = tp.id ? tp.id.replace(/[^\w-]/g, "") : "new";
+  d.innerHTML = `
+    <summary>${tp.id ? esc(tp.name) : "＋ New template"}${tp.isDefault ? " ★" : ""}${tp.active ? "" : ' <span class="off-tag">off</span>'}
+      <span class="s">${tp.id ? `${tp.agents} agent${tp.agents === 1 ? "" : "s"} using it` : "not saved yet"}</span></summary>
+    <form>
+      <label>Name</label><input type="text" name="name" maxlength="60" required value="${esc(tp.name)}" />
+      <label>Persona (who the agent is) <span style="text-transform:none;letter-spacing:0;font-weight:500">empty = the type's</span></label>
+      <textarea name="role" maxlength="300" rows="2" placeholder="${esc(t.role)}">${esc(tp.role)}</textarea>
+      <label>Greeting <span style="text-transform:none;letter-spacing:0;font-weight:500">empty = the type's</span></label>
+      <textarea name="greeting" maxlength="400" rows="2" placeholder="${esc(t.greeting)}">${esc(tp.greeting)}</textarea>
+      <div class="preview-line"></div>
+      <label>Goal</label><textarea name="goal" maxlength="400" rows="2" required>${esc(tp.goal)}</textarea>
+      <div class="f2b">
+        <div><label>Steps (one per line)</label><textarea name="steps" rows="6">${esc(tp.steps.join("\n"))}</textarea></div>
+        <div><label>Rules (one per line)</label><textarea name="rules" rows="6">${esc(tp.rules.join("\n"))}</textarea></div>
+      </div>
+      <label>Summary should cover</label><input type="text" name="summary" maxlength="300" value="${esc(tp.summary)}" />
+      <div class="switches">${sw(`d-${uid}`, "Pre-selected for new agents of this type", tp.isDefault)}${sw(`a-${uid}`, "Available to users", tp.active)}</div>
+      <div class="form-actions">
+        ${tp.id ? '<button class="btn btn-ghost danger" type="button" data-del>🗑 Delete</button>' : '<button class="btn btn-ghost" type="button" data-cancel>Cancel</button>'}
+        <button class="btn btn-grad" type="submit">💾 ${tp.id ? "Save template" : "Add template"}</button>
+      </div>
+    </form>`;
+  const f = d.querySelector("form");
+  const prev = d.querySelector(".preview-line");
+  const preview = () => (prev.textContent = `Example: “${renderTpl(f.elements.greeting.value || t.greeting, SAMPLE)}”`);
+  f.elements.greeting.oninput = preview;
+  preview();
+  f.onsubmit = async (e) => {
+    e.preventDefault();
+    const body = { type: t.key, name: f.elements.name.value, role: f.elements.role.value, greeting: f.elements.greeting.value, goal: f.elements.goal.value, steps: f.elements.steps.value, rules: f.elements.rules.value,
+      summary: f.elements.summary.value, isDefault: $(`d-${uid}`).checked, active: $(`a-${uid}`).checked };
+    try {
+      await api(tp.id ? `/api/admin/templates/${encodeURIComponent(tp.id)}` : "/api/admin/templates", { method: tp.id ? "PUT" : "POST", body: JSON.stringify(body) });
+      toast(tp.id ? "✓ Template saved" : "✓ Template added");
+      state.draft = false;
+      await loadTemplates(true);
+      loadLog();
+    } catch (err) { toast("⚠ " + err.message); }
+  };
+  d.querySelector("[data-cancel]")?.addEventListener("click", () => { state.draft = false; renderTypeEditor(); });
+  d.querySelector("[data-del]")?.addEventListener("click", async () => {
+    const using = tp.agents ? ` ${tp.agents} agent${tp.agents === 1 ? " uses" : "s use"} it and will go back to free conversation.` : "";
+    if (!confirm(`Delete the template "${tp.name}"?${using}`)) return;
+    try {
+      await api(`/api/admin/templates/${encodeURIComponent(tp.id)}`, { method: "DELETE" });
+      toast("✓ Template deleted");
+      await loadTemplates(true);
+      loadLog();
+    } catch (err) { toast("⚠ " + err.message); }
+  });
+  return d;
+}
+
+$("newTplBtn").onclick = () => { state.draft = true; renderTypeEditor(); $("tplList").querySelector("input")?.focus(); };
+$("newTypeBtn").onclick = async () => {
+  const name = prompt("Name of the new agent type (e.g. School Office):");
+  if (!name?.trim()) return;
+  try {
+    const t = await api("/api/admin/types", { method: "POST", body: JSON.stringify({ name: name.trim(), icon: "✨" }) });
+    state.typeKey = t.key;
+    toast("✓ Type added. Fill in its persona and greeting.");
+    await loadTemplates(true);
+    loadLog();
+  } catch (err) { toast("⚠ " + err.message); }
+};
+
 // ---------- start ----------
 (async () => {
   try {
     await loadMe();
     loadSettings().catch(() => {});
     loadLog().catch(() => {});
+    loadLogins().catch(() => {});
+    loadTemplates().catch((err) => ($("typeList").innerHTML = `<div class="empty">${esc(err.message)}</div>`));
     await loadOverview();
   } catch (err) {
     $("users").innerHTML = `<div class="empty">Couldn't load the dashboard: ${esc(err.message)}</div>`;

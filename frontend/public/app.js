@@ -79,7 +79,7 @@ const state = {
   types: {}, saved: [], playbookId: "", voices: null, rules: [], savedSnapshot: "",
   turns: [], // per caller turn: { intent, mood, lang, firstText, firstVoice, total }
   emotion: "neutral",
-  pendingCalendar: [], utter: null, vadTimer: null, micAnalyser: null, srDisabled: false, pendingHangup: false, historyPage: 1,
+  pendingCalendar: [], pendingMessages: [], utter: null, vadTimer: null, micAnalyser: null, srDisabled: false, pendingHangup: false, historyPage: 1,
   callTokens: { input: 0, output: 0, total: 0 },
   agents: [], agentId: "", agentTypes: {}, me: null,
 };
@@ -140,6 +140,64 @@ async function loadConfig() {
   return cfg;
 }
 
+// ---------- persona & greeting (template from the DB, plus who the agent works for) ----------
+// Same rules as the backend: {agent} {owner} {org} are filled in; a [[ … ]] part is dropped when a value inside is empty.
+function renderTpl(text, v) {
+  const fb = { agent: "the assistant", owner: "the person you work for", org: "the company" };
+  return String(text || "")
+    .replace(/\[\[([\s\S]*?)\]\]/g, (_, inner) => ([...inner.matchAll(/\{(agent|owner|org)\}/g)].every((m) => v[m[1]]) ? inner : ""))
+    .replace(/\{(agent|owner|org)\}/g, (_, k) => v[k] || fb[k])
+    .replace(/[ \t]{2,}/g, " ").trim();
+}
+const personaAgent = () => SETTINGS.currentAgent || currentAgentCard() || {};
+const typeOf = (key) => state.agentTypes?.[key] || {};
+
+function showPreview(el, label, text) {
+  el.textContent = "";
+  if (!text) return;
+  const b = document.createElement("b");
+  b.textContent = label + " ";
+  el.append(b, `“${text}”`);
+}
+
+function fillPersona() {
+  const a = personaAgent();
+  const type = typeOf(a.type);
+  const sel = $("pTemplate");
+  sel.innerHTML = "";
+  sel.add(new Option("No template: free conversation", ""));
+  for (const t of type.templates || []) sel.add(new Option(t.name + (t.isDefault ? " ★" : ""), t.id));
+  if (a.templateId && ![...sel.options].some((o) => o.value === a.templateId)) sel.add(new Option(`${a.templateName || a.templateId} (switched off)`, a.templateId));
+  sel.value = a.templateId || "";
+  $("pOwner").value = a.ownerName || "";
+  $("pOrg").value = a.organization || "";
+  $("pAvail").value = a.availability || "";
+  $("pGreeting").value = a.greeting || "";
+  $("pOwnerLabel").innerHTML = type.needsOwner ? 'Works for <span class="req">*</span>' : "Works for";
+  renderPersonaPreview();
+}
+
+function personaPayload() {
+  return { templateId: $("pTemplate").value, ownerName: $("pOwner").value.trim(), organization: $("pOrg").value.trim(),
+    availability: $("pAvail").value.trim(), greeting: $("pGreeting").value.trim() };
+}
+
+function renderPersonaPreview() {
+  const a = personaAgent();
+  const type = typeOf(a.type);
+  const p = personaPayload();
+  const tpl = (type.templates || []).find((t) => t.id === p.templateId);
+  const v = { agent: agentName(), owner: p.ownerName, org: p.organization };
+  $("pGreeting").placeholder = renderTpl(tpl?.greeting || type.greeting || "", v);
+  showPreview($("pPreview"), "First line:", renderTpl(p.greeting || tpl?.greeting || type.greeting || "", v));
+  $("pTemplateHint").textContent = tpl ? `🎯 ${renderTpl(tpl.goal, v)}` : `${type.icon || "✨"} ${type.name || "Agent"}: no fixed script, it helps with whatever the caller needs.`;
+  $("personaNote").textContent = p.ownerName ? `for ${p.ownerName}` : p.organization || "";
+  $("personaNote").classList.toggle("on", !!(p.ownerName || p.organization));
+}
+$("pTemplate").addEventListener("change", () => { renderPersonaPreview(); markDirty(); });
+["pOwner", "pOrg", "pAvail", "pGreeting"].forEach((id) => $(id).addEventListener("input", () => { renderPersonaPreview(); markDirty(); }));
+$("nameInput").addEventListener("input", () => renderPersonaPreview());
+
 // Put the saved configuration into the form.
 function fillForm() {
   const a = SETTINGS.agent || {};
@@ -156,6 +214,7 @@ function fillForm() {
   $("emgToggle").checked = !!SETTINGS.emergency?.enabled;
   state.rules = structuredClone(SETTINGS.emergency?.rules || []);
   renderRules();
+  fillPersona();
   state.savedSnapshot = formSnapshot();
   $("calendarCard").hidden = !SETTINGS.calendar?.enabled;
 }
@@ -701,6 +760,7 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
   const emergency = hidden ? null : detectEmergency(text);
   if (emergency) showEmergency(emergency);
   state.pendingCalendar = [];
+  state.pendingMessages = [];
   const turn = { t0: t0 ?? performance.now(), hidden, emergency, bubble: null, firstText: null, firstVoice: null, total: null };
   state.turns.push(turn);
   const controller = new AbortController();
@@ -710,10 +770,14 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
 
   // Pull <intent:..><mood:..><lang:..> out of the stream as soon as each is complete.
   const readMeta = () => {
-    pending = pending.replace(/<(intent|mood|lang|user|hangup|calendar):([^>]*)>/gi, (_, k, v) => {
+    pending = pending.replace(/<(intent|mood|lang|user|hangup|calendar|message):([^>]*)>/gi, (_, k, v) => {
       k = k.toLowerCase() === "user" ? "mood" : k.toLowerCase();
       if (k === "calendar") {
         if (!hidden && SETTINGS.calendar?.enabled) state.pendingCalendar.push(v);
+        return "";
+      }
+      if (k === "message") {
+        if (!hidden) state.pendingMessages.push(v);
         return "";
       }
       if (k === "hangup") {
@@ -796,6 +860,7 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
     turn.total = Math.round(performance.now() - turn.t0);
     renderTiming(turn);
     for (const v of state.pendingCalendar.splice(0)) addCalendarEvent(v, turn);
+    for (const v of state.pendingMessages.splice(0)) saveCallerMessage(v, turn);
     if (raw.trim()) state.history.push({ role: "assistant", content: raw.trim() });
   } catch (err) {
     if (err.name === "AbortError") {
@@ -940,6 +1005,7 @@ async function summarizeCall(duration, recording, endedBy) {
           role: "caller", text: m.content, intent: t.intent, mood: t.mood, lang: t.lang, responseMs: t.firstVoice ?? t.firstText ?? null,
           ...(t.emergency ? { emergency: `${t.emergency.label} ${t.emergency.number}` } : {}),
           ...(t.calendar ? { calendar: `${t.calendar.title} @ ${new Date(t.calendar.start).toLocaleString()}` } : {}),
+          ...(t.message ? { message: msgLine(t.message) } : {}),
         };
       }
       const emotions = [...new Set([...m.content.matchAll(/\[([a-z]+)\]/gi)].map((x) => x[1].toLowerCase()))];
@@ -960,6 +1026,7 @@ async function summarizeCall(duration, recording, endedBy) {
           tokens: { ...state.callTokens },
           emergencies: callerTurns.filter((x) => x.emergency).map((x) => `${x.emergency.label} ${x.emergency.number}`),
           calendarEvents: callerTurns.filter((x) => x.calendar).map((x) => x.calendar.title),
+          messages: callerTurns.filter((x) => x.message).map((x) => msgLine(x.message)),
         },
         summary: summaryText, transcript,
       }),
@@ -1497,6 +1564,7 @@ function formPayload() {
     models: { chat: $("llmSel").value, stt: $("sttSel").value, tts: $("ttsSel").value },
     calendar: { enabled: $("calToggle").checked },
     emergency: { enabled: $("emgToggle").checked, rules: state.rules },
+    persona: personaPayload(),
   };
 }
 const formSnapshot = () => JSON.stringify(formPayload());
@@ -1508,7 +1576,7 @@ function markDirty() {
   if (formSnapshot() === state.savedSnapshot) return;
   setSaveStatus("Saving…");
   clearTimeout(state.saveTimer);
-  const typing = document.activeElement?.matches?.('input[type="text"]');
+  const typing = document.activeElement?.matches?.('input[type="text"], textarea');
   state.saveTimer = setTimeout(autoSave, typing ? 700 : 150);
 }
 
@@ -1535,8 +1603,12 @@ async function autoSave() {
     Object.assign(CONFIG, data.settings.conversation || {});
     $("modelInfo").textContent = `${SETTINGS.models.chat} · ${SETTINGS.models.stt} · ${SETTINGS.models.tts}`;
     state.savedSnapshot = snapshot;
-    const cur = state.agents.find((a) => a.id === SETTINGS.currentAgent?.id);
-    if (cur && cur.name !== SETTINGS.currentAgent.name) { cur.name = SETTINGS.currentAgent.name; renderAgents(); }
+    if (data.agent) {
+      const i = state.agents.findIndex((a) => a.id === data.agent.id);
+      if (i >= 0) state.agents[i] = data.agent;
+      SETTINGS.currentAgent = data.agent;
+      renderAgents();
+    }
     const calWasHidden = $("calendarCard").hidden;
     $("calendarCard").hidden = !SETTINGS.calendar?.enabled;
     if (calWasHidden && SETTINGS.calendar?.enabled) loadCalendar();
@@ -1623,6 +1695,62 @@ async function loadCalendar() {
       if (!confirm(`Delete "${e.title}" from the calendar?`)) return;
       await fetch(`/api/calendar/${e.id}`, { method: "DELETE" });
       loadCalendar();
+    };
+    box.appendChild(el);
+  }
+}
+
+// ---------- messages callers leave (<message:NAME|NUMBER|URGENCY|TEXT> in a reply) ----------
+const msgLine = (m) => `${m.callerName || "Caller"}${m.callerNumber ? ` (${m.callerNumber})` : ""}${m.urgency === "urgent" ? " [urgent]" : ""}: ${m.message}`;
+
+async function saveCallerMessage(raw, turn) {
+  const [callerName = "", callerNumber = "", urgency = "", ...rest] = raw.split("|").map((x) => x.trim());
+  const message = rest.join(" | ").trim();
+  if (!message) return;
+  try {
+    const res = await fetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callerName, callerNumber, urgency, message }),
+    });
+    const m = await res.json();
+    if (!res.ok) throw new Error(m.error);
+    turn.message = m;
+    addChip(turn.bubble, `📨 message saved${m.forName ? ` for ${m.forName}` : ""}${m.urgency === "urgent" ? " · urgent" : ""}`, "msg-" + m.id);
+    loadMessages();
+  } catch (e) {
+    console.warn("Couldn't save the message:", e);
+  }
+}
+
+async function loadMessages() {
+  const data = await fetch("/api/messages").then((r) => r.json());
+  const box = $("msgList");
+  box.innerHTML = "";
+  $("msgNote").textContent = data.newCount ? `${data.newCount} new` : "";
+  $("msgNote").classList.toggle("on", !!data.newCount);
+  if (!data.items?.length) { box.innerHTML = '<div class="empty">No messages yet.</div>'; return; }
+  for (const m of data.items) {
+    const el = document.createElement("div");
+    el.className = "msg-item" + (m.status === "done" ? " done" : "") + (m.urgency === "urgent" ? " urgent" : "");
+    el.innerHTML = `<div class="msg-top"><b></b><a></a><span class="when"></span></div><div class="msg-text"></div>
+      <div class="msg-actions"><button type="button" class="m-done"></button><button type="button" class="m-del" aria-label="Delete message">🗑</button></div>`;
+    el.querySelector("b").textContent = m.callerName || "Unknown caller";
+    const a = el.querySelector("a");
+    if (m.callerNumber) { a.href = `tel:${m.callerNumber.replace(/\s/g, "")}`; a.textContent = `📞 ${m.callerNumber}`; } else a.remove();
+    if (m.urgency === "urgent") el.querySelector(".msg-top b").insertAdjacentHTML("afterend", '<span class="msg-badge">urgent</span>');
+    el.querySelector(".when").textContent = new Date(m.createdAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+    el.querySelector(".msg-text").textContent = (m.forName ? `For ${m.forName}: ` : "") + m.message;
+    const done = el.querySelector(".m-done");
+    done.textContent = m.status === "done" ? "↺ Mark new" : "✓ Done";
+    done.onclick = async () => {
+      await fetch(`/api/messages/${m.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: m.status === "done" ? "new" : "done" }) });
+      loadMessages();
+    };
+    el.querySelector(".m-del").onclick = async () => {
+      if (!confirm(`Delete the message from ${m.callerName || "this caller"}?`)) return;
+      await fetch(`/api/messages/${m.id}`, { method: "DELETE" });
+      loadMessages();
     };
     box.appendChild(el);
   }
@@ -1736,6 +1864,7 @@ async function switchAgent(id) {
   clearTimeout(state.saveFade);
   state.saveFade = setTimeout(() => setSaveStatus(""), 2000);
   if (SETTINGS.calendar?.enabled) loadCalendar().catch(() => {});
+  loadMessages().catch(() => {});
 }
 
 async function agentRequest(url, method, body) {
@@ -1779,7 +1908,8 @@ $("agentDelete").addEventListener("click", async () => {
   } catch (e) { setSaveStatus("⚠ " + e.message, "err"); }
 });
 
-// New agent dialog: pick a type (hospital, banking, HR …), give it a name.
+// New agent dialog: pick a type (call assistant, hospital, banking, HR …) and a template (both from the DB),
+// say who it works for, give it a name.
 const na = { type: "personal" };
 function openAgentDialog() {
   if (state.inCall) return;
@@ -1787,6 +1917,7 @@ function openAgentDialog() {
   $("naForm").reset();
   $("naErr").textContent = "";
   renderAgentTypes();
+  renderNaTemplates();
   $("agentDialog").classList.add("open");
   setTimeout(() => $("naName").focus(), 30);
 }
@@ -1795,12 +1926,32 @@ function renderAgentTypes() {
   const grid = $("naTypes");
   grid.innerHTML = "";
   for (const [id, t] of Object.entries(state.agentTypes)) {
-    const b = tile(t.icon, t.name, t.description, () => { na.type = id; renderAgentTypes(); $("naName").focus(); });
+    const b = tile(t.icon, t.name, t.description, () => { na.type = id; renderAgentTypes(); renderNaTemplates(); (t.needsOwner && !$("naOwner").value ? $("naOwner") : $("naName")).focus(); });
     b.classList.toggle("picked", id === na.type);
     b.setAttribute("aria-pressed", String(id === na.type));
     grid.appendChild(b);
   }
 }
+function renderNaTemplates() {
+  const t = typeOf(na.type);
+  const sel = $("naTemplate");
+  sel.innerHTML = "";
+  sel.add(new Option("No template: free conversation", ""));
+  for (const tp of t.templates || []) sel.add(new Option(tp.name, tp.id));
+  sel.value = (t.templates || []).find((x) => x.isDefault)?.id || "";
+  $("naOwnerLabel").innerHTML = t.needsOwner ? 'Works for <span class="req">*</span>' : "Works for (optional)";
+  $("naOwner").required = !!t.needsOwner;
+  $("naAvailWrap").hidden = !(t.needsOwner || t.defaultCalendar);
+  renderNaPreview();
+}
+function renderNaPreview() {
+  const t = typeOf(na.type);
+  const tp = (t.templates || []).find((x) => x.id === $("naTemplate").value);
+  const v = { agent: $("naName").value.trim() || "…", owner: $("naOwner").value.trim(), org: $("naOrg").value.trim() };
+  showPreview($("naPreview"), "It will answer:", renderTpl(tp?.greeting || t.greeting || "", v));
+}
+$("naTemplate").addEventListener("change", renderNaPreview);
+["naName", "naOwner", "naOrg"].forEach((id) => $(id).addEventListener("input", renderNaPreview));
 $("naClose").addEventListener("click", closeAgentDialog);
 $("naCancel").addEventListener("click", closeAgentDialog);
 $("agentDialog").addEventListener("click", (e) => { if (e.target === $("agentDialog")) closeAgentDialog(); });
@@ -1809,9 +1960,14 @@ $("naForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = $("naName").value.trim();
   if (!name) { $("naErr").textContent = "Give your agent a name."; return; }
+  const t = typeOf(na.type);
+  if (t.needsOwner && !$("naOwner").value.trim()) { $("naErr").textContent = "Who does this agent work for? Add their name."; $("naOwner").focus(); return; }
   $("naCreate").disabled = true;
   try {
-    const a = await agentRequest("/api/agents", "POST", { name, type: na.type, description: $("naDesc").value.trim() });
+    const a = await agentRequest("/api/agents", "POST", {
+      name, type: na.type, description: $("naDesc").value.trim(), templateId: $("naTemplate").value,
+      ownerName: $("naOwner").value.trim(), organization: $("naOrg").value.trim(), availability: $("naAvail").value.trim(),
+    });
     state.agents.push(a);
     closeAgentDialog();
     await switchAgent(a.id);
@@ -1835,6 +1991,7 @@ $("naForm").addEventListener("submit", async (e) => {
     // The model list comes from OpenAI and can take a few seconds; fill the dropdowns when it arrives.
     loadModels().then(() => { state.savedSnapshot = formSnapshot(); }).catch(() => {});
     loadCalendar().catch(() => {});
+    loadMessages().catch(() => {});
   } catch (e) {
     addMsg("error", "Couldn't load settings: " + e.message);
   }
