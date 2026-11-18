@@ -153,15 +153,18 @@ public class AgentService {
       if (newType == null || !J.bool(newType.get("active"))) throw ApiException.bad("That agent type doesn't exist or is switched off.");
       String type = (String) newType.get("key");
       if (!type.equals(a.get("agent_type"))) {
-        // New type → its pre-selected template; the description follows if it was still the old type's default text;
-        // types that book meetings (default_calendar) switch the calendar on.
-        Map<String, Object> oldType = templates.type(J.str(a.get("agent_type")));
-        String desc = J.str(a.get("description"));
-        boolean defaultDesc = desc.isEmpty() || (oldType != null && desc.equals(J.str(oldType.get("description"))));
+        // A new type is a new job: reset everything role-specific to the new type's / app's defaults (the page asks
+        // first). Kept: name, language, voice and AI models.
+        Map<String, Object> cfg = config.app();
+        boolean calendar = J.bool(newType.get("defaultCalendar")) || J.bool(J.get(cfg, "calendar.enabled"));
+        boolean emergency = J.bool(J.get(cfg, "emergency.enabled"));
+        List<Object> rules = J.list(J.get(cfg, "emergency.rules"));
         db.tx(() -> {
-          db.exec("UPDATE agents SET agent_type = ?, template_id = ? WHERE id = ?", type, templates.defaultTemplateId(type), id);
-          if (defaultDesc) db.exec("UPDATE agents SET description = ? WHERE id = ?", J.str(newType.get("description"), 300), id);
-          if (J.bool(newType.get("defaultCalendar"))) db.exec("UPDATE agents SET calendar_enabled = 1 WHERE id = ?", id);
+          db.exec("UPDATE agents SET agent_type = ?, template_id = ?, description = ?, playbook_id = NULL, greeting = '', owner_name = '', "
+                  + "organization = '', owner_availability = '', availability_plan = NULL, meeting_minutes = NULL, calendar_enabled = ?, "
+                  + "emergency_enabled = ? WHERE id = ?",
+              type, templates.defaultTemplateId(type), J.str(newType.get("description"), 300), calendar ? 1 : 0, emergency ? 1 : 0, id);
+          writeRules(id, rules);
         });
       }
     }

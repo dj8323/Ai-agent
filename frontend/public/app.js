@@ -236,6 +236,33 @@ function renderPersonaPreview() {
 }
 $("pTemplate").addEventListener("change", () => { renderPersonaPreview(); markDirty(); });
 
+// Confirmation before a type change: it lists what goes back to the new type's defaults and what is kept.
+function askTypeChange(cur, t, tpl) {
+  return new Promise((resolve) => {
+    const old = typeOf(cur.type);
+    $("tdLead").textContent = `"${cur.name}" changes from ${old.icon || ""} ${old.name || cur.typeName} to ${t.icon} ${t.name}. A new type is a new job, so its setup starts again from that type's defaults.`;
+    const li = (list, items) => { list.innerHTML = ""; for (const x of items) { const el = document.createElement("li"); el.textContent = x; list.appendChild(el); } };
+    li($("tdReset"), [
+      `Template → ${tpl ? tpl.name : "free conversation"}`, "Greeting → the template's", "Description → the type's",
+      "Works for, organization, availability → cleared", "Playbook → none",
+      `Calendar → ${t.defaultCalendar || SETTINGS.calendar?.enabled ? "on" : "off"}, default meeting length`, "Emergency detection and contacts → app defaults",
+    ]);
+    li($("tdKeep"), ["Name", "Language and voice", "AI models (LLM, STT, TTS)", "Past calls and messages"]);
+    const done = (ok) => {
+      $("typeDialog").classList.remove("open");
+      ["tdOk", "tdCancel", "tdClose"].forEach((id) => ($(id).onclick = null));
+      resolve(ok);
+    };
+    $("tdOk").onclick = () => done(true);
+    $("tdCancel").onclick = $("tdClose").onclick = () => done(false);
+    $("typeDialog").onclick = (e) => { if (e.target === $("typeDialog")) done(false); };
+    const onKey = (e) => { if (e.key === "Escape") { document.removeEventListener("keydown", onKey); done(false); } };
+    document.addEventListener("keydown", onKey);
+    $("typeDialog").classList.add("open");
+    $("tdCancel").focus();
+  });
+}
+
 // Change the agent's type (e.g. Personal Assistant → Call Assistant). Saved in MySQL straight away (PATCH /api/agents/:id):
 // the type's pre-selected template comes with it, and the form reloads from the database.
 $("pType").addEventListener("change", async () => {
@@ -244,7 +271,7 @@ $("pType").addEventListener("change", async () => {
   if (!cur || key === cur.type) return;
   const t = typeOf(key);
   const tpl = (t.templates || []).find((x) => x.isDefault);
-  if (state.inCall || !confirm(`Change "${cur.name}" to ${t.name}?\nIts template becomes ${tpl ? `"${tpl.name}"` : "free conversation"}. Name, voice, models, availability and emergency contacts stay.`)) {
+  if (state.inCall || !(await askTypeChange(cur, t, tpl))) {
     $("pType").value = cur.type;
     return;
   }
@@ -1999,15 +2026,28 @@ function route() {
   const agents = view === "agents";
   document.body.dataset.view = agents ? "agents" : "call";
   $("navCall").setAttribute("aria-current", agents ? "false" : "page");
+  $("menuWhere").textContent = agents ? "My agents" : "Call";
   $("navAgents").setAttribute("aria-current", agents ? "page" : "false");
   if (agents) {
     showTab(tab || state.tab);
     if (state.tab === "calendar" && SETTINGS.calendar?.enabled) loadCalendar().catch(() => {});
   }
-  window.scrollTo({ top: 0 });
+  // My agents opens in the conversation area (right column); on a phone that sits below the call card, so scroll to it.
+  if (agents && matchMedia("(max-width: 900px)").matches) $("manageView").scrollIntoView({ block: "start" });
+  else window.scrollTo({ top: 0 });
 }
 document.querySelectorAll(".tabs [data-tab]").forEach((b) => (b.onclick = () => (location.hash = `agents/${b.dataset.tab}`)));
-document.querySelectorAll(".topnav [data-go]").forEach((b) => (b.onclick = () => (location.hash = b.dataset.go)));
+// ☰ Menu dropdown
+function setMenu(open) {
+  $("menuPanel").hidden = !open;
+  $("menuBtn").setAttribute("aria-expanded", String(open));
+  if (open) $("menuPanel").querySelector("button")?.focus();
+}
+$("menuBtn").addEventListener("click", (e) => { e.stopPropagation(); setMenu($("menuPanel").hidden); });
+document.addEventListener("click", (e) => { if (!e.target.closest(".app-menu")) setMenu(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("menuPanel").hidden) { setMenu(false); $("menuBtn").focus(); } });
+document.querySelectorAll(".menu-panel [data-go]").forEach((b) => (b.onclick = () => { setMenu(false); location.hash = b.dataset.go; }));
+$("navNew").addEventListener("click", () => { setMenu(false); openAgentDialog(); });
 window.addEventListener("hashchange", route);
 route();
 
