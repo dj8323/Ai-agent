@@ -48,6 +48,7 @@ public class Db {
     addColumn("agents", "greeting", "VARCHAR(400) NOT NULL DEFAULT '' AFTER owner_availability");
     addColumn("agents", "availability_plan", "JSON NULL AFTER greeting");
     addColumn("agents", "meeting_minutes", "INT NULL AFTER availability_plan");
+    addColumn("agents", "speech_speed", "DECIMAL(3,2) NULL AFTER meeting_minutes");
     addColumn("emergency_rules", "contact_type", "VARCHAR(10) NOT NULL DEFAULT 'phone' AFTER label");
     // Emergency contacts can be an email address now: widen the old VARCHAR(20).
     Long len = jdbc.queryForObject("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "

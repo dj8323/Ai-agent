@@ -24,6 +24,8 @@ import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -38,6 +40,18 @@ public class VoiceController {
   private final TemplateService templates;
   private final PlaybookService playbooks;
   private final OpenAiClient openai;
+
+  /** Small least-recently-used cache (speech audio, translated greetings): the same line is never generated twice. */
+  private static <V> Map<String, V> lru(int max) {
+    return Collections.synchronizedMap(new LinkedHashMap<>(64, 0.75f, true) {
+      @Override
+      protected boolean removeEldestEntry(Map.Entry<String, V> e) {
+        return size() > max;
+      }
+    });
+  }
+  private final Map<String, byte[]> speechCache = lru(300);
+  private final Map<String, String> greetingCache = lru(200);
 
   public VoiceController(AppConfigService config, TemplateService templates, PlaybookService playbooks, OpenAiClient openai) {
     this.config = config;
@@ -138,6 +152,42 @@ public class VoiceController {
     }
   }
 
+  /**
+   * The first line of the call, ready to speak without asking the LLM: the agent's greeting (agent → template → type),
+   * translated once into the agent's language when it isn't English (cached). The page fetches it, and its audio,
+   * as soon as the agent is selected, so Start call talks at once.
+   */
+  @PostMapping("/api/greeting")
+  Map<String, Object> greeting(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    Map<String, Object> cfg = config.forAgent(ctx.agent);
+    String name = J.blank(body.get("assistantName")) ? J.str(J.get(cfg, "agent.defaultName")) : J.str(body.get("assistantName"), 40);
+    String lang = J.str(body.get("lang"));
+    String text = templates.greeting(ctx.agent, name);
+    if (text.isEmpty()) text = "Hi, this is " + name + ". How can I help you today?";
+    String language = Prompts.language(lang);
+    boolean english = lang.isEmpty() || (lang.startsWith("en-") && !"en-JM".equals(lang));
+    boolean translated = false;
+    if (!english) {
+      String key = lang + "|" + text;
+      String hit = greetingCache.get(key);
+      if (hit == null) {
+        String sys = "Translate this phone-call greeting into " + language + ("en-JM".equals(lang) ? " (natural Jamaican Patois spelling)" : ", in its native script")
+            + ". Keep it natural, warm and short, with the same meaning; keep names as they are. Reply with the translated greeting only.";
+        Map<String, Object> req = chatBody(cfg, List.of(J.map("role", "system", "content", sys), J.map("role", "user", "content", text)));
+        req.put("max_completion_tokens", 1000);
+        try {
+          Map<String, Object> out = openai.chat(req);
+          hit = J.str(J.get(J.obj(J.list(out.get("choices")).stream().findFirst().orElse(null)), "message.content"));
+          if (!hit.isEmpty()) greetingCache.put(key, hit);
+        } catch (OpenAiClient.OpenAiException e) {
+          log.warn("greeting translation failed: {} {}", e.status, e.getMessage());
+        }
+      }
+      if (hit != null && !hit.isEmpty()) { text = hit; translated = true; }
+    }
+    return J.map("text", text, "language", english || translated ? language : "English", "emotion", "cheerful");
+  }
+
   @PostMapping("/api/summary")
   ResponseEntity<Map<String, Object>> summary(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
     Map<String, Object> cfg = config.forAgent(ctx.agent);
@@ -186,8 +236,12 @@ public class VoiceController {
     boolean legacy = model.startsWith("tts-1"); // tts-1 / tts-1-hd: no emotion instructions, older voice set
     Map<String, Object> req = J.map("model", model, "voice", legacy && !Prompts.LEGACY_VOICES.contains(voice) ? "alloy" : voice, "input", text, "response_format", "mp3");
     if (!legacy) req.put("instructions", "You are a voice agent on a phone call. " + Prompts.voiceStyle(lang) + " " + Prompts.EMOTIONS.get(emotion));
+    String cacheKey = J.json(req);
+    byte[] cached = speechCache.get(cacheKey);
+    if (cached != null) return ResponseEntity.ok().contentType(MediaType.parseMediaType("audio/mpeg")).header("Cache-Control", "no-store").header("X-Cache", "hit").body(cached);
     try {
       byte[] mp3 = openai.speech(req);
+      speechCache.put(cacheKey, mp3);
       return ResponseEntity.ok().contentType(MediaType.parseMediaType("audio/mpeg")).header("Cache-Control", "no-store").body(mp3);
     } catch (OpenAiClient.OpenAiException e) {
       log.warn("tts failed: {} {}", e.status, e.getMessage());
@@ -213,6 +267,7 @@ public class VoiceController {
     String hint = "Phone call with a voice assistant. The caller usually speaks " + Prompts.language(lang)
         + ("en-JM".equals(lang) ? " (write it in natural Patois spelling as spoken)" : "")
         + ", and may mix in English or other languages; transcribe exactly what they say, in the language they say it."
+        + " The recording can start with a faint echo of the assistant's own voice: leave that out and write only the caller's words."
         + (J.blank(body.get("context")) ? "" : " The assistant just said: \"" + J.str(body.get("context"), 300) + "\"");
     try {
       return ResponseEntity.ok(J.map("text", openai.transcribe(audio, "speech." + ext, mime, J.str(J.get(cfg, "speechToText.model")), hint).trim()));

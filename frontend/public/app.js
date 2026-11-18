@@ -104,6 +104,17 @@ for (const [code, label] of LANGS) $("lang").add(new Option(label, code));
 const lang = () => $("lang").value;
 const agentName = () => $("nameInput").value.trim() || SETTINGS.agent.defaultName;
 
+// ---------- speaking speed (per agent, saved in MySQL; applied as the playback rate of every sentence) ----------
+const speed = () => Math.min(2, Math.max(0.5, Number($("speedRange").value) || 1));
+function renderSpeed() {
+  const v = speed();
+  $("speedVal").textContent = `${v.toFixed(2)}×`;
+  $("speedPicks").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(Math.abs(Number(b.dataset.speed) - v) < 0.001)));
+  if (state.audio) state.audio.playbackRate = v; // takes effect even mid-sentence
+}
+$("speedPicks").querySelectorAll("button").forEach((b) => (b.onclick = () => { $("speedRange").value = b.dataset.speed; renderSpeed(); markDirty(); }));
+$("speedRange").addEventListener("input", () => { renderSpeed(); markDirty(); });
+
 function refreshName() {
   $("agentName").textContent = agentName();
   $("avatar").textContent = agentName()[0].toUpperCase();
@@ -127,7 +138,7 @@ function renderSummary() {
   setDd("sOrg", $("pOrg").value.trim());
   setDd("sAvail", availabilityText());
   const voice = ($("voice").selectedOptions[0]?.text || $("voice").value || "").split(" — ")[0];
-  setDd("sLang", [$("lang").selectedOptions[0]?.text, voice].filter(Boolean).join(" · "));
+  setDd("sLang", [$("lang").selectedOptions[0]?.text, voice, speed() !== 1 ? `${speed().toFixed(2)}× speed` : ""].filter(Boolean).join(" · "));
   setDd("sModels", [$("llmSel").value || SETTINGS.models?.chat, $("sttSel").value === "browser" ? "browser captions" : $("sttSel").value || SETTINGS.models?.stt, $("ttsSel").value || SETTINGS.models?.tts].filter(Boolean).join(" · "));
   const feats = $("sFeats");
   feats.innerHTML = "";
@@ -365,6 +376,8 @@ function fillForm() {
   refreshName();
   if (a.defaultLanguage) $("lang").value = a.defaultLanguage;
   if (a.defaultVoice && state.voices?.[a.defaultVoice]) $("voice").value = a.defaultVoice;
+  $("speedRange").value = String(a.speechSpeed ?? 1);
+  renderSpeed();
   state.playbookId = state.saved.some((p) => p.id === a.defaultPlaybookId) ? a.defaultPlaybookId : "";
   renderPlaybooks();
   setSelect($("llmSel"), SETTINGS.models.chat);
@@ -382,6 +395,7 @@ function fillForm() {
   $("calendarCard").hidden = !SETTINGS.calendar?.enabled;
   renderNotes();
   renderSummary();
+  prepareGreeting();
 }
 
 const warnings = [];
@@ -660,11 +674,14 @@ async function speakNext() {
   state.playing = true;
   setPhase("speaking", `Speaking · ${item.emotion}`);
   setEmotion(item.emotion);
+  startBargeWatch();
   const url = await item.url;
   if (gen !== state.speechGen) { if (url) URL.revokeObjectURL(url); return; }
   markVoiceStart(item.turn);
   if (!url) return fallbackSpeak(item, gen);
   const audio = new Audio(url);
+  audio.preservesPitch = true;
+  audio.playbackRate = speed();
   state.audio = audio;
   routeToMixer(audio);
   const done = () => { URL.revokeObjectURL(url); if (gen === state.speechGen) speakNext(); };
@@ -696,6 +713,7 @@ function fallbackSpeak(item, gen) {
   if (!window.speechSynthesis) return speakNext();
   const u = new SpeechSynthesisUtterance(item.text);
   u.lang = lang();
+  u.rate = speed();
   u.onend = u.onerror = () => { if (gen === state.speechGen) speakNext(); };
   speechSynthesis.speak(u);
 }
@@ -716,6 +734,8 @@ $("previewBtn").addEventListener("click", async () => {
     const greeting = LANGS.find((l) => l[0] === lang())[2].replace("{name}", agentName());
     const url = await fetchSpeech(greeting, "cheerful");
     const a = new Audio(url);
+    a.preservesPitch = true;
+    a.playbackRate = speed();
     a.onended = () => URL.revokeObjectURL(url);
     await a.play();
   } catch (e) {
@@ -835,6 +855,8 @@ function vadTick() {
 
 function startListening() {
   if (!state.inCall) return;
+  clearInterval(state.vadTimer);
+  discardUtterance(); // the barge-in recording made while the agent spoke (nobody talked over it)
   setPhase("listening");
   if (state.muted) return;
   startUtterance();
@@ -843,8 +865,54 @@ function startListening() {
   state.vadTimer = setInterval(vadTick, 50);
 }
 
+// ---------- barge-in: the caller can talk over the agent ----------
+// While the agent speaks, the mic keeps recording and its level is watched. Loud enough for long enough (well above
+// the agent's own echo, which the browser's echo cancellation mostly removes) → the agent stops at once and listens.
+// The recording already holds the caller's first words, so nothing they said is lost.
+function startBargeWatch() {
+  if (state.barge || !state.inCall || state.muted || !state.micAnalyser || CONFIG.bargeIn === false) return;
+  startUtterance();
+  state.utter.barge = true;
+  state.barge = { loud: 0, floor: 0 };
+  clearInterval(state.vadTimer);
+  state.vadTimer = setInterval(bargeTick, 50);
+}
+function bargeTick() {
+  const b = state.barge;
+  if (!b || state.muted || !state.playing || state.phase !== "speaking") return;
+  const level = micLevel();
+  const trigger = Math.max(Number(CONFIG.bargeInLevel) || 0.035, b.floor * 3, (SETTINGS.speechToText?.vadThreshold ?? 0.015) * 2.5);
+  if (level > trigger) b.loud += 50;
+  else { b.loud = Math.max(0, b.loud - 25); b.floor = b.floor * 0.9 + level * 0.1; } // echo and room noise level
+  if (b.loud >= (Number(CONFIG.bargeInMs) || 300)) bargeIn();
+}
+function bargeIn() {
+  const u = state.utter;
+  state.barge = null;
+  const turn = [...state.turns].reverse().find((t) => t.bubble);
+  if (turn?.bubble) addChip(turn.bubble, "✋ interrupted", "interrupted");
+  if (state.abort) state.abort.abort(); // stop the reply that is still being written (what was said stays in the history)
+  stopSpeaking();
+  state.streamDone = true;
+  state.pendingHangup = false;
+  setPhase("listening");
+  if (u) { u.barge = false; u.speechMs = Number(CONFIG.bargeInMs) || 300; u.lastVoiceAt = now(); }
+  else startUtterance();
+  safeStart();
+  clearInterval(state.vadTimer);
+  state.vadTimer = setInterval(vadTick, 50);
+}
+function discardUtterance() {
+  const u = state.utter;
+  state.barge = null;
+  if (!u?.barge) return;
+  state.utter = null;
+  if (u.recorder && u.recorder.state !== "inactive") { try { u.recorder.stop(); } catch {} }
+}
+
 // Stop listening and throw away anything not yet sent.
 function stopListening() {
+  state.barge = null;
   clearInterval(state.vadTimer);
   state.vadTimer = null;
   if (state.recognition) { try { state.recognition.abort(); } catch {} }
@@ -1061,8 +1129,47 @@ function addTokens(u) {
   state.callTokens.total += u.total || 0;
 }
 
+// ---------- instant greeting ----------
+// The first line is known before the call (the agent's greeting), so it is fetched with its audio as soon as the agent
+// is selected or saved, and Start call speaks it at once instead of waiting for the LLM and TTS.
+const greetKey = () => [state.agentId, lang(), $("voice").value, agentName(), JSON.stringify(personaPayload())].join("|");
+function prepareGreeting() {
+  if (state.inCall || !state.agentId) return null;
+  const key = greetKey();
+  if (state.greet?.key === key) return state.greet;
+  const g = { key };
+  g.ready = (async () => {
+    const res = await fetch("/api/greeting", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: lang(), assistantName: agentName() }) });
+    const d = await res.json();
+    if (!res.ok || !d.text) throw new Error(d.error || "No greeting");
+    g.text = d.text; g.language = d.language; g.emotion = d.emotion || "cheerful";
+    g.url = await fetchSpeech(d.text, g.emotion);
+    return g;
+  })();
+  g.ready.catch(() => { if (state.greet === g) state.greet = null; });
+  state.greet = g;
+  return g;
+}
+async function speakGreeting(g) {
+  let ready = null;
+  try { ready = await Promise.race([g.ready, new Promise((r) => setTimeout(() => r(null), 6000))]); } catch {}
+  if (!state.inCall) return;
+  state.greet = null; // its audio is played (and released) now
+  if (!ready?.url) return sendUserText("[call connected]", { hidden: true }); // not ready: let the LLM greet
+  const turn = { t0: performance.now(), hidden: true, emergency: null, bubble: null, firstText: 0, firstVoice: null, total: 0 };
+  state.turns.push(turn);
+  state.history.push({ role: "user", content: "[call connected]" });
+  state.history.push({ role: "assistant", content: `<intent:call start><mood:neutral><lang:${ready.language}>[${ready.emotion}] ${ready.text}` });
+  turn.bubble = addMsg("assistant", ready.text);
+  addChip(turn.bubble, `${EMOJI[ready.emotion] || "•"} ${ready.emotion}`, ready.emotion);
+  state.streamDone = true;
+  state.speakQueue.push({ text: ready.text, emotion: ready.emotion, turn, url: Promise.resolve(ready.url) });
+  if (!state.playing) speakNext();
+}
+
 // ---------- call controls ----------
 async function startCall() {
+  const greet = prepareGreeting(); // usually ready already; if not, it loads while the mic opens
   try {
     state.micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   } catch {
@@ -1092,8 +1199,9 @@ async function startCall() {
   renderPlaybooks();
   const pb = activePlaybook();
   addDivider(`📞 Call started · ${pb ? pb.name : "Default agent"} · ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
-  // The agent greets first, in the selected language and playbook.
-  sendUserText("[call connected]", { hidden: true });
+  // The agent greets first: the prepared greeting plays at once (the LLM greets only if it isn't ready).
+  if (greet) speakGreeting(greet);
+  else sendUserText("[call connected]", { hidden: true });
 }
 
 async function endCall(endedBy = "ended by you") {
@@ -1115,6 +1223,7 @@ async function endCall(endedBy = "ended by you") {
   teardownMixer();
   addDivider(`Call ended · ${duration} · ${endedBy}`);
   summarizeCall(duration, recording, endedBy);
+  setTimeout(() => prepareGreeting(), 500); // ready for the next call
 }
 
 // ---------- call summary ----------
@@ -1749,7 +1858,7 @@ resetEmgForm();
 
 function formPayload() {
   return {
-    agent: { defaultName: agentName(), defaultLanguage: lang(), defaultVoice: $("voice").value, defaultPlaybookId: state.playbookId },
+    agent: { defaultName: agentName(), defaultLanguage: lang(), defaultVoice: $("voice").value, defaultPlaybookId: state.playbookId, speechSpeed: speed() },
     models: { chat: $("llmSel").value, stt: $("sttSel").value, tts: $("ttsSel").value },
     calendar: { enabled: $("calToggle").checked, defaultDurationMin: Number($("calLen").value) || 30 },
     emergency: { enabled: $("emgToggle").checked, rules: state.rules },
@@ -1793,6 +1902,7 @@ async function autoSave() {
     Object.assign(CONFIG, data.settings.conversation || {});
     $("modelInfo").textContent = `${SETTINGS.models.chat} · ${SETTINGS.models.stt} · ${SETTINGS.models.tts}`;
     state.savedSnapshot = snapshot;
+    prepareGreeting(); // the greeting may have changed (name, voice, language, persona)
     if (data.agent) {
       const i = state.agents.findIndex((a) => a.id === data.agent.id);
       if (i >= 0) state.agents[i] = data.agent;

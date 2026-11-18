@@ -105,12 +105,14 @@ public class AppConfigService {
     Map<String, Object> models = new LinkedHashMap<>();
     Map<String, Object> stt = new LinkedHashMap<>();
     if (!J.blank(a.get("chat_model"))) models.put("chat", a.get("chat_model"));
+    Map<String, Object> agentSec = new LinkedHashMap<>(J.map("defaultName", a.get("name"), "defaultLanguage", a.get("language"),
+        "defaultVoice", a.get("voice"), "defaultPlaybookId", a.get("playbook_id") == null ? "" : a.get("playbook_id")));
+    if (a.get("speech_speed") != null) agentSec.put("speechSpeed", J.dbl(a.get("speech_speed")));
     if (!J.blank(a.get("tts_model"))) models.put("tts", a.get("tts_model"));
     if (!J.blank(a.get("stt_engine"))) stt.put("engine", a.get("stt_engine"));
     if (!J.blank(a.get("stt_model"))) stt.put("model", a.get("stt_model"));
     return J.map(
-        "agent", J.map("defaultName", a.get("name"), "defaultLanguage", a.get("language"), "defaultVoice", a.get("voice"),
-            "defaultPlaybookId", a.get("playbook_id") == null ? "" : a.get("playbook_id")),
+        "agent", agentSec,
         "models", models, "speechToText", stt,
         "calendar", a.get("meeting_minutes") == null ? J.map("enabled", J.bool(a.get("calendar_enabled")))
             : J.map("enabled", J.bool(a.get("calendar_enabled")), "defaultDurationMin", a.get("meeting_minutes")),
@@ -142,7 +144,8 @@ public class AppConfigService {
         "branding", cfg.get("branding"),
         "agent", cfg.get("agent"),
         "currentAgent", agentCard,
-        "conversation", J.map("responseDelayMs", conv.get("responseDelayMs"), "hangupDelayMs", conv.get("hangupDelayMs")),
+        "conversation", J.map("responseDelayMs", conv.get("responseDelayMs"), "hangupDelayMs", conv.get("hangupDelayMs"),
+            "bargeIn", conv.get("bargeIn"), "bargeInMs", conv.get("bargeInMs"), "bargeInLevel", conv.get("bargeInLevel")),
         "history", J.map("pageSize", section(cfg, "history").get("pageSize")),
         "speechToText", J.map("engine", stt.get("engine"), "vadThreshold", stt.get("vadThreshold"),
             "minSpeechMs", stt.get("minSpeechMs"), "maxUtteranceSeconds", stt.get("maxUtteranceSeconds")),

@@ -81,6 +81,7 @@ CREATE TABLE IF NOT EXISTS agents (
   greeting          VARCHAR(400) NOT NULL DEFAULT '',     -- own first line; empty = the template's greeting
   availability_plan JSON         NULL,                    -- {days:[1..7], from:"15:00", to:"18:00", tz, note}; owner_availability is its text
   meeting_minutes   INT          NULL,                    -- meeting length for calendar bookings; NULL = app default
+  speech_speed      DECIMAL(3,2) NULL,                    -- how fast the agent speaks (0.50–2.00, 1 = normal); NULL = app default
   created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   INDEX idx_agents_user (user_id),

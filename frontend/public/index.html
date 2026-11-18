@@ -449,6 +449,12 @@
   .topnav button[aria-current="page"] { background: var(--grad); color: #fff; }
   @media (max-width: 700px) { .topnav { order: 3; width: 100%; } .topnav button { flex: 1; justify-content: center; padding: 8px 4px; font-size: 13px; } }
 
+  /* Speaking speed */
+  .speed-picks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .speed-picks button { padding: 9px 6px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+  .speed-picks button[aria-pressed="true"] { background: var(--grad); color: #fff; border-color: transparent; }
+  #speedRange { width: 100%; margin: 10px 0 0; accent-color: var(--c1); }
+
   /* ＋ create agent: hover hint + a small turn */
   .add-agent { position: relative; transition: background .15s, color .15s, border-color .15s; }
   .add-agent .plus, .btn-new .plus { display: inline-block; transition: transform .25s ease; }
@@ -662,7 +668,13 @@
               <div class="voice-row"><select id="voice"></select><button class="icon-mini" id="previewBtn" type="button" title="Preview this voice" aria-label="Preview voice">▶</button></div>
             </div>
           </div>
-          <div class="block-title" style="margin-top:16px">🧠 AI models</div>
+          <div class="block-title" style="margin-top:16px">⏩ Speaking speed <span class="sec-note on" id="speedVal">1.00×</span></div>
+        <div class="speed-picks" id="speedPicks" role="group" aria-label="Speaking speed">
+          <button type="button" data-speed="0.8">🐢 Slow</button><button type="button" data-speed="1">Normal</button><button type="button" data-speed="1.2">Fast</button><button type="button" data-speed="1.4">🚀 Faster</button>
+        </div>
+        <input type="range" id="speedRange" min="0.5" max="2" step="0.05" value="1" aria-label="Speaking speed (fine tune)" />
+        <div class="hint-line">Every sentence the agent says, and ▶ preview, play at this speed.</div>
+        <div class="block-title" style="margin-top:16px">🧠 AI models</div>
           <div class="model-row">
             <label class="mini" title="Large language model: thinks and writes replies"><span>LLM</span><select id="llmSel"></select></label>
             <label class="mini" title="Speech-to-text: hears the caller"><span>STT</span><select id="sttSel"></select></label>

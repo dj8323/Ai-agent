@@ -74,7 +74,8 @@ public class AgentService {
         "templateId", a.get("template_id") == null ? "" : a.get("template_id"), "templateName", tp == null ? null : tp.get("name"),
         "ownerName", J.str(a.get("owner_name")), "organization", J.str(a.get("organization")),
         "availability", J.str(a.get("owner_availability")), "availabilityPlan", J.parse(a.get("availability_plan")),
-        "meetingMinutes", a.get("meeting_minutes"), "greeting", J.str(a.get("greeting")),
+        "meetingMinutes", a.get("meeting_minutes"), "speechSpeed", a.get("speech_speed") == null ? null : J.dbl(a.get("speech_speed")),
+        "greeting", J.str(a.get("greeting")),
         "greetingPreview", templates.greeting(a, null),
         "calendar", J.bool(a.get("calendar_enabled")), "emergency", J.bool(a.get("emergency_enabled")), "isDefault", J.bool(a.get("is_default")),
         "createdAt", J.iso(a.get("created_at")), "updatedAt", J.iso(a.get("updated_at")));
@@ -251,6 +252,10 @@ public class AgentService {
         if (!J.blank(a.get("defaultName"))) db.exec("UPDATE agents SET name = ? WHERE id = ? AND user_id = ?", J.str(a.get("defaultName"), 24), agentId, userId);
         if (!J.blank(a.get("defaultLanguage"))) db.exec("UPDATE agents SET language = ? WHERE id = ? AND user_id = ?", J.str(a.get("defaultLanguage"), 10), agentId, userId);
         if (!J.blank(a.get("defaultVoice"))) db.exec("UPDATE agents SET voice = ? WHERE id = ? AND user_id = ?", J.str(a.get("defaultVoice"), 20), agentId, userId);
+        if (a.containsKey("speechSpeed")) {
+          Double sp = J.dbl(a.get("speechSpeed"));
+          db.exec("UPDATE agents SET speech_speed = ? WHERE id = ?", sp == null ? null : Math.round(Math.min(2.0, Math.max(0.5, sp)) * 100) / 100.0, agentId);
+        }
         if (a.containsKey("defaultPlaybookId")) {
           String pb = J.str(a.get("defaultPlaybookId"), 16);
           boolean ok = !pb.isEmpty() && db.one("SELECT id FROM playbooks WHERE id = ? AND user_id = ?", pb, userId) != null;
