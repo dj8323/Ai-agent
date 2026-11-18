@@ -31,7 +31,7 @@ The app is two applications: a **Spring Boot backend** (Java) that holds all the
 | Area | What you get |
 | --- | --- |
 | Accounts | Sign in, self sign-up (Create account), two roles: Admin and User, password change, lockout after 5 wrong tries |
-| Agents | Many agents per user, 14 agent types (Call Assistant, Hospital, Banking, HR, Telecom, Support, Sales and more), each with ready-made templates stored in the database; switch with one click |
+| Agents | Many agents per user, 15 agent types (Call Assistant, Hospital, Banking, Real Estate, HR, Telecom, Support, Sales and more), each with ready-made templates stored in the database; switch with one click |
 | Persona | Each agent says who it works for and for which organization, with a greeting from its template or its own |
 | Messages | The agent takes messages for the person it works for (caller name, number, urgency, message) |
 | Voice calls | Web call button, live captions, accurate speech-to-text, emotional replies, automatic hang-up when the caller says goodbye |
@@ -137,6 +137,7 @@ The type gives the agent its default persona and greeting, and offers ready-made
 | Telecom Care | Mobile network care executive | Recharge & data packs, VAS / caller tune deactivation, Network complaint |
 | Hospital & Healthcare | Calm hospital front desk and patient care | OPD appointment, Lab report status, Discharge follow-up |
 | Banking & Finance | Trustworthy bank service officer | Card block & dispute, Loan enquiry, Account & KYC help |
+| Real Estate | Friendly property advisor (calendar on, for site visits) | Property enquiry (pre-selected), Site visit booking, Rental & tenant support, Sell or list a property |
 | Sales | Friendly, non-pushy sales rep | Lead qualification, Demo booking, Upsell / renewal |
 | Appointment Booking | Warm receptionist | Clinic booking, Salon booking, Reschedule / cancel |
 | Payment Reminder | Polite billing reminder | Overdue bill reminder, EMI reminder |

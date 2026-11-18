@@ -49,7 +49,7 @@ Branding: "TelemuneSmartAi", footer "Powered by Telemune © 2027 · Designed by 
 ## Agents, types & templates
 
 - Each user has many agents. The **agent type** (`agent_types`: personal, **secretary = "Call Assistant (for a person)"**,
-  support, telecom, hospital, banking, sales, appointment, collections, survey, hr, tutor, wellness, other) gives the
+  support, telecom, hospital, banking, realestate, sales, appointment, collections, survey, hr, tutor, wellness, other) gives the
   default persona (`role`) and **greeting**; `needs_owner` makes "Works for" required; `default_calendar` turns the
   calendar on for new agents.
 - **Templates** (`agent_templates`): persona, greeting, goal, steps, rules, summary focus, per type; one per type can be
