@@ -160,14 +160,17 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 
 - Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions /
   fallback. The agent replies after `conversation.responseDelayMs` of silence.
-- **One page, two views** switched by the top menu (hash routing, `route()` in app.js): **🎙 Call** (`#call`, the main
-  page) and **🤖 My agents** (`#agents/<tab>`).
-  CSS: `body[data-view]` hides the other view.
+- **One page, two views** switched by the **☰ Menu** dropdown (`#menuBtn`/`#menuPanel`; hash routing, `route()` in
+  app.js): **🎙 Call** (`#call`, the main page) and **🤖 My agents** (`#agents/<tab>`), plus ＋ New agent. My agents
+  (`#manageView`) lives in the right column and replaces the conversation there; the call card stays on the left.
+  CSS: `body[data-view="agents"] .right-col > :not(#manageView)` is hidden.
 - Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,
   organization, availability, language · voice, AI models, playbook picker `#pbPick`, feature chips). ✎ Edit agent →
   `#agents/profile`. Keep it simple: anything that edits an agent belongs in My agents.
 - My agents = agent list (`#agentChips`, ＋ New agent) + the setup card with tabs: Profile (agent type `#pType` →
-  PATCH `/api/agents/:id {type}` right away, then the form reloads; template, works for,
+  approval dialog `#typeDialog` → PATCH `/api/agents/:id {type}`, which resets template, greeting, description,
+  playbook, works for, organization, availability, calendar and emergency to defaults in one transaction (keeps name,
+  language, voice, models), then the form reloads; template, works for,
   organization, what it's for, greeting + preview) · Voice & AI · Availability (day buttons, from/to, time zone, note) ·
   Calendar (switch, meeting length, events) · Emergency · Playbooks. Hero: name, 🎙 Call, ☆ Default, 🗑.
 - Everything auto-saves (no Save button; `markDirty()` → `autoSave()` → POST `/api/settings`; persona payload carries

@@ -159,7 +159,7 @@ Safety rules travel with the types: the hospital agent never diagnoses and sends
     - A preview shows the first line the agent will say. **Create agent** saves it and opens it in My agents, where you set its availability, calendar, emergency contacts and voice.
 3. Switching loads that agent's settings everywhere. Switching is locked during a call.
 4. In My agents, **☆ Default** makes the agent open first next time and **🗑** deletes it (its past calls stay in Call summaries).
-5. To change what an agent is, pick a new **Agent type** in **My agents → 👤 Profile**. It is saved in the database straight away: the agent gets the new type's usual template, its description follows if it was still the old type's default text, and the calendar switches on for types that book meetings. Name, voice, models, availability and emergency contacts stay. If the new type works for a person, fill in **Works for**.
+5. To change what an agent is, pick a new **Agent type** in **My agents → 👤 Profile**. A new type is a new job, so a dialog first shows what will be reset and asks for approval; **Cancel** changes nothing. After **Change type and reset**, the database is updated in one step: template, greeting and description go to the new type's defaults; works for, organization and availability are cleared; the playbook is removed; the calendar and emergency settings go back to the defaults. Name, language, voice, AI models and past calls are kept. If the new type works for a person, fill in **Works for**.
 
 The app remembers the last agent each user had open. A new account starts with one Personal Assistant agent.
 
@@ -175,13 +175,13 @@ The app remembers the last agent each user had open. A new account starts with o
 
 ## Main page and the My agents menu
 
-The app has a menu at the top with two entries: **🎙 Call** (the main page) and **🤖 My agents** (create and edit agents).
+A **☰ Menu** button at the top right opens the menu: **🎙 Make a call** (the main page), **🤖 My agents** (create and edit agents) and **＋ New agent**. The button also shows which page you are on.
 
 ### The main page (🎙 Call)
 
 The main page only has what you need to make a call:
 
-1. **Agent for this call**: a dropdown at the top of the call card lists your agents ("Brown · for DJ"). ＋ creates a new one.
+1. **Agent for this call**: a dropdown at the top of the call card lists your agents ("Brown · for DJ"). ＋ creates a new one (hover it to see "Create a new agent").
 2. **Start call**: the green button. Mute and record (●) sit next to it.
 3. **About this agent**: a short card under it shows the basics: works for, organization, availability, language and voice, and the AI models.
 4. **Playbook**: pick a script for this call, or keep "Default: the agent's template".
@@ -192,7 +192,7 @@ On the right are the conversation and the call summaries.
 
 ### My agents (create and edit)
 
-**🤖 My agents** shows your agents on the left (★ = the one that opens first) with **＋ New agent** below them. The selected agent's settings are on the right, under its name. The header holds **🎙 Call** (back to the main page with this agent), **☆ Default** and **🗑 Delete**.
+**🤖 My agents** opens in the conversation area, so the call card stays on the left. It lists your agents (★ = the one that opens first) with **＋ New agent**. The selected agent's settings are on the right, under its name. The header holds **🎙 Call** (back to the main page with this agent), **☆ Default** and **🗑 Delete**.
 
 Every change saves itself within a second: there is no Save button. A small pill in the header shows **Saving…**, then **✓ Saved**. The next reply already uses the new setup.
 
