@@ -464,7 +464,6 @@
       <nav class="topnav" aria-label="Main menu">
         <button type="button" data-go="call" id="navCall">🎙 Call</button>
         <button type="button" data-go="agents" id="navAgents">🤖 My agents</button>
-        <button type="button" data-go="agents/messages" id="navMsgs">📨 Messages<span class="nav-badge" id="navMsgCount" hidden></span></button>
       </nav>
       <div class="sub" id="modelInfo" hidden></div>
       <button class="icon-btn" id="themeBtn" title="Switch light / dark theme" aria-label="Switch theme">🌙</button>
@@ -603,7 +602,6 @@
         <button type="button" role="tab" data-tab="voice">🧠 Voice &amp; AI</button>
         <button type="button" role="tab" data-tab="availability">🕒 Availability <span class="sec-note" id="availNote"></span></button>
         <button type="button" role="tab" data-tab="calendar">📅 Calendar <span class="sec-note" id="calNote"></span></button>
-        <button type="button" role="tab" data-tab="messages">📨 Messages <span class="sec-note" id="msgNote"></span></button>
         <button type="button" role="tab" data-tab="emergency">🚨 Emergency <span class="sec-note" id="emgNote"></span></button>
         <button type="button" role="tab" data-tab="playbooks">📘 Playbooks</button>
       </div>
@@ -665,11 +663,6 @@
           <div class="cal-head"><span class="sub">Upcoming events</span><a class="link" id="icsAll" href="/api/calendar/calendar.ics" download>⬇ Export all (.ics)</a></div>
           <div class="cal-list" id="calList"><div class="empty">No events yet. Ask the agent to book or remind you of something.</div></div>
         </div>
-      </div>
-
-      <div class="tab-panel" data-panel="messages" role="tabpanel" hidden>
-        <p class="panel-lead">Messages callers left with this agent.</p>
-        <div class="msg-list" id="msgList"><div class="empty">No messages yet.</div></div>
       </div>
 
       <div class="tab-panel" data-panel="emergency" role="tabpanel" hidden>

@@ -139,7 +139,6 @@ function renderSummary() {
   };
   feat($("calToggle").checked ? "📅 Calendar on" : "📅 Calendar off", $("calToggle").checked ? "on" : "", "calendar");
   feat($("emgToggle").checked ? `🚨 Emergency on · ${state.rules.length}` : "🚨 Emergency off", $("emgToggle").checked ? "on" : "", "emergency");
-  if (state.newMessages) feat(`📨 ${state.newMessages} new message${state.newMessages === 1 ? "" : "s"}`, "alert", "messages");
 }
 $("nameInput").addEventListener("input", () => { refreshName(); markDirty(); });
 refreshName();
@@ -1843,48 +1842,8 @@ async function saveCallerMessage(raw, turn) {
     if (!res.ok) throw new Error(m.error);
     turn.message = m;
     addChip(turn.bubble, `📨 message saved${m.forName ? ` for ${m.forName}` : ""}${m.urgency === "urgent" ? " · urgent" : ""}`, "msg-" + m.id);
-    loadMessages();
   } catch (e) {
     console.warn("Couldn't save the message:", e);
-  }
-}
-
-async function loadMessages() {
-  const data = await fetch("/api/messages").then((r) => r.json());
-  const box = $("msgList");
-  box.innerHTML = "";
-  $("msgNote").textContent = data.newCount ? `${data.newCount} new` : "";
-  $("msgNote").classList.toggle("on", !!data.newCount);
-  state.newMessages = data.newCount || 0;
-  renderSummary();
-  fetch("/api/messages?scope=all&status=new&limit=1").then((r) => r.json()).then((all) => {
-    $("navMsgCount").hidden = !all.newCount;
-    $("navMsgCount").textContent = all.newCount || "";
-  }).catch(() => {});
-  if (!data.items?.length) { box.innerHTML = '<div class="empty">No messages yet.</div>'; return; }
-  for (const m of data.items) {
-    const el = document.createElement("div");
-    el.className = "msg-item" + (m.status === "done" ? " done" : "") + (m.urgency === "urgent" ? " urgent" : "");
-    el.innerHTML = `<div class="msg-top"><b></b><a></a><span class="when"></span></div><div class="msg-text"></div>
-      <div class="msg-actions"><button type="button" class="m-done"></button><button type="button" class="m-del" aria-label="Delete message">🗑</button></div>`;
-    el.querySelector("b").textContent = m.callerName || "Unknown caller";
-    const a = el.querySelector("a");
-    if (m.callerNumber) { a.href = `tel:${m.callerNumber.replace(/\s/g, "")}`; a.textContent = `📞 ${m.callerNumber}`; } else a.remove();
-    if (m.urgency === "urgent") el.querySelector(".msg-top b").insertAdjacentHTML("afterend", '<span class="msg-badge">urgent</span>');
-    el.querySelector(".when").textContent = new Date(m.createdAt).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
-    el.querySelector(".msg-text").textContent = (m.forName ? `For ${m.forName}: ` : "") + m.message;
-    const done = el.querySelector(".m-done");
-    done.textContent = m.status === "done" ? "↺ Mark new" : "✓ Done";
-    done.onclick = async () => {
-      await fetch(`/api/messages/${m.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status: m.status === "done" ? "new" : "done" }) });
-      loadMessages();
-    };
-    el.querySelector(".m-del").onclick = async () => {
-      if (!confirm(`Delete the message from ${m.callerName || "this caller"}?`)) return;
-      await fetch(`/api/messages/${m.id}`, { method: "DELETE" });
-      loadMessages();
-    };
-    box.appendChild(el);
   }
 }
 
@@ -1990,7 +1949,7 @@ $("sumEdit").addEventListener("click", () => (location.hash = "agents/profile"))
 $("agentCallBtn").addEventListener("click", () => (location.hash = "call"));
 
 // ---------- menu: 🎙 Call (main page) · 🤖 My agents (editor, in tabs) · 📨 Messages ----------
-const TABS = ["profile", "voice", "availability", "calendar", "messages", "emergency", "playbooks"];
+const TABS = ["profile", "voice", "availability", "calendar", "emergency", "playbooks"];
 function showTab(tab) {
   state.tab = TABS.includes(tab) ? tab : "profile";
   document.querySelectorAll(".tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === state.tab)));
@@ -2001,11 +1960,9 @@ function route() {
   const agents = view === "agents";
   document.body.dataset.view = agents ? "agents" : "call";
   $("navCall").setAttribute("aria-current", agents ? "false" : "page");
-  $("navAgents").setAttribute("aria-current", agents && tab !== "messages" ? "page" : "false");
-  $("navMsgs").setAttribute("aria-current", agents && tab === "messages" ? "page" : "false");
+  $("navAgents").setAttribute("aria-current", agents ? "page" : "false");
   if (agents) {
     showTab(tab || state.tab);
-    if (state.tab === "messages") loadMessages().catch(() => {});
     if (state.tab === "calendar" && SETTINGS.calendar?.enabled) loadCalendar().catch(() => {});
   }
   window.scrollTo({ top: 0 });
@@ -2029,7 +1986,6 @@ async function switchAgent(id) {
   clearTimeout(state.saveFade);
   state.saveFade = setTimeout(() => setSaveStatus(""), 2000);
   if (SETTINGS.calendar?.enabled) loadCalendar().catch(() => {});
-  loadMessages().catch(() => {});
 }
 
 async function agentRequest(url, method, body) {
@@ -2147,8 +2103,7 @@ $("naForm").addEventListener("submit", async (e) => {
     // The model list comes from OpenAI and can take a few seconds; fill the dropdowns when it arrives.
     loadModels().then(() => { state.savedSnapshot = formSnapshot(); renderSummary(); }).catch(() => {});
     loadCalendar().catch(() => {});
-    loadMessages().catch(() => {});
-  } catch (e) {
+    } catch (e) {
     addMsg("error", "Couldn't load settings: " + e.message);
   }
 })();
