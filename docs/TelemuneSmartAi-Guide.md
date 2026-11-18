@@ -263,6 +263,8 @@ The agent has 20 emotions: neutral, happy, excited, cheerful, calm, empathetic, 
 - **Messages**: when the caller wants to leave a message, the agent takes their name, callback number and message, reads it back, and after they confirm saves it: a "📨 message saved for DJ" chip appears, and the message is saved with the call (in its transcript and summary file). Urgent messages are marked.
 - **Emergency**: a matching keyword shows a red banner with the number to call, and the agent tells you to call it first.
 
+- **Silence**: if you say nothing for 8 seconds, the agent checks in ("Are you still there?"). After 2 check-ins with no answer it says a short goodbye and ends the call ("no answer from the caller"). Both numbers are set in Admin → App settings.
+
 You can also type a message in the box under the chat instead of speaking.
 
 ## After the call: summaries, recordings and history
@@ -336,6 +338,8 @@ Every greeting box shows a live example (with Brown, DJ and Telemune). In any te
 | Session length | 12 hours | How long a sign-in lasts without Keep me signed in |
 | Keep me signed in | 30 days | How long a remembered sign-in lasts |
 | Agents per user | 20 | Most agents one user can create |
+| Re-ask after silence (seconds) | 8 | How long the caller may stay silent before the agent checks in (0 = never) |
+| Re-asks before hanging up | 2 | Check-ins with no answer before the agent says goodbye and ends the call |
 
 Changes are saved to the database and apply immediately.
 
@@ -465,20 +469,21 @@ Shared settings live in the `app_config` table; each agent's own choices (name, 
 | agent.maxReplyWords | 25 | Target length of a spoken reply |
 | agent.speechSpeed | 1.0 | Speaking speed for agents that have none set |
 | agent.maxAgentsPerUser | 20 | Agent limit per user |
-| models.chat / tts / reasoningEffort | gpt-5.5 / gpt-4o-mini-tts / none | Default models for new agents; "none" thinks least and answers fastest |
+| models.chat / tts / reasoningEffort | gpt-4.1-mini / gpt-4o-mini-tts / none | Default models for new agents (gpt-4.1-mini answers fastest; reasoningEffort only applies to gpt-5 models) |
 | models.maxReplyTokens / maxSummaryTokens | 1024 / 2048 | Output limits |
 | speechToText.engine / model | openai / gpt-4o-transcribe | How the caller is heard |
 | speechToText.vadThreshold | 0.015 | Mic loudness counted as speech; raise in noisy rooms |
 | speechToText.minSpeechMs / maxUtteranceSeconds | 250 / 60 | Shortest speech that counts / longest single utterance |
 | conversation.responseDelayMs | 1000 | Silence before the agent replies (lower = faster, but it may answer before you finish a slow sentence) |
 | conversation.hangupDelayMs | 800 | Pause after the goodbye before disconnecting |
+| conversation.silenceRetrySeconds / silenceRetries | 8 / 2 | If the caller says nothing for this many seconds the agent checks in; after this many check-ins it says goodbye and hangs up (0 seconds = never). Editable in Admin → App settings |
 | conversation.bargeIn / bargeInMs / bargeInLevel | true / 300 / 0.035 | Let the caller interrupt; how long and how loud they must speak to stop the agent (raise the level if the agent stops by itself on loudspeakers) |
 | conversation.historyTurnsSentToModel | 30 | Recent messages sent to the model |
 | history.pageSize / maxRecordingMB | 5 / 100 | Calls per page / recording size limit |
 | calendar.defaultDurationMin | 30 | Event length when none is given |
 | auth.allowSignup / sessionHours / rememberDays | true / 12 / 30 | Sign-up and sign-in length |
 
-The four auth and agent-limit settings are editable in the admin dashboard; others are changed in the database, for example `UPDATE app_config SET value = JSON_SET(value, '$.responseDelayMs', 1500) WHERE section = 'conversation';`. Optional environment overrides: `PORT`, `BACKEND_PORT`, `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT`.
+The auth, agent-limit and silence settings are editable in the admin dashboard; others are changed in the database, for example `UPDATE app_config SET value = JSON_SET(value, '$.responseDelayMs', 1500) WHERE section = 'conversation';`. Optional environment overrides: `PORT`, `BACKEND_PORT`, `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT`.
 
 ### Security notes
 

@@ -168,8 +168,11 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 - **Reply speed:** speech is streamed (`GET /api/tts/stream?text&voice&emotion&lang&agentId`, played by an `<audio>`
   while it downloads; `enqueueSpeech()` creates the element so later sentences load ahead); the first chunk of a reply
   may end at a comma (`firstClause()`); `startEarlyTranscribe()` sends the recording after 0.4 s of silence so the text
-  is ready when `responseDelayMs` (1000) ends. Measured: ~4 s from end of speech to the agent's voice with gpt-5.5
-  (was ~6.5 s); most of what's left is the LLM (~1.5 s) and OpenAI's first speech audio (~1.1 s).
+  is ready when `responseDelayMs` (1000) ends. Measured: ~3.4 s from end of speech to the agent's voice with gpt-4.1-mini (the
+  default since 2026-11-18; ~4.2 s with gpt-5.5, ~6.5 s before these changes).
+- **Silence re-ask:** `conversation.silenceRetrySeconds` (8) / `silenceRetries` (2) in app_config (Admin → App settings).
+  `vadTick()` → `silencePrompt()` sends a hidden `[no response]` turn; after the re-asks `[no response, end call]` and
+  `state.silenceEnding` hangs up after that goodbye even without `<hangup:yes>`. Markers are filtered out of summaries.
 - **Speaking speed:** `agents.speech_speed` (0.5–2.0; `agent.speechSpeed` in settings), set in Voice & AI; applied as
   `audio.playbackRate` (pitch kept) to every sentence and the preview.
 
