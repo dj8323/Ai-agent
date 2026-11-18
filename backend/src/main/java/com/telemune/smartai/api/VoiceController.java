@@ -100,6 +100,7 @@ public class VoiceController {
 
   @PostMapping("/api/chat")
   void chat(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx, HttpServletResponse res) throws IOException {
+    if (ctx.agent == null) throw ApiException.bad("Create an agent first.");
     Map<String, Object> cfg = config.forAgent(ctx.agent);
     List<Map<String, Object>> turns = cleanTurns(body.get("messages"), cfg);
     if (turns.isEmpty() || !"user".equals(turns.get(turns.size() - 1).get("role"))) throw ApiException.bad("Last message must be from the user");

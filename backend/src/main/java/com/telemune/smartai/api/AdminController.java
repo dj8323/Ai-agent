@@ -145,7 +145,6 @@ public class AdminController {
   @PostMapping("/users")
   ResponseEntity<Map<String, Object>> createUser(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
     Map<String, Object> u = auth.createUser(body, "admin");
-    agents.ensureDefault((String) u.get("id"));
     logs.activity(ctx, "user.create", (String) u.get("username"), J.map("role", u.get("role")));
     return ResponseEntity.status(201).body(u);
   }

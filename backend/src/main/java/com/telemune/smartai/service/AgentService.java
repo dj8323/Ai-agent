@@ -62,6 +62,7 @@ public class AgentService {
 
   /** What the browser and the admin dashboard see. */
   public Map<String, Object> card(Map<String, Object> a) {
+    if (a == null) return null;
     Map<String, Object> type = templates.type(J.str(a.get("agent_type")));
     Map<String, Object> tp = templates.template(J.str(a.get("template_id")));
     return J.map("id", a.get("id"), "name", a.get("name"), "type", a.get("agent_type"),
@@ -124,20 +125,16 @@ public class AgentService {
     return get(id, userId);
   }
 
-  /** Make sure a user has at least one agent (a personal assistant). Returns their default agent. */
-  public Map<String, Object> ensureDefault(String userId) {
-    Map<String, Object> a = db.one("SELECT * FROM agents WHERE user_id = ? ORDER BY is_default DESC, created_at LIMIT 1", userId);
-    if (a != null) return withRules(a);
-    return create(J.map("type", "personal"), userId);
-  }
-
-  /** The agent a request is for: the one asked for (if it's theirs), else their default agent. */
+  /**
+   * The agent a request is for: the one asked for (if it's theirs), else their default agent, else null.
+   * New accounts start with no agents (the page shows the "Create your first agent" tutorial); nothing is made for them.
+   */
   public Map<String, Object> resolve(String userId, String requestedId) {
     if (requestedId != null && AGENT_ID.matcher(requestedId).matches()) {
       Map<String, Object> a = get(requestedId, userId);
       if (a != null) return a;
     }
-    return ensureDefault(userId);
+    return withRules(db.one("SELECT * FROM agents WHERE user_id = ? ORDER BY is_default DESC, created_at LIMIT 1", userId));
   }
 
   /** Rename / describe / change type / make default / persona fields. */
@@ -213,7 +210,6 @@ public class AgentService {
   public Map<String, Object> delete(String id, String userId) {
     Map<String, Object> a = get(id, userId);
     if (a == null) throw ApiException.notFound("Agent not found.");
-    if (db.count("SELECT COUNT(*) FROM agents WHERE user_id = ?", userId) <= 1) throw ApiException.bad("You need at least one agent.");
     db.exec("DELETE FROM agents WHERE id = ?", id); // calls, events and messages keep their history (agent_id → NULL)
     if (J.bool(a.get("is_default"))) db.exec("UPDATE agents SET is_default = 1 WHERE user_id = ? ORDER BY created_at LIMIT 1", userId);
     return a;
@@ -242,7 +238,7 @@ public class AgentService {
 
   /** Saves from the Agent setup card (auto-save). Runs one at a time per agent, so quick edits can't interleave. */
   public Map<String, Object> saveSettings(Map<String, Object> in, Map<String, Object> agent) {
-    if (agent == null) throw ApiException.bad("No agent selected.");
+    if (agent == null) throw ApiException.bad("Create an agent first.");
     String agentId = (String) agent.get("id");
     String userId = (String) agent.get("user_id");
     synchronized (locks.computeIfAbsent(agentId, k -> new Object())) {

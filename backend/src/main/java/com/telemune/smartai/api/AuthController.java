@@ -67,7 +67,6 @@ public class AuthController {
     Map<String, Object> b = body == null ? Map.of() : body;
     if (!J.str(b.get("password")).equals(J.str(b.get("confirm")))) throw ApiException.bad("The passwords don't match.");
     Map<String, Object> user = auth.createUser(J.map("username", b.get("username"), "name", b.get("name"), "email", b.get("email"), "password", b.get("password")), "self");
-    agents.ensureDefault((String) user.get("id")); // every new account starts with a personal assistant
     AuthService.Session s = auth.startSession(user, J.bool(b.get("remember")), ctx.ip, req.getHeader("User-Agent"));
     logs.activity(ctx, "auth.signup", (String) user.get("username"), J.map("name", user.get("name"), "email", J.blank(user.get("email")) ? null : user.get("email")),
         (String) user.get("id"), (String) user.get("username"));

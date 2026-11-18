@@ -38,7 +38,6 @@ public class Bootstrap {
     config.seed();
     Map<String, Object> admin = auth.ensureAdmin();
     if (admin != null) {
-      agents.ensureDefault((String) admin.get("id"));
       log.info("Created admin account \"admin\" (password admin@123, change it after signing in).");
     }
   }

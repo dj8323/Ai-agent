@@ -1238,6 +1238,7 @@ async function speakGreeting(g) {
 
 // ---------- call controls ----------
 async function startCall() {
+  if (!state.agentId) { openAgentDialog(); return; } // no agent yet: create one first
   const greet = prepareGreeting(); // usually ready already; if not, it loads while the mic opens
   try {
     state.micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -1941,7 +1942,7 @@ const formSnapshot = () => JSON.stringify(formPayload());
 // Every change in Agent setup is saved to config.json automatically (no Save button).
 // Selects and switches save almost at once; typing saves after a short pause.
 function markDirty() {
-  if (!state.savedSnapshot) return; // still filling the form on start-up
+  if (!state.savedSnapshot || !state.agentId) return; // still filling the form on start-up, or no agent yet
   if (formSnapshot() === state.savedSnapshot) return;
   setSaveStatus("Saving…");
   renderSummary();
@@ -2159,6 +2160,7 @@ async function loadAgents() {
 }
 
 function renderAgents() {
+  document.body.classList.toggle("no-agents", !state.agents.length); // new accounts start with no agents
   const box = $("agentChips");
   box.innerHTML = "";
   for (const a of state.agents) {
@@ -2195,7 +2197,120 @@ $("mgNew").addEventListener("click", openAgentDialog);
 $("sumEdit").addEventListener("click", () => (location.hash = "agents/profile"));
 $("agentCallBtn").addEventListener("click", () => (location.hash = "call"));
 
-// ---------- menu: 🎙 Call (main page) · 🤖 My agents (editor, in tabs) · 📨 Messages ----------
+
+// ---------- 📚 Tutorials: short step-by-step guides for everything on the site ----------
+// Each topic: steps (plain text; **bold** allowed), tips, and buttons that open the right place ("go" = a page/tab,
+// "do" = an action). adminOnly topics show for admins only.
+const TUTORIALS = [
+  { id: "welcome", icon: "👋", title: "Welcome", intro: "TelemuneSmartAi lets you talk to AI voice agents from your browser. An agent is a voice assistant with a job: answering calls for you while you're busy, a hospital front desk, a property advisor, a support desk and more. Here is how to get going in three steps.",
+    steps: ["**Create an agent**: choose what it's for and give it a name.", "**Check its profile**: who it works for, its organization, and the first thing it says.", "**Press Start call** and talk to it like you would on the phone."],
+    tips: ["Use **Chrome** or **Edge** and allow the microphone when asked.", "Headphones give the best results: the agent can't hear its own voice.", "You can open these tutorials any time from **📚 Tutorials** in the top menu."],
+    actions: [{ label: "＋ Create my first agent", do: "newAgent", primary: true }] },
+  { id: "first-agent", icon: "＋", title: "Create your first agent", intro: "It takes about a minute. You can change everything later.",
+    steps: ["Click **＋** next to \"Agent for this call\" (or **🤖 My agents → ＋ New agent**).", "Pick a **type**: for example *Call Assistant (for a person)* to answer calls for someone who is busy, or *Hospital*, *Real Estate*, *Banking*, *HR*.", "Pick a **template** (the usual one is already selected). It is the agent's script: what it asks and in which order.", "Type a **name** for the agent, for example *Brown*.", "Fill in **Works for** (the person it answers for, for example *DJ*) and the **Organization** if it has one.", "Read the preview of what it will say first, then press **Create agent**."],
+    tips: ["After creating it, **My agents** opens so you can set its availability, calendar, voice and emergency contacts.", "You can create up to 20 agents and switch between them with the dropdown on the main page."],
+    actions: [{ label: "＋ Create an agent now", do: "newAgent", primary: true }] },
+  { id: "call", icon: "🎙", title: "Make a call", intro: "Calls happen right in the browser: you speak, the agent answers out loud.",
+    steps: ["Choose the agent in **Agent for this call**.", "Press the green **Start call** button. The first time, allow the microphone.", "The agent greets you straight away. Talk normally: it answers after you pause for about a second.", "To interrupt, just start talking while it speaks: it stops and listens. Tapping the avatar works too.", "Use **🎙** to mute, **●** to record the call, and **End call** when you're done. You can also type in the box under the conversation.", "Say goodbye (\"bye\", \"that's all\") and the agent ends the call by itself."],
+    tips: ["If you say nothing for 8 seconds, the agent checks you're still there; after 2 tries it says goodbye and hangs up.", "Each of your messages shows what you wanted (intent), your mood and language; each reply shows how fast it came."],
+    actions: [{ label: "🎙 Go to the call page", go: "call" }] },
+  { id: "persona", icon: "👤", title: "Profile, persona & greeting", intro: "The profile decides who the agent is and how it opens every call.",
+    steps: ["Open **🤖 My agents** and pick the agent; the **👤 Profile** tab opens.", "**Agent type** and **Template**: the job and the script. Changing the type asks first, because it resets the agent's setup.", "**Works for** and **Organization**: the agent introduces itself as, for example, \"DJ's assistant\" or \"City Hospital front desk\".", "**What it's for**: a short note added to the agent's instructions.", "**First line of every call**: leave it empty to use the template's greeting, or write your own. {agent}, {owner} and {org} are filled in for you."],
+    tips: ["Everything saves by itself within a second. Watch for **✓ Saved** next to the agent's name."],
+    actions: [{ label: "👤 Open the Profile tab", go: "agents/profile" }] },
+  { id: "availability", icon: "🕒", title: "Availability, calendar & meetings", intro: "Let the agent book meetings only when the person it works for is free.",
+    steps: ["In **My agents → 🕒 Availability**, tap the days (or *Weekdays*), set **From**, **To** and the **time zone**, and add a note if needed.", "In **📅 Calendar**, switch on **Book into the calendar** and pick the **meeting length**.", "During a call, when a caller confirms a time, the agent adds the meeting with their name in the title. A 📅 chip shows on its reply.", "Your upcoming events are listed in the Calendar tab. **⬇ Export all (.ics)** adds them to Google, Outlook or Apple Calendar."],
+    tips: ["With no availability set, the agent asks the caller for a time and takes it as a request."],
+    actions: [{ label: "🕒 Open Availability", go: "agents/availability" }, { label: "📅 Open Calendar", go: "agents/calendar" }] },
+  { id: "voice", icon: "🧠", title: "Voice, language, speed & AI", intro: "Choose how the agent sounds and which AI models it uses.",
+    steps: ["Open **My agents → 🧠 Voice & AI**.", "Pick the **language** and a **voice**; press **▶** to hear a sample.", "Set the **speaking speed**: 🐢 Slow, Normal, Fast or 🚀 Faster, or fine-tune it with the slider.", "**LLM** thinks and writes the replies, **STT** hears the caller, **TTS** speaks."],
+    tips: ["**gpt-4.1-mini** answers fastest. Bigger models think more but take a little longer.", "The agent matches the caller's language, including mixes like Hinglish."],
+    actions: [{ label: "🧠 Open Voice & AI", go: "agents/voice" }] },
+  { id: "emergency", icon: "🚨", title: "Emergency contacts", intro: "If a caller says something like \"chest pain\" or \"fire\", the agent gives the right number or email straight away.",
+    steps: ["Open **My agents → 🚨 Emergency** and switch on **Emergency detection**.", "In **Add emergency contact**, choose what it's **related to** (Ambulance, Police, Fire, helplines…).", "Choose **Contact by**: 📞 Phone or ✉️ Email, and check the number or address.", "Tap the suggested **keywords** or type your own, then press **＋ Add**."],
+    tips: ["During a call, a red 🚨 banner shows the contact with a tap-to-call (or email) link."],
+    actions: [{ label: "🚨 Open Emergency", go: "agents/emergency" }] },
+  { id: "playbooks", icon: "📘", title: "Playbooks (your own scripts)", intro: "A playbook is your own call script. It takes the place of the agent's template.",
+    steps: ["Open **My agents → 📘 Playbooks** and press **＋ Add playbook**.", "Pick an agent type, then a ready-made script or *Custom*.", "Edit the role, goal, steps and rules, then save.", "Choose it for a call from the **Playbook** dropdown on the main page."],
+    tips: ["Playbooks are shared by all your agents. \"Default\" means the agent uses its own template."],
+    actions: [{ label: "📘 Open Playbooks", go: "agents/playbooks" }] },
+  { id: "summaries", icon: "📚", title: "Call summaries & recordings", intro: "Every call is saved with an AI summary, so you never lose what was said.",
+    steps: ["When a call ends, a summary appears in the conversation: what happened, what the caller wanted, their mood, key details and next steps.", "**📚 Call summaries** under the conversation shows your totals. Click **Show calls** to see every call.", "Click a call to read the summary and the full transcript, play the recording, or download them.", "Messages callers leave (\"tell DJ I called\") are saved with the call and shown in its transcript."],
+    tips: ["Press **●** during a call to record both sides. 🗑 deletes a call with its summary and recording."],
+    actions: [{ label: "📚 Go to Call summaries", go: "call" }] },
+  { id: "manage", icon: "🤖", title: "Manage your agents", intro: "Keep as many agents as you need, each with its own setup.",
+    steps: ["Switch agents with the dropdown on the main page, or pick one in **🤖 My agents**.", "**☆ Default** makes an agent open first next time.", "**🗑** deletes an agent; its past calls stay in Call summaries.", "Changing an agent's **type** (Profile tab) resets its setup to the new type's defaults, after you approve."],
+    tips: ["Switching agents is locked during a call."],
+    actions: [{ label: "🤖 Open My agents", go: "agents" }] },
+  { id: "account", icon: "🔑", title: "Your account", intro: "Your account keeps your agents, calls and calendar private to you.",
+    steps: ["Click your name at the top right for **🔑 Change password** and **↪ Sign out**.", "Use **🌙 / ☀️** to switch between light and dark theme.", "Tick **Keep me signed in** on the login page to stay signed in for 30 days."],
+    tips: ["After 5 wrong passwords, sign-in is paused for 5 minutes."], actions: [] },
+  { id: "tips", icon: "💡", title: "Tips & troubleshooting", intro: "Quick fixes for the most common questions.",
+    steps: ["**No sound or the mic doesn't work**: use Chrome or Edge, allow the microphone for this site, and check your input device.", "**The agent stops talking by itself**: it is hearing its own voice from the speakers. Use headphones.", "**It answers before I finish**: pause less in the middle of a sentence, or ask an admin to raise the reply wait.", "**It misheard a word**: just correct it (\"no, I meant Friday\"); the agent uses the correction.", "**A template I need is missing**: ask your admin; they manage agent types and templates."],
+    tips: [], actions: [] },
+  { id: "admin", icon: "👑", title: "For admins", adminOnly: true, intro: "The admin dashboard manages users, agent templates and app settings.",
+    steps: ["Open **📊 Admin dashboard** from your name menu.", "**Users**: add users, reset passwords, make admin, disable or delete. New users start with no agents and see these tutorials.", "**🧩 Agent types & templates**: edit personas, greetings and scripts, or add new types; agents pick up changes on their next call.", "**⚙️ App settings**: sign-up, session length, agents per user, and how long the agent waits on a silent caller.", "**🔐 Sign-ins** and **📜 Activity log** show who did what and when."],
+    tips: [], actions: [{ label: "📊 Open the admin dashboard", do: "admin" }] },
+];
+
+const tutEsc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const tutText = (t) => tutEsc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>").replace(/\*(.+?)\*/g, "<i>$1</i>");
+const tutorialsFor = () => TUTORIALS.filter((t) => !t.adminOnly || state.me?.role === 1);
+
+function showTutorial(id) {
+  const list = tutorialsFor();
+  const i = Math.max(0, list.findIndex((t) => t.id === id));
+  const t = list[i];
+  $("learnList").innerHTML = "";
+  list.forEach((x) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.setAttribute("aria-current", String(x.id === t.id));
+    b.innerHTML = `<span class="li-icon" aria-hidden="true">${x.icon}</span><span>${tutEsc(x.title)}</span>`;
+    b.onclick = () => (location.hash = `learn/${x.id}`);
+    $("learnList").appendChild(b);
+  });
+  const next = list[i + 1];
+  $("learnBody").innerHTML = `
+    <div class="lb-kicker">Tutorial ${i + 1} of ${list.length}</div>
+    <h2>${t.icon} ${tutEsc(t.title)}</h2>
+    <p class="lb-intro">${tutText(t.intro)}</p>
+    ${t.steps.length ? `<ol>${t.steps.map((x) => `<li>${tutText(x)}</li>`).join("")}</ol>` : ""}
+    ${t.tips.length ? `<div class="lb-tips"><b>💡 Good to know</b><ul>${t.tips.map((x) => `<li>${tutText(x)}</li>`).join("")}</ul></div>` : ""}
+    <div class="lb-actions"></div>`;
+  const acts = $("learnBody").querySelector(".lb-actions");
+  for (const a of t.actions) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = a.primary ? "btn btn-primary" : "btn btn-small"; b.textContent = a.label;
+    b.onclick = () => runTutorialAction(a);
+    acts.appendChild(b);
+  }
+  const grow = document.createElement("span"); grow.className = "grow"; acts.appendChild(grow);
+  if (next) {
+    const n = document.createElement("button");
+    n.type = "button"; n.className = "lb-next"; n.textContent = `Next: ${next.title} →`;
+    n.onclick = () => (location.hash = `learn/${next.id}`);
+    acts.appendChild(n);
+  }
+  $("learnBody").scrollTop = 0;
+}
+function runTutorialAction(a) {
+  if (a.go) { location.hash = a.go; return; }
+  if (a.do === "admin") { location.href = "/admin.html"; return; }
+  if (a.do === "newAgent") { location.hash = "call"; openAgentDialog(); }
+}
+$("lrClose").addEventListener("click", () => (location.hash = "call"));
+$("learnModal").addEventListener("click", (e) => { if (e.target === $("learnModal")) location.hash = "call"; });
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "Escape" || !$("learnModal").classList.contains("open")) return;
+  if ([...document.querySelectorAll(".overlay.open")].some((o) => o !== $("learnModal"))) return;
+  location.hash = "call";
+});
+document.querySelectorAll("[data-learn]").forEach((b) => (b.onclick = () => (location.hash = `learn/${b.dataset.learn}`)));
+$("firstAgentBtn").addEventListener("click", () => openAgentDialog());
+$("firstAgentLearn").addEventListener("click", () => (location.hash = "learn/first-agent"));
+
+// ---------- menu: 🎙 Call (main page) · 🤖 My agents (editor, in tabs) · 📚 Tutorials ----------
 const TABS = ["profile", "voice", "availability", "calendar", "emergency", "playbooks"];
 function showTab(tab) {
   state.tab = TABS.includes(tab) ? tab : "profile";
@@ -2204,11 +2319,14 @@ function showTab(tab) {
 }
 function route() {
   const [view, tab] = location.hash.replace(/^#/, "").split("/");
-  const agents = view === "agents";
-  document.body.dataset.view = agents ? "agents" : "call";
+  const agents = view === "agents", learn = view === "learn";
+  document.body.dataset.view = agents ? "agents" : learn ? "learn" : "call";
   $("agentsModal").classList.toggle("open", agents);
-  $("navCall").setAttribute("aria-current", agents ? "false" : "page");
+  $("learnModal").classList.toggle("open", learn);
+  if (learn) showTutorial(tab || "welcome");
+  $("navCall").setAttribute("aria-current", agents || learn ? "false" : "page");
   $("navAgents").setAttribute("aria-current", agents ? "page" : "false");
+  $("navLearn").setAttribute("aria-current", learn ? "page" : "false");
   if (agents) {
     showTab(tab || state.tab);
     if (state.tab === "calendar" && SETTINGS.calendar?.enabled) loadCalendar().catch(() => {});
@@ -2270,7 +2388,8 @@ $("agentDelete").addEventListener("click", async () => {
     await loadAgents(); // picks the default agent
     const next = state.agents.find((a) => a.isDefault) || state.agents[0];
     state.agentId = "";
-    await switchAgent(next.id);
+    if (next) await switchAgent(next.id);
+    else { SETTINGS.currentAgent = null; state.greet = null; renderAgents(); setSaveStatus(""); } // that was the last one
   } catch (e) { setSaveStatus("⚠ " + e.message, "err"); }
 });
 
@@ -2351,6 +2470,7 @@ $("naForm").addEventListener("submit", async (e) => {
     state.me = (await fetch("/api/me").then((r) => r.json())).user;
     state.agentId = store.get(agentKey()) || ""; // the agent this user had open last time
     await loadAgents();
+    if (location.hash.startsWith("#learn")) route(); // now we know if the admin topic should show
     await loadConfig();
     if (SETTINGS.currentAgent && SETTINGS.currentAgent.id !== state.agentId) { state.agentId = SETTINGS.currentAgent.id; renderAgents(); }
     await loadPlaybooks();
@@ -2358,6 +2478,8 @@ $("naForm").addEventListener("submit", async (e) => {
     // The model list comes from OpenAI and can take a few seconds; fill the dropdowns when it arrives.
     loadModels().then(() => { state.savedSnapshot = formSnapshot(); renderSummary(); }).catch(() => {});
     loadCalendar().catch(() => {});
+    // No agents yet (new account): show how to create one instead of making one for them.
+    if (!state.agents.length && !location.hash.replace("#", "")) location.hash = "learn/first-agent";
     } catch (e) {
     addMsg("error", "Couldn't load settings: " + e.message);
   }
