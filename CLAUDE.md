@@ -188,6 +188,9 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 - **Silence re-ask:** `conversation.silenceRetrySeconds` (8) / `silenceRetries` (2) in app_config (Admin → App settings).
   `vadTick()` → `silencePrompt()` sends a hidden `[no response]` turn; after the re-asks `[no response, end call]` and
   `state.silenceEnding` hangs up after that goodbye even without `<hangup:yes>`. Markers are filtered out of summaries.
+- **Call card animation** (`drawViz()` canvas around `#avatar`): idle gradient ring, listening ripples, thinking spinning
+  arc + orbit dots, speaking three wobbling blobs driven by the voice level. **Agent bubbles** show only
+  "Name · time · ⏱ reply" (`renderTiming()` writes `.meta`; details in its title); no emotion chips on agent bubbles.
 - **Speaking speed:** `agents.speech_speed` (0.5–2.0; `agent.speechSpeed` in settings), set in Voice & AI; applied as
   `audio.playbackRate` (pitch kept) to every sentence and the preview.
 

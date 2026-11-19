@@ -1065,10 +1065,12 @@ function firstClause(text) {
 
 function renderTiming(turn) {
   if (!turn.bubble) return;
-  const parts = [`first words ${fmtS(turn.firstText)}`];
-  if (turn.firstVoice != null) parts.push(`voice ${fmtS(turn.firstVoice)}`);
-  if (turn.total != null) parts.push(`full reply ${fmtS(turn.total)}`);
-  turn.bubble.querySelector(".timing").textContent = "⏱ " + parts.join(" · ");
+  // Agent bubbles show just "Name · time · ⏱ reply time" (how long until the caller heard the agent).
+  const meta = turn.bubble.querySelector(".meta");
+  if (!meta.dataset.base) meta.dataset.base = meta.textContent;
+  const took = turn.firstVoice ?? turn.firstText;
+  meta.textContent = meta.dataset.base + (took != null ? ` · ⏱ ${fmtS(took)}` : "");
+  meta.title = `First words ${fmtS(turn.firstText)} · voice ${fmtS(turn.firstVoice)} · full reply ${fmtS(turn.total)}`;
 }
 
 async function sendUserText(text, { hidden = false, bubble = null, t0 = null } = {}) {
@@ -1128,7 +1130,6 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
     if (tags.length) emotion = tags.at(-1)[1].toLowerCase();
     const clean = stripTags(chunk).trim();
     if (!clean) return false;
-    addChip(turn.bubble, `${EMOJI[emotion] || "•"} ${emotion}`, emotion);
     if (state.inCall) enqueueSpeech(clean, emotion, turn);
     return true;
   };
@@ -1246,7 +1247,6 @@ async function speakGreeting(g) {
   state.history.push({ role: "user", content: "[call connected]" });
   state.history.push({ role: "assistant", content: `<intent:call start><mood:neutral><lang:${ready.language}>[${ready.emotion}] ${ready.text}` });
   turn.bubble = addMsg("assistant", ready.text);
-  addChip(turn.bubble, `${EMOJI[ready.emotion] || "•"} ${ready.emotion}`, ready.emotion);
   state.streamDone = true;
   state.speakQueue.push({ text: ready.text, emotion: ready.emotion, turn, url: Promise.resolve(ready.url) });
   if (!state.playing) speakNext();
@@ -1521,12 +1521,34 @@ function phaseColor() {
   return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
 }
 
+// Agent animation on the call card (drawn around the avatar):
+//   idle      a slowly turning gradient ring that breathes
+//   listening ripples spreading out (green; grey when muted), stronger while the caller is loud
+//   thinking  a gradient arc spinning, with dots orbiting the other way
+//   speaking  three soft "liquid" blobs that wobble with the agent's voice, in the emotion colour + theme colours
+let vizCols = null, vizColsAt = 0;
+function vizColors(ts) {
+  if (!vizCols || ts - vizColsAt > 500) {
+    const css = getComputedStyle(document.documentElement);
+    const g = (n, d) => css.getPropertyValue(n).trim() || d;
+    vizCols = { c1: g("--c1", "#7c3aed"), c2: g("--c2", "#ec4899"), c3: g("--c3", "#06b6d4") };
+    vizColsAt = ts;
+  }
+  return vizCols;
+}
+function ringGradient(angle, cols) {
+  if (!vctx.createConicGradient) return cols[0];
+  const gr = vctx.createConicGradient(angle, 120, 120);
+  cols.forEach((c, i) => gr.addColorStop(i / (cols.length - 1), c));
+  return gr;
+}
+
 function drawViz(ts) {
-  const W = 240, cx = 120, cy = 120, base = 68;
+  const W = 240, cx = 120, cy = 120, base = 64;
   vctx.clearRect(0, 0, W, W);
+  const { c1, c2, c3 } = vizColors(ts);
   const color = phaseColor();
   let level = 0;
-  const bars = 64;
 
   if (state.analyser && (state.phase === "speaking" || state.phase === "listening")) {
     state.analyser.getByteFrequencyData(freq);
@@ -1534,41 +1556,62 @@ function drawViz(ts) {
     level = level / (64 * 255);
   }
   smoothLevel += (level - smoothLevel) * 0.25;
-  $("avatar").style.setProperty("--level", Math.min(1, smoothLevel * 2.2).toFixed(3));
-
+  const lv = Math.min(1, smoothLevel * 2.2);
+  $("avatar").style.setProperty("--level", lv.toFixed(3));
   vctx.lineCap = "round";
-  if (state.phase === "thinking") {
-    // orbiting dots
-    for (let i = 0; i < 3; i++) {
-      const a = ts / 380 + (i * Math.PI * 2) / 3;
+
+  if (state.phase === "speaking") {
+    const blobCols = [color, c2, c3];
+    for (let k = 2; k >= 0; k--) {
+      const amp = 5 + lv * (26 - k * 5), t = ts / (900 + k * 260);
       vctx.beginPath();
-      vctx.fillStyle = color;
-      vctx.globalAlpha = 0.9 - i * 0.2;
-      vctx.arc(cx + Math.cos(a) * (base + 14), cy + Math.sin(a) * (base + 14), 6 - i, 0, Math.PI * 2);
+      for (let i = 0; i <= 90; i++) {
+        const a = (i / 90) * Math.PI * 2;
+        const r = base + 4 + k * 5 + amp * (0.55 * Math.sin(a * 3 + t * 2 + k) + 0.3 * Math.sin(a * 5 - t * 3 + k * 2) + 0.15 * Math.sin(a * 7 + t * 4));
+        const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
+        i ? vctx.lineTo(x, y) : vctx.moveTo(x, y);
+      }
+      vctx.closePath();
+      vctx.globalAlpha = 0.28 + lv * 0.25;
+      vctx.fillStyle = blobCols[k];
       vctx.fill();
     }
-    vctx.globalAlpha = 1;
-  } else {
-    for (let i = 0; i < bars; i++) {
-      const a = (i / bars) * Math.PI * 2 - Math.PI / 2;
-      let v;
-      if (state.analyser && (state.phase === "speaking" || state.phase === "listening")) {
-        const bin = Math.floor((i < bars / 2 ? i : bars - i) * 1.4) + 2; // mirrored so the ring looks symmetric
-        v = freq[bin] / 255;
-      } else {
-        v = 0.08 + 0.05 * Math.sin(ts / 700 + i / 3); // gentle idle breathing
-      }
-      const len = 4 + v * 40;
-      vctx.strokeStyle = color;
-      vctx.globalAlpha = 0.35 + v * 0.65;
-      vctx.lineWidth = 3;
-      vctx.beginPath();
-      vctx.moveTo(cx + Math.cos(a) * (base + 4), cy + Math.sin(a) * (base + 4));
-      vctx.lineTo(cx + Math.cos(a) * (base + 4 + len), cy + Math.sin(a) * (base + 4 + len));
-      vctx.stroke();
+    // a thin turning ring on top keeps the shape crisp
+    vctx.globalAlpha = 0.9;
+    vctx.strokeStyle = ringGradient(ts / 900, [color, c2, c3, color]);
+    vctx.lineWidth = 3;
+    vctx.beginPath(); vctx.arc(cx, cy, base + 2, 0, Math.PI * 2); vctx.stroke();
+  } else if (state.phase === "thinking") {
+    const a = ts / 420;
+    vctx.globalAlpha = 0.18; vctx.strokeStyle = c1; vctx.lineWidth = 6;
+    vctx.beginPath(); vctx.arc(cx, cy, base + 12, 0, Math.PI * 2); vctx.stroke();
+    vctx.globalAlpha = 1; vctx.lineWidth = 6;
+    vctx.strokeStyle = ringGradient(a, ["transparent", c1, c2, c3]);
+    vctx.beginPath(); vctx.arc(cx, cy, base + 12, a, a + Math.PI * 1.6); vctx.stroke();
+    for (let i = 0; i < 3; i++) {
+      const b = -ts / 600 + (i * Math.PI * 2) / 3;
+      vctx.globalAlpha = 0.85; vctx.fillStyle = [c1, c2, c3][i];
+      vctx.beginPath(); vctx.arc(cx + Math.cos(b) * (base + 30), cy + Math.sin(b) * (base + 30), 5, 0, Math.PI * 2); vctx.fill();
     }
-    vctx.globalAlpha = 1;
+  } else if (state.phase === "listening") {
+    for (let i = 0; i < 3; i++) {
+      const p = (ts / 1800 + i / 3) % 1;
+      vctx.globalAlpha = (1 - p) * (0.45 + lv * 0.5);
+      vctx.strokeStyle = color;
+      vctx.lineWidth = 2 + lv * 4;
+      vctx.beginPath(); vctx.arc(cx, cy, base + 4 + p * 48, 0, Math.PI * 2); vctx.stroke();
+    }
+    vctx.globalAlpha = 0.9; vctx.lineWidth = 3 + lv * 3; vctx.strokeStyle = color;
+    vctx.beginPath(); vctx.arc(cx, cy, base + 4 + lv * 6, 0, Math.PI * 2); vctx.stroke();
+  } else {
+    const breathe = 0.5 + 0.5 * Math.sin(ts / 900);
+    vctx.globalAlpha = 0.25 + breathe * 0.2; vctx.lineWidth = 10 + breathe * 6;
+    vctx.strokeStyle = ringGradient(ts / 3000, [c1, c2, c3, c1]);
+    vctx.beginPath(); vctx.arc(cx, cy, base + 12, 0, Math.PI * 2); vctx.stroke();
+    vctx.globalAlpha = 0.95; vctx.lineWidth = 3;
+    vctx.beginPath(); vctx.arc(cx, cy, base + 12, 0, Math.PI * 2); vctx.stroke();
   }
+  vctx.globalAlpha = 1;
   requestAnimationFrame(drawViz);
 }
 requestAnimationFrame(drawViz);
