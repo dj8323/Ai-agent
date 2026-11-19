@@ -48,6 +48,10 @@ Run it from this folder (or set `APP_HOME`): it reads `.env`, `config.json` and 
 | `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT` | — | Override the models set in the admin dashboard |
 | `APP_HOME` | `.` | Folder holding `config.json` and `data/` |
 
+**`keys.env`** (optional, never commit; template `keys.env.example`): keys for the planned providers and channels:
+ElevenLabs (STT + TTS), AWS Transcribe + Polly, Cartesia (TTS), WhatsApp Cloud API, SMTP email, Flash SMS gateway.
+Read like `.env`; an empty key leaves that provider off.
+
 **`config.json`** seeds the app settings (`app_config` table) on the **first** start only: branding, agent defaults,
 models, speech-to-text, conversation timing, history, calendar, emergency, auth. After that, change them in the admin
 dashboard (App settings) or with `PUT /api/admin/config/<section>`. Bottom layer: `src/main/resources/defaults.json`.

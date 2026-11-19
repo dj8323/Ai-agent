@@ -111,6 +111,8 @@ docs/                  TelemuneSmartAi-Guide.md (+ PDF, images/). Keep it in ste
 voice_ai_backend/      ── backend team ──
   run.sh               Java check, build when src/pom/db changed, restart an older copy, start, wait for /api/health.
   .env(.example)       Secrets + MySQL + BACKEND_PORT/HOST + TRUSTED_PROXIES + LOG_LEVEL/SQL_LOG.  .gitignore
+  keys.env(.example)   Keys for planned providers/channels (ElevenLabs, AWS, Cartesia, WhatsApp, SMTP, Flash SMS);
+                       imported after .env (application.properties); gitignored.
   config.json          Seed for app_config on first start (no ports in it any more).
   README.md            Requirements, config, logs, API.   Troubleshooting.md  logs, tracing, every table, SQL queries.
   db/schema.sql        All tables.     db/seed.sql   Agent types + templates (copied into the jar by pom.xml).
