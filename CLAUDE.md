@@ -226,7 +226,9 @@ voice_ai_web/          ── frontend team ──
   lip-sync level without the call's analyser) · WhatsApp (`#waSend` → POST `/api/whatsapp/send {to, message}` →
   `NotifyService.sendText` → gateway `/sendTextWhatsApp {to, message}`; answers {ok, id} / {ok:false, error}). Chat sessions
   greet first (text from /api/greeting; voice chat speaks it) and End & save → `summarizeCall()` (endedBy "live chat" / "voice chat").
-  `setTalkMode(m)` ends what's running first (call → `endCall`, chat → `endSession`); Start call switches back to Web call.
+  `setTalkMode(m)` ends what's running first (call → `endCall`, chat → `endSession`), then `clearChat()`; Start call switches back
+  to Web call. Voice chat: `#vcMute` (`state.vcMuted`: mic tracks off, hold disabled) + red `#voiceEnd`; `summarizeCall()`
+  snapshots startedAt/tokens/playbook first because the page may already be on the next channel while it saves.
   Mobile numbers: `country_codes` table (seed.sql, India first; /api/config.countryCodes) → `fillCc()`, `fullNumber()`, `splitNumber()`
   for the WhatsApp send box and the Tools → Call summaries WhatsApp number.
   The old "type a message to test" box is gone (Live chat replaces it).

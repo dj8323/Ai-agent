@@ -301,6 +301,11 @@
   .talk-pane textarea { width: 100%; resize: vertical; min-height: 64px; font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); }
   .btn-wa { width: 100%; margin: 8px 0 6px; padding: 12px; background: var(--grad); }
   .btn-wa .wa-ico { width: 18px; height: 18px; fill: currentColor; }
+  .vc-row { display: flex; align-items: center; justify-content: center; gap: 16px; }
+  .vc-row .btn-round svg { width: 22px; height: 22px; fill: currentColor; }
+  .vc-row .btn-round[aria-pressed="true"] { background: var(--amber); border-color: var(--amber); color: #fff; }
+  .vc-end { padding: 12px 18px; } .vc-end svg { width: 18px; height: 18px; fill: currentColor; transform: rotate(135deg); }
+  .btn-small-end { padding: 7px 14px; font-size: 13px; }
   .hold-btn { display: grid; place-items: center; width: 96px; height: 96px; margin: 4px auto; border: 0; border-radius: 50%; cursor: pointer; color: #fff;
     background: var(--grad); box-shadow: 0 10px 28px color-mix(in srgb, var(--c2) 35%, transparent); touch-action: none; user-select: none; -webkit-user-select: none; }
   .hold-btn svg { width: 38px; height: 38px; fill: currentColor; }
@@ -775,14 +780,21 @@
         <button class="btn btn-send" type="submit">Send</button>
       </form>
       <div class="talk-foot"><span class="talk-hint" id="chatHint">The agent answers in text straight away. No microphone needed.</span>
-        <button class="link" id="chatEnd" type="button" hidden>End &amp; save chat</button></div>
+        <button class="btn btn-end btn-small-end" id="chatEnd" type="button" title="End the chat and save it" hidden>End chat</button></div>
     </div>
     <div class="talk-pane" data-talk="voice" hidden>
-      <button class="hold-btn" id="holdBtn" type="button" aria-label="Hold to talk">
-        <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
-      </button>
-      <div class="talk-foot center"><span class="talk-hint" id="holdHint"><b>Hold</b> to talk, <b>let go</b> to send. The agent answers out loud.</span>
-        <button class="link" id="voiceEnd" type="button" hidden>End &amp; save voice chat</button></div>
+      <div class="vc-row">
+        <button class="btn btn-round" id="vcMute" type="button" title="Mute microphone" aria-pressed="false" aria-label="Mute microphone">
+          <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+        </button>
+        <button class="hold-btn" id="holdBtn" type="button" aria-label="Hold to talk">
+          <svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+        </button>
+        <button class="btn btn-end vc-end" id="voiceEnd" type="button" title="End the voice chat and save it" hidden>
+          <svg viewBox="0 0 24 24"><path d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.57a1 1 0 0 1-.25 1z"/></svg><span>End</span>
+        </button>
+      </div>
+      <div class="talk-foot center"><span class="talk-hint" id="holdHint"><b>Hold</b> to talk, <b>let go</b> to send. The agent answers out loud.</span></div>
     </div>
     <div class="talk-pane" data-talk="whatsapp" hidden>
       <div class="mini"><span>To (mobile number)</span><div class="cc-row"><select id="waCc" aria-label="Country code"></select><input type="tel" id="waTo" maxlength="15" placeholder="98765 43210" autocomplete="off" aria-label="Mobile number" /></div></div>

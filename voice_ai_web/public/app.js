@@ -1434,6 +1434,8 @@ async function endCall(endedBy = "ended by you") {
 
 // ---------- call summary ----------
 async function summarizeCall(duration, recording, endedBy) {
+  // Snapshot what belongs to this call: the page may already be on the next chat (or cleared) while this is saved.
+  const startedAt = state.callStartedAt, tokens = { ...state.callTokens }, playbookId = state.playbookId;
   const turns = state.history.filter((m) => !/^\[(call connected|no response[^\]]*)\]$/.test(m.content)); // app markers, not the caller's words
   const callerTurns = state.turns.filter((t) => !t.hidden);
   const pb = activePlaybook();
@@ -1459,13 +1461,13 @@ async function summarizeCall(duration, recording, endedBy) {
     const res = await fetch("/api/summary", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ messages: turns, playbookId: state.playbookId, lang: lang(), duration }),
+      body: JSON.stringify({ messages: turns, playbookId, lang: lang(), duration }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Summary failed");
     pre.textContent = data.summary;
     summaryText = data.summary;
-    addTokens(data.usage);
+    if (data.usage) { tokens.input += data.usage.input || 0; tokens.output += data.usage.output || 0; tokens.total += data.usage.total || 0; }
 
     let i = 0;
     const transcript = turns.map((m) => {
@@ -1475,7 +1477,7 @@ async function summarizeCall(duration, recording, endedBy) {
       }
       return `${agentName()}: ${stripTags(m.content)}`;
     }).join("\n");
-    const file = `CALL SUMMARY\n${statsLine}\n${state.callStartedAt?.toLocaleString() || ""}\n\n${data.summary}\n\n--- Transcript ---\n${transcript}\n`;
+    const file = `CALL SUMMARY\n${statsLine}\n${startedAt?.toLocaleString() || ""}\n\n${data.summary}\n\n--- Transcript ---\n${transcript}\n`;
     const url = URL.createObjectURL(new Blob([file], { type: "text/plain" }));
     actions.appendChild(downloadLink(url, `call-summary-${localStamp()}.txt`, "⬇ Summary + transcript"));
   } catch (e) {
@@ -1504,14 +1506,14 @@ async function summarizeCall(duration, recording, endedBy) {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        startedAt: state.callStartedAt?.toISOString(), duration, endedBy,
+        startedAt: startedAt?.toISOString(), duration, endedBy,
         playbook: pb ? { name: pb.name, icon: t?.icon, type: t?.name } : null,
         language: $("lang").selectedOptions[0]?.text, voice: $("voice").value, agentName: agentName(),
         stats: {
           turns: callerTurns.length, avgResponse: avg, languages: langs, moodPath,
           avgResponseMs: times.length ? Math.round(times.reduce((a, b) => a + b, 0) / times.length) : null,
           intents: [...new Set(callerTurns.map((x) => x.intent).filter(Boolean))],
-          tokens: { ...state.callTokens },
+          tokens: { ...tokens },
           emergencies: callerTurns.filter((x) => x.emergency).map((x) => `${x.emergency.label} ${x.emergency.number}`),
           calendarEvents: callerTurns.filter((x) => x.calendar).map((x) => x.calendar.title),
           messages: callerTurns.filter((x) => x.message).map((x) => msgLine(x.message)),
@@ -1522,7 +1524,7 @@ async function summarizeCall(duration, recording, endedBy) {
     if (recording?.blob) {
       await fetch(`/api/calls/${saved.id}/recording`, { method: "PUT", headers: { "Content-Type": recording.blob.type }, body: recording.blob });
     }
-    card.querySelector(".stats").textContent += ` · ${state.callTokens.total.toLocaleString()} tokens · saved to call summaries`;
+    card.querySelector(".stats").textContent += ` · ${tokens.total.toLocaleString()} tokens · saved to call summaries`;
     state.historyPage = 1;
     loadHistory();
   } catch (e) {
@@ -1689,6 +1691,8 @@ async function setTalkMode(m) {
   if (state.inCall) await endCall(`switched to ${TALK_NAMES[m]}`);
   if (state.session) await endSession();
   stopSpeaking();
+  clearChat(); // the next channel starts with an empty conversation (the previous one is saved in Call summaries)
+  if (state.mode === "voice" && m !== "voice") { state.vcStream?.getTracks().forEach((t) => t.stop()); state.vcStream = null; state.vcMuted = false; renderVcMute(); }
   state.mode = m;
   renderTalk();
 }
@@ -1765,9 +1769,27 @@ async function voiceStream() {
   state.vcStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
   return state.vcStream;
 }
+// 🔇 mute in Voice chat: the mic is off and holding does nothing until unmuted
+state.vcMuted = false;
+function renderVcMute() {
+  $("vcMute").setAttribute("aria-pressed", String(state.vcMuted));
+  $("vcMute").title = state.vcMuted ? "Unmute microphone" : "Mute microphone";
+  $("vcMute").setAttribute("aria-label", $("vcMute").title);
+  $("holdBtn").disabled = state.vcMuted;
+  $("holdHint").innerHTML = state.vcMuted ? "🔇 <b>Muted.</b> Unmute to talk." : "<b>Hold</b> to talk, <b>let go</b> to send. The agent answers out loud.";
+  if (state.mode === "voice" && !state.session && !state.playing) setPhase("idle", state.vcMuted ? "Muted" : "Hold to talk");
+}
+$("vcMute").addEventListener("click", async () => {
+  state.vcMuted = !state.vcMuted;
+  if (state.vcMuted && state.holding) { const h = state.holding; state.holding = null; $("holdBtn").classList.remove("rec"); try { h.rec.stop(); } catch {} } // drop what was being said
+  state.vcStream?.getAudioTracks().forEach((t) => (t.enabled = !state.vcMuted));
+  renderVcMute();
+  if (state.vcMuted && state.session) setPhase("idle", "Muted");
+});
+
 async function holdStart(e) {
   e.preventDefault();
-  if (state.holding || state.inCall) return;
+  if (state.holding || state.inCall || state.vcMuted) return;
   stopSpeaking(); if (state.abort) state.abort.abort();
   let stream;
   try { stream = await voiceStream(); } catch {
@@ -1808,7 +1830,7 @@ async function holdEnd() {
     if (String(err?.message) !== "no agent") addMsg("error", "Voice chat: " + (err?.message || err));
     setPhase("idle");
   } finally {
-    $("holdBtn").disabled = false;
+    $("holdBtn").disabled = state.vcMuted;
   }
 }
 $("holdBtn").addEventListener("pointerdown", holdStart);
@@ -1816,6 +1838,7 @@ $("holdBtn").addEventListener("pointerdown", holdStart);
 $("holdBtn").addEventListener("keydown", (e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) holdStart(e); });
 $("holdBtn").addEventListener("keyup", (e) => { if (e.key === " " || e.key === "Enter") holdEnd(); });
 renderTalk();
+renderVcMute();
 
 // WhatsApp: send a typed message to a number (through the Telemune WhatsApp gateway)
 // ---------- mobile numbers: country code (from the country_codes table) + national number ----------
