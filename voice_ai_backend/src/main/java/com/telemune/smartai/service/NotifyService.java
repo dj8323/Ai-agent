@@ -30,7 +30,7 @@ import java.util.concurrent.Executors;
  *   POST {base-url}{template-send-path}  {"to": "+<number>", "template": <name>, "reply": <text>, "params": [<v1>, <v2>, ...]}
  * The query parameter names and the values each template takes are settings (whatsapp.param.*, whatsapp.*-params),
  * so they can match the gateway without code changes. Values: agent, owner, recipient, caller, date, duration, summary,
- * brief (the summary on one line), label, keyword, number.
+ * brief (the summary on one line), label, keyword, number, alert (the emergency in one line).
  */
 @Service
 public class NotifyService {
@@ -127,11 +127,15 @@ public class NotifyService {
     v.put("keyword", keyword);
     v.put("number", to);
     v.put("date", java.time.format.DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm").withZone(java.time.ZoneId.systemDefault()).format(java.time.Instant.now()));
+    // one line for the WhatsApp template (emergency_alert_new: header "Emergency Alert", body values = agent, alert)
+    v.put("alert", "Caller said \"" + keyword + "\" during a call with " + v.get("agent")
+        + (v.get("owner").isEmpty() ? "" : " (works for " + v.get("owner") + ")") + ", " + v.get("date")
+        + ". Contact: " + v.get("label") + ". Please follow up straight away.");
     if ("whatsapp".equals(type)) {
       if (!whatsappReady()) return "whatsapp not set up";
       String base = prop("whatsapp.emergency-base-url", prop("whatsapp.base-url", ""));
       pool.submit(() -> whatsapp(base, to, prop("whatsapp.emergency-template", "emergency_alert_new"),
-          prop("whatsapp.emergency-header", ""), prop("whatsapp.emergency-params", "agent,keyword"), v, "emergency"));
+          prop("whatsapp.emergency-header", ""), prop("whatsapp.emergency-params", "agent,alert"), v, "emergency"));
       return "whatsapp";
     }
     if ("email".equals(type)) {

@@ -118,7 +118,7 @@ Each agent picks its providers (agents.tts_provider / stt_provider). A provider 
 if a provider fails during a call, speech and transcription fall back to OpenAI so the call keeps going (WARN in the log).
 Messages are sent in the background after the call is saved. WhatsApp uses the Telemune gateway:
 `POST /sendWhatsApp {"to": "91…", "template": "ai_message_summary", "headerParam": "Conversation Summary", "params": [name, summary], "reply": "Thanks"}`
-(tested 2026-11-19). The header and the values each template takes are settings in `keys.env` (`whatsapp.summary-header`,
+(tested 2026-11-19; emergency alerts use the same call with `emergency_alert_new`, header "Emergency Alert", params [agent, alert]). The header and the values each template takes are settings in `keys.env` (`whatsapp.summary-header`,
 `whatsapp.summary-params`, `whatsapp.emergency-*`). The summary goes as one line of up to ~700 characters.
 
 ## Voices

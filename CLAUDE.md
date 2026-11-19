@@ -242,7 +242,8 @@ voice_ai_web/          ── frontend team ──
   `agents.notify` JSON {whatsapp:{on,to}, email:{on,to}, sms} (`notifyPayload()`); after POST `/api/calls` the backend sends
   them in the background (`NotifyService.callSummary`: Spring Mail via spring.mail.*, WhatsApp via the Telemune gateway
   `POST /sendWhatsApp {to: digits, template, headerParam, params[], reply}`; ai_message_summary = header "Conversation Summary",
-  params [recipient (owner, else agent), brief (summary on one line)]; whatsapp.* in keys.env). Both tested 2026-11-19. Flash SMS is shown but off (later). `/api/config.channels` says what's set up.
+  params [recipient (owner, else agent), brief (summary on one line)]; emergency_alert_new = header "Emergency Alert",
+  params [agent, alert (one line: keyword, agent, owner, time, contact)]; whatsapp.* in keys.env). All tested 2026-11-19. Flash SMS is shown but off (later). `/api/config.channels` says what's set up.
 - **Speaking speed:** `agents.speech_speed` (0.5–2.0; `agent.speechSpeed` in settings), set in Voice & AI; applied as
   `audio.playbackRate` (pitch kept) to every sentence and the preview.
 
