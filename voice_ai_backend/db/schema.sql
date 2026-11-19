@@ -281,3 +281,15 @@ CREATE TABLE IF NOT EXISTS login_attempts (
   created_at DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   INDEX idx_login_user_ip (username, ip, created_at)
 );
+
+-- Country dialling codes for mobile numbers (WhatsApp send, WhatsApp call summaries). Seeded by seed.sql; an admin can
+-- add rows or switch some off (active = 0). digits = usual length of the national number (for a quick check; 0 = any).
+CREATE TABLE IF NOT EXISTS country_codes (
+  iso2       CHAR(2)      NOT NULL PRIMARY KEY,   -- IN, US, AE …
+  name       VARCHAR(60)  NOT NULL,
+  dial_code  VARCHAR(6)   NOT NULL,               -- digits only, e.g. 91, 1, 971
+  flag       VARCHAR(8)   NOT NULL DEFAULT '',
+  digits     INT          NOT NULL DEFAULT 0,
+  sort_order INT          NOT NULL DEFAULT 100,
+  active     TINYINT(1)   NOT NULL DEFAULT 1
+);

@@ -117,6 +117,7 @@ All times are UTC. Ids are 8-character hex strings unless noted.
 | `messages` | Messages callers left | id, user_id, agent_id, caller_name, caller_number, urgency, message, status (new/done) |
 | `activity_logs` | Who did what (sign-in, agent create/update/delete, settings, calls, admin actions) | **request_id**, user_id, username, action, target, details (JSON), ip, created_at |
 | `api_logs` | Every API request | **request_id**, user_id, agent_id, method, path, status, duration_ms, ip, created_at |
+| `country_codes` | Dialling codes for mobile numbers (WhatsApp) | **iso2**, name, dial_code, flag, digits, sort_order, active |
 
 Activity `action` values: `auth.login`, `auth.login_failed`, `auth.logout`, `auth.signup`, `auth.password_change`,
 `agent.create`, `agent.update`, `agent.delete`, `agent.settings`, `calendar.add`, `calendar.delete`, `call.save`,

@@ -111,3 +111,31 @@ INSERT IGNORE INTO agent_templates (id, type_key, name, role, greeting, goal, st
   ('realestate-rental-support', 'realestate', 'Rental & tenant support', 'a friendly, knowledgeable real estate advisor[[ at {org}]] who helps callers find the right property', '', 'Help tenants and landlords with rent, maintenance requests, agreements and move-in or move-out.', '["Ask whether they are a tenant or an owner, and the property address or unit.", "Ask what they need help with (rent, repair, agreement, deposit, move-out).", "For a repair, ask what is wrong, how urgent it is and a good time to visit.", "Log the request and give a reference like RE-2045.", "Tell them when they will hear back."]', '["For a gas leak, fire or flooding, tell them to leave and call emergency services first.", "Don''t promise deposit refunds; say the team will review."]', 'Caller (tenant or owner), property, request type, details, urgency, reference number, follow-up.', 0, 30);
 INSERT IGNORE INTO agent_templates (id, type_key, name, role, greeting, goal, steps, rules, summary_focus, is_default, sort_order) VALUES
   ('realestate-seller-listing', 'realestate', 'Sell or list a property', 'a friendly, knowledgeable real estate advisor[[ at {org}]] who helps callers find the right property', '', 'Collect details from an owner who wants to sell or rent out a property and book a valuation visit.', '["Ask whether they want to sell or rent it out.", "Ask the location, type, size, age and condition of the property.", "Ask the price they expect and when they want to close.", "Offer a free valuation visit and book a time.", "Take their name and phone number."]', '["Don''t quote a final price on the call; say an agent will value it on the visit."]', 'Owner name and phone, sell or rent out, property details, expected price, timeline, valuation visit booked.', 0, 40);
+
+-- Country dialling codes (India first, then the most used). INSERT IGNORE keeps admin edits.
+INSERT IGNORE INTO country_codes (iso2, name, dial_code, flag, digits, sort_order) VALUES
+('IN', 'India', '91', '🇮🇳', 10, 1),
+('US', 'United States', '1', '🇺🇸', 10, 2),
+('AE', 'United Arab Emirates', '971', '🇦🇪', 9, 3),
+('GB', 'United Kingdom', '44', '🇬🇧', 10, 4),
+('SA', 'Saudi Arabia', '966', '🇸🇦', 9, 5),
+('QA', 'Qatar', '974', '🇶🇦', 8, 6),
+('KW', 'Kuwait', '965', '🇰🇼', 8, 7),
+('OM', 'Oman', '968', '🇴🇲', 8, 8),
+('BH', 'Bahrain', '973', '🇧🇭', 8, 9),
+('SG', 'Singapore', '65', '🇸🇬', 8, 10),
+('MY', 'Malaysia', '60', '🇲🇾', 0, 11),
+('CA', 'Canada', '1', '🇨🇦', 10, 12),
+('AU', 'Australia', '61', '🇦🇺', 9, 13),
+('NP', 'Nepal', '977', '🇳🇵', 10, 14),
+('BD', 'Bangladesh', '880', '🇧🇩', 10, 15),
+('LK', 'Sri Lanka', '94', '🇱🇰', 9, 16),
+('PK', 'Pakistan', '92', '🇵🇰', 10, 17),
+('ID', 'Indonesia', '62', '🇮🇩', 0, 18),
+('PH', 'Philippines', '63', '🇵🇭', 10, 19),
+('ZA', 'South Africa', '27', '🇿🇦', 9, 20),
+('NG', 'Nigeria', '234', '🇳🇬', 10, 21),
+('KE', 'Kenya', '254', '🇰🇪', 9, 22),
+('DE', 'Germany', '49', '🇩🇪', 0, 23),
+('FR', 'France', '33', '🇫🇷', 9, 24),
+('JM', 'Jamaica', '1876', '🇯🇲', 7, 25);

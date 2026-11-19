@@ -201,6 +201,8 @@ async function loadConfig() {
   state.voices = c.voices;
   state.providers = c.providers;
   state.channels = c.channels || {};
+  state.countryCodes = (c.countryCodes || []).map((x, i) => ({ ...x, sort: i }));
+  fillCc($("waCc")); fillCc($("nfWaCc"));
   const cfg = c.settings || {};
   Object.assign(SETTINGS, cfg);
   Object.assign(CONFIG, cfg.conversation || {});
@@ -1369,7 +1371,7 @@ async function speakGreeting(g) {
 // ---------- call controls ----------
 async function startCall() {
   if (!state.agentId) { openAgentDialog(); return; } // no agent yet: create one first
-  if (state.mode !== "call" || state.session) return;
+  if (state.mode !== "call" || state.session) await setTalkMode("call"); // ends a running chat first
   state.alerted = new Set(); // emergency contacts alerted during this call
   const greet = prepareGreeting(); // usually ready already; if not, it loads while the mic opens
   try {
@@ -1672,22 +1674,28 @@ $("avatar").addEventListener("click", () => {
 state.mode = "call";
 const voiceMode = () => state.mode === "voice";
 function renderTalk() {
-  const busy = state.inCall || !!state.session || !!state.holding;
-  document.querySelectorAll("#talkModes button").forEach((b) => {
-    b.setAttribute("aria-pressed", String(b.dataset.talk === state.mode));
-    b.disabled = busy && b.dataset.talk !== state.mode;
-  });
+  document.querySelectorAll("#talkModes button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.talk === state.mode)));
   document.querySelectorAll(".talk-pane").forEach((p) => (p.hidden = p.dataset.talk !== state.mode));
   $("chatEnd").hidden = !(state.session?.kind === "chat");
   $("voiceEnd").hidden = !(state.session?.kind === "voice");
   if (!state.inCall && !state.session && state.phase !== "thinking" && !state.playing)
     setPhase("idle", { call: "Ready to call", chat: "Ready to chat", voice: "Hold to talk", whatsapp: "Ready to send" }[state.mode]);
 }
-$("talkModes").addEventListener("click", (e) => {
-  const b = e.target.closest("button[data-talk]");
-  if (!b || b.disabled || b.dataset.talk === state.mode) return;
-  state.mode = b.dataset.talk;
+// Choosing another way to talk ends what's running first: a call is hung up, a chat is saved (End & save).
+const TALK_NAMES = { call: "Web call", chat: "Live chat", voice: "Voice chat", whatsapp: "WhatsApp" };
+async function setTalkMode(m) {
+  if (m === state.mode) return;
+  if (state.holding) await holdEnd();
+  if (state.inCall) await endCall(`switched to ${TALK_NAMES[m]}`);
+  if (state.session) await endSession();
+  stopSpeaking();
+  state.mode = m;
   renderTalk();
+}
+$("talkModes").addEventListener("click", async (e) => {
+  const b = e.target.closest("button[data-talk]");
+  if (!b || b.dataset.talk === state.mode) return;
+  await setTalkMode(b.dataset.talk);
   if (state.mode === "chat") setTimeout(() => $("chatIn").focus(), 30);
   if (state.mode === "whatsapp") setTimeout(() => ($("waTo").value ? $("waText") : $("waTo")).focus(), 30);
 });
@@ -1707,8 +1715,17 @@ async function startSession(kind) {
   renderTalk();
   // the agent greets first (the prepared greeting; spoken in Voice chat)
   let g = null;
-  try { g = await Promise.race([prepareGreeting()?.ready, new Promise((r) => setTimeout(() => r(null), 5000))]); } catch {}
-  if (!g?.text) return;
+  if (kind === "voice") { // spoken: use the prepared greeting (text + audio) when it's ready in time
+    try { g = await Promise.race([prepareGreeting()?.ready, new Promise((r) => setTimeout(() => r(null), 4000))]); } catch {}
+  }
+  if (!g?.text) { // text only (Live chat, or the audio isn't ready): just the greeting's words
+    try {
+      const r = await fetch("/api/greeting", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lang: lang(), assistantName: agentName() }) });
+      const d = await r.json();
+      if (r.ok && d.text) g = { text: d.text, language: d.language, emotion: d.emotion || "cheerful" };
+    } catch {}
+  }
+  if (!g?.text || !state.session) return;
   const turn = { t0: performance.now(), hidden: true, emergency: null, bubble: null, firstText: 0, firstVoice: null, total: 0 };
   state.turns.push(turn);
   state.history.push({ role: "user", content: "[call connected]" });
@@ -1801,10 +1818,36 @@ $("holdBtn").addEventListener("keyup", (e) => { if (e.key === " " || e.key === "
 renderTalk();
 
 // WhatsApp: send a typed message to a number (through the Telemune WhatsApp gateway)
+// ---------- mobile numbers: country code (from the country_codes table) + national number ----------
+const ccOf = (iso) => (state.countryCodes || []).find((c) => c.iso2 === iso);
+function fillCc(sel, iso = sel.value || "IN") {
+  if (!sel.options.length) for (const c of state.countryCodes || []) sel.add(new Option(`${c.flag} +${c.dial}`, c.iso2));
+  if ([...sel.options].some((o) => o.value === iso)) sel.value = iso;
+  sel.title = ccOf(sel.value)?.name || "";
+}
+// full number in digits (country code + national number without a leading 0), or an error text
+function fullNumber(sel, input) {
+  const c = ccOf(sel.value), local = input.value.replace(/[^\d]/g, "").replace(/^0+/, "");
+  if (!c) return { error: "Pick a country code." };
+  if (!local) return { error: "Enter the mobile number." };
+  if (c.digits && local.length !== c.digits) return { error: `${c.name} mobile numbers have ${c.digits} digits (you typed ${local.length}).` };
+  if (local.length < 6) return { error: "That number looks too short." };
+  return { number: c.dial + local };
+}
+// a stored full number → country + national number (longest matching code; India before the US/Canada "1")
+function splitNumber(digits) {
+  digits = String(digits || "").replace(/[^\d]/g, "");
+  const list = [...(state.countryCodes || [])].sort((a, b) => b.dial.length - a.dial.length || a.sort - b.sort);
+  const c = list.find((x) => digits.startsWith(x.dial) && (!x.digits || digits.length - x.dial.length === x.digits)) || list.find((x) => digits.startsWith(x.dial));
+  return c ? { iso: c.iso2, local: digits.slice(c.dial.length) } : { iso: "IN", local: digits };
+}
+["waCc", "nfWaCc"].forEach((id) => $(id).addEventListener("change", () => { $(id).title = ccOf($(id).value)?.name || ""; }));
+
 $("waSend").addEventListener("click", async () => {
-  const to = $("waTo").value.trim(), message = $("waText").value.trim();
-  const digits = to.replace(/[^\d]/g, "");
-  if (digits.length < 10) { $("waHint").textContent = "⚠ Enter the number with its country code, e.g. 91 98765 43210."; $("waTo").focus(); return; }
+  const message = $("waText").value.trim();
+  const num = fullNumber($("waCc"), $("waTo"));
+  if (num.error) { $("waHint").textContent = "⚠ " + num.error; $("waTo").focus(); return; }
+  const to = num.number, digits = to;
   if (!message) { $("waHint").textContent = "⚠ Write a message first."; $("waText").focus(); return; }
   $("waSend").disabled = true;
   $("waSend").querySelector("span").textContent = "Sending…";
@@ -2284,11 +2327,12 @@ const formSnapshot = () => JSON.stringify(formPayload());
 
 // ---------- call summaries: send after every call by WhatsApp / email (Flash SMS later) ----------
 function notifyPayload() {
-  return { whatsapp: { on: $("nfWa").checked, to: $("nfWaTo").value.trim() }, email: { on: $("nfMail").checked, to: $("nfMailTo").value.trim() },
+  const wa = $("nfWaTo").value.trim() ? fullNumber($("nfWaCc"), $("nfWaTo")) : { number: "" };
+  return { whatsapp: { on: $("nfWa").checked, to: wa.number || "" }, email: { on: $("nfMail").checked, to: $("nfMailTo").value.trim() },
     sms: { on: false, to: "" } };
 }
 function renderNotify() {
-  for (const [sw, to, st, ch] of [["nfWa", "nfWaTo", "nfWaState", "whatsapp"], ["nfMail", "nfMailTo", "nfMailState", "email"]]) {
+  for (const [sw, to, st, ch] of [["nfWa", "nfWaRow", "nfWaState", "whatsapp"], ["nfMail", "nfMailTo", "nfMailState", "email"]]) {
     $(to).hidden = !$(sw).checked;
     const ready = state.channels?.[ch] !== false;
     $(st).textContent = ready ? "" : "not set up on the server yet";
@@ -2298,7 +2342,8 @@ function renderNotify() {
 }
 function fillNotify(n) {
   n ||= {};
-  $("nfWa").checked = !!n.whatsapp?.on; $("nfWaTo").value = n.whatsapp?.to || "";
+  const wa = splitNumber(n.whatsapp?.to);
+  $("nfWa").checked = !!n.whatsapp?.on; fillCc($("nfWaCc"), wa.iso); $("nfWaTo").value = wa.local;
   $("nfMail").checked = !!n.email?.on; $("nfMailTo").value = n.email?.to || "";
   renderNotify();
 }
@@ -2308,6 +2353,7 @@ function fillNotify(n) {
   if ($(id).checked && !to.value) to.focus();
 }));
 ["nfWaTo", "nfMailTo"].forEach((id) => $(id).addEventListener("input", markDirty));
+$("nfWaCc").addEventListener("change", markDirty);
 
 // Every change in Agent setup is saved to config.json automatically (no Save button).
 // Selects and switches save almost at once; typing saves after a short pause.

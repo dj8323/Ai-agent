@@ -54,7 +54,12 @@ public class ConfigController {
     Map<String, Object> pub = config.publicConfig(cfg, agents.card(ctx.agent));
     return J.map("stale", false, "me", ctx.user, "model", J.get(cfg, "models.chat"), "ttsModel", J.get(cfg, "models.tts"),
         "sttModel", J.get(pub, "models.stt"), "languages", Prompts.LANGUAGE_NAMES, "voices", Prompts.VOICES,
-        "emotions", Prompts.EMOTIONS.keySet(), "providers", speech.providers(), "channels", notify.channels(), "settings", pub);
+        "emotions", Prompts.EMOTIONS.keySet(), "providers", speech.providers(), "channels", notify.channels(), "countryCodes", countryCodes(), "settings", pub);
+  }
+
+  /** Country dialling codes for mobile numbers (table country_codes, active rows, India first). */
+  private List<Map<String, Object>> countryCodes() {
+    return config.countryCodes();
   }
 
   /** Saves the Agent setup card into the active agent only (other agents and other users are untouched). */

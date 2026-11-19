@@ -33,7 +33,8 @@ Split on 2026-11-19 into two self-contained apps (own settings, run script, logs
 - Tables: `roles` (1 admin, 2 user) · `users` · `sessions` · `login_attempts` (every sign-in, drives the lockout) ·
   `app_config` (shared settings, one JSON per section) · `agent_types` + `agent_templates` (personas, greetings, scripts) ·
   `agents` + `emergency_rules` (each agent's own setup) · `playbooks` · `calls` + `call_summaries` · `calendar_events` ·
-  `messages` (messages callers left) · `activity_logs` (who did what) · `api_logs` (every API request).
+  `messages` (messages callers left) · `activity_logs` (who did what) · `api_logs` (every API request) ·
+  `country_codes` (dialling codes for mobile numbers: iso2, name, dial_code, flag, digits).
 - Only call recordings stay on disk: `voice_ai_backend/data/users/<userId>/recordings/<file>` (file name in `calls.recording_file`).
 - Backups of the pre-MySQL JSON data: `backups/pre-mysql-2026-11-17/`, `backups/pre-login-2026-11-17/`.
 
@@ -219,12 +220,15 @@ voice_ai_web/          ── frontend team ──
 - **Silence re-ask:** `conversation.silenceRetrySeconds` (8) / `silenceRetries` (2) in app_config (Admin → App settings).
   `vadTick()` → `silencePrompt()` sends a hidden `[no response]` turn; after the re-asks `[no response, end call]` and
   `state.silenceEnding` hangs up after that goodbye even without `<hangup:yes>`. Markers are filtered out of summaries.
-- **Talk by** (bottom of the call card, `#talkModes`, `state.mode`, `renderTalk()`): 📞 Web call (default, the live call) ·
+- **Talk by** (bottom of the Conversation card in `#talkDock`, `#talkModes`, `state.mode`, `renderTalk()`; the call card is as before): 📞 Web call (default, the live call) ·
   💬 Live chat (`#chatForm` → `startSession("chat")` + `sendUserText`, text only) · 🎤 Voice chat (`#holdBtn` hold-to-record →
   `transcribe()` → `sendUserText`; `voiceMode()` lets `enqueueSpeech/speakNext` speak outside a call; drawViz fakes the
   lip-sync level without the call's analyser) · WhatsApp (`#waSend` → POST `/api/whatsapp/send {to, message}` →
   `NotifyService.sendText` → gateway `/sendTextWhatsApp {to, message}`; answers {ok, id} / {ok:false, error}). Chat sessions
-  greet first, lock the other options, and End & save → `summarizeCall()` (endedBy "live chat" / "voice chat").
+  greet first (text from /api/greeting; voice chat speaks it) and End & save → `summarizeCall()` (endedBy "live chat" / "voice chat").
+  `setTalkMode(m)` ends what's running first (call → `endCall`, chat → `endSession`); Start call switches back to Web call.
+  Mobile numbers: `country_codes` table (seed.sql, India first; /api/config.countryCodes) → `fillCc()`, `fullNumber()`, `splitNumber()`
+  for the WhatsApp send box and the Tools → Call summaries WhatsApp number.
   The old "type a message to test" box is gone (Live chat replaces it).
 - **Call card agent** = a cartoon person with a headset (`voice_ai_web/public/agent-face.js`, SVG in `#avatar`), **female**
   (long hair, lashes, blouse) for every voice not labelled male, **male** (short spiky hair, wider jaw, shirt + tie) when the voice's label in

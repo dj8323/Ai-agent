@@ -140,6 +140,14 @@ public class AppConfigService {
     return cfg;
   }
 
+  /** Country dialling codes (country_codes table): [{iso2, name, dial, flag, digits}], India first. */
+  public List<Map<String, Object>> countryCodes() {
+    List<Map<String, Object>> out = new java.util.ArrayList<>();
+    for (Map<String, Object> r : db.query("SELECT iso2, name, dial_code, flag, digits FROM country_codes WHERE active = 1 ORDER BY sort_order, name"))
+      out.add(J.map("iso2", r.get("iso2"), "name", r.get("name"), "dial", r.get("dial_code"), "flag", r.get("flag"), "digits", J.num(r.get("digits"))));
+    return out;
+  }
+
   /** The part of the settings the browser may see. */
   public Map<String, Object> publicConfig(Map<String, Object> cfg, Map<String, Object> agentCard) {
     Map<String, Object> conv = section(cfg, "conversation");
