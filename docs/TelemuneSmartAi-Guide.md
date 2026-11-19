@@ -321,7 +321,17 @@ The agent has 20 emotions: neutral, happy, excited, cheerful, calm, empathetic, 
 
 - **Silence**: if you say nothing for 8 seconds, the agent checks in ("Are you still there?"). After 2 check-ins with no answer it says a short goodbye and ends the call ("no answer from the caller"). Both numbers are set in Admin → App settings.
 
-You can also type a message in the box under the chat instead of speaking.
+### Four ways to talk to the agent
+
+At the bottom of the call card, **Talk by** offers four options (Web call is selected by default; the others are locked
+while a call or chat is going on):
+
+| Option | How it works |
+| --- | --- |
+| 📞 **Web call** | The live voice call described above |
+| 💬 **Live chat** | Type a message; the agent greets you and answers in text straight away (no microphone needed). **End & save chat** saves it to Call summaries with an AI summary, and sends the summary by WhatsApp/email if switched on |
+| 🎤 **Voice chat** | **Hold** the mic button, speak, **let go**: the agent hears you (with its speech-to-text provider) and answers out loud and in text. **End & save voice chat** saves it like a call |
+| WhatsApp | Enter a number with country code and a message, then **Send on WhatsApp**: it goes from your WhatsApp business number through the Telemune gateway. WhatsApp only delivers a typed message to someone who messaged that number in the last 24 hours |
 
 ## After the call: summaries, recordings and history
 

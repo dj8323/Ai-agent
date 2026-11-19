@@ -170,6 +170,7 @@ voice_ai_web/          ── frontend team ──
 | POST | `/api/chat` | SSE: `delta` {text}, `usage`, `error`, `done` |
 | POST | `/api/tts`, `/api/transcribe`, `/api/summary` | mp3 / {text, provider} / {summary, usage} (tts/transcribe take optional provider, model) |
 | GET | `/api/voices?provider&lang` | the TTS provider's voices [{id, label}] (labels end in (male)/(female)) |
+| POST | `/api/whatsapp/send` | {to, message}: typed WhatsApp message (free text, 24-hour window) → {ok, id} or {ok:false, error} |
 | POST | `/api/emergency/alert` | {label, keyword}: alert that WhatsApp/email emergency contact |
 | GET | `/api/models` | OpenAI models grouped {chat, stt, tts} (cached 10 min) |
 | GET/POST/DELETE | `/api/playbooks[/:id]` | {types, saved} / add / delete (the user's own playbooks) |
@@ -218,6 +219,13 @@ voice_ai_web/          ── frontend team ──
 - **Silence re-ask:** `conversation.silenceRetrySeconds` (8) / `silenceRetries` (2) in app_config (Admin → App settings).
   `vadTick()` → `silencePrompt()` sends a hidden `[no response]` turn; after the re-asks `[no response, end call]` and
   `state.silenceEnding` hangs up after that goodbye even without `<hangup:yes>`. Markers are filtered out of summaries.
+- **Talk by** (bottom of the call card, `#talkModes`, `state.mode`, `renderTalk()`): 📞 Web call (default, the live call) ·
+  💬 Live chat (`#chatForm` → `startSession("chat")` + `sendUserText`, text only) · 🎤 Voice chat (`#holdBtn` hold-to-record →
+  `transcribe()` → `sendUserText`; `voiceMode()` lets `enqueueSpeech/speakNext` speak outside a call; drawViz fakes the
+  lip-sync level without the call's analyser) · WhatsApp (`#waSend` → POST `/api/whatsapp/send {to, message}` →
+  `NotifyService.sendText` → gateway `/sendTextWhatsApp {to, message}`; answers {ok, id} / {ok:false, error}). Chat sessions
+  greet first, lock the other options, and End & save → `summarizeCall()` (endedBy "live chat" / "voice chat").
+  The old "type a message to test" box is gone (Live chat replaces it).
 - **Call card agent** = a cartoon person with a headset (`voice_ai_web/public/agent-face.js`, SVG in `#avatar`), **female**
   (long hair, lashes, blouse) for every voice not labelled male, **male** (short spiky hair, wider jaw, shirt + tie) when the voice's label in
   `Prompts.VOICES` says "(male)" (`characterFor(label)`; no voice list in the web app, so new voices just need the label).

@@ -94,6 +94,7 @@ All routes are under `/api`, JSON in and out (errors are `{"error": "…"}`). Si
 | POST / GET | `/api/tts`, `/api/tts/stream` | speech (mp3) / streamed speech |
 | POST | `/api/transcribe`, `/api/summary` | speech-to-text {text, provider} (optional provider) / call summary {summary, usage} |
 | GET | `/api/voices?provider&lang` | voices of a TTS provider: openai, aws (Polly), elevenlabs, cartesia |
+| POST | `/api/whatsapp/send` | {to, message}: send a typed WhatsApp message via the gateway's `/sendTextWhatsApp` |
 | POST | `/api/emergency/alert` | {label, keyword}: WhatsApp / email alert to that emergency contact |
 | GET | `/api/models` | OpenAI models {chat, stt, tts} |
 | GET/POST/DELETE | `/api/playbooks[/:id]` | the user's own playbooks |

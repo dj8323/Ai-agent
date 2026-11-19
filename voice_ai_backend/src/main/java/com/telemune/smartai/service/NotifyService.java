@@ -183,6 +183,44 @@ public class NotifyService {
     }
   }
 
+  /**
+   * A typed WhatsApp message from the call page (the 🟢 WhatsApp option): POST {base}{send-path} {"to": "91…", "message": text}.
+   * Sent straight away (not in the background) so the page can show the result. WhatsApp only delivers free text to
+   * someone who messaged the business number in the last 24 hours; outside that window it is dropped later, without
+   * an error here. Returns {ok, id} or {ok:false, error}.
+   */
+  public Map<String, Object> sendText(String to, String message) {
+    if (!whatsappReady()) return J.map("ok", false, "error", "WhatsApp is not set up on the server (whatsapp.* in keys.env).");
+    String number = to.replaceAll("[^\\d]", "");
+    if (number.length() < 10 || number.length() > 15) return J.map("ok", false, "error", "Enter the number with its country code, e.g. 91 98765 43210.");
+    String text = message == null ? "" : message.trim();
+    if (text.isEmpty()) return J.map("ok", false, "error", "Write a message first.");
+    if (text.length() > 4000) text = text.substring(0, 4000);
+    String url = prop("whatsapp.base-url", "").replaceAll("/+$", "") + prop("whatsapp.send-path", "/sendTextWhatsApp");
+    try {
+      HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20)).header("Content-Type", "application/json")
+          .POST(HttpRequest.BodyPublishers.ofString(J.json(J.map("to", number, "message", text)))).build();
+      HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
+      Object parsed = J.parse(res.body());
+      Map<String, Object> body = parsed instanceof Map<?, ?> ? J.obj(parsed) : J.map();
+      Map<String, Object> result = body.get("result") instanceof Map<?, ?> ? J.obj(body.get("result")) : body;
+      Object err = result.get("error") != null ? result.get("error") : body.get("error");
+      String reply = res.body().replace(number, mask(number));
+      if (res.statusCode() / 100 != 2 || err != null) {
+        String why = err instanceof Map<?, ?> ? J.str(J.obj(err).get("error_data") instanceof Map<?, ?> ? J.get(J.obj(err), "error_data.details") : J.obj(err).get("message"))
+            : err != null ? J.str(err) : "HTTP " + res.statusCode();
+        log.warn("WhatsApp text to {} failed: HTTP {} {}", mask(number), res.statusCode(), J.str(reply, 400));
+        return J.map("ok", false, "error", why.isEmpty() ? "WhatsApp refused the message." : why);
+      }
+      Object id = J.list(result.get("messages")).stream().findFirst().map(m -> J.obj(m).get("id")).orElse(null);
+      log.info("WhatsApp text sent to {} ({} chars): {}", mask(number), text.length(), J.str(reply, 200));
+      return J.map("ok", true, "id", id, "to", "…" + number.substring(number.length() - 4));
+    } catch (Exception e) {
+      log.warn("WhatsApp text to {} failed: {}", mask(number), e.toString());
+      return J.map("ok", false, "error", "The WhatsApp gateway couldn't be reached.");
+    }
+  }
+
   private void email(String to, String subject, String body, String what) {
     JavaMailSender sender = mail.getIfAvailable();
     if (sender == null) { log.warn("Email {} not sent: spring.mail.* is not set up", what); return; }

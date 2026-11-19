@@ -97,6 +97,15 @@ public class DataController {
     return ResponseEntity.status(201).body(call);
   }
 
+  /** 🟢 WhatsApp on the call page: send a typed message to a number. Body {to, message}. */
+  @PostMapping("/api/whatsapp/send")
+  ResponseEntity<Map<String, Object>> whatsappSend(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    Map<String, Object> r = notify.sendText(J.str(body.get("to"), 30), J.str(body.get("message"), 4000));
+    logs.activity(ctx, "whatsapp.send", ctx.agent == null ? "" : J.str(ctx.agent.get("name")),
+        J.map("to", J.str(r.get("to")), "ok", r.get("ok"), "chars", J.str(body.get("message")).length()));
+    return ResponseEntity.ok(r); // {ok:false, error} when WhatsApp refused it: a normal answer, shown on the page
+  }
+
   /** The caller said an emergency word: alert that contact by WhatsApp or email (phone contacts are only shown). Body {label, keyword}. */
   @PostMapping("/api/emergency/alert")
   ResponseEntity<Map<String, Object>> emergencyAlert(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {

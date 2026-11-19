@@ -615,7 +615,7 @@ function setPhase(phase, text) {
   const labels = { idle: "Ready to call", listening: "Listening…", thinking: "Thinking…", speaking: "Speaking…" };
   $("status").textContent = text || (state.muted && phase === "listening" ? "Muted" : labels[phase]);
   if (phase !== "speaking") setEmotion(null);
-  showTyping(phase === "thinking" && state.inCall);
+  showTyping(phase === "thinking" && (state.inCall || !!state.session));
 }
 
 // Typing dots in the conversation while the agent is thinking (styles in motion.css).
@@ -725,10 +725,11 @@ function enqueueSpeech(text, emotion = "neutral", turn = null) {
 }
 
 async function speakNext() {
-  if (!state.inCall) { state.playing = false; return; }
+  if (!state.inCall && !voiceMode()) { state.playing = false; return; }
   const item = state.speakQueue.shift();
   if (!item) {
     state.playing = false;
+    if (!state.inCall) { if (state.streamDone) setPhase("idle", "Hold to talk"); return; } // voice chat: wait for the next hold
     if (state.streamDone) afterAgentTurn();
     return;
   }
@@ -1243,7 +1244,7 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
     if (tags.length) emotion = tags.at(-1)[1].toLowerCase();
     const clean = stripTags(chunk).trim();
     if (!clean) return false;
-    if (state.inCall) enqueueSpeech(clean, emotion, turn);
+    if (state.inCall || voiceMode()) enqueueSpeech(clean, emotion, turn);
     return true;
   };
 
@@ -1315,7 +1316,7 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
       state.abort = null;
       state.streamDone = true;
       if (state.inCall && !state.playing && !state.speakQueue.length && state.phase !== "listening") afterAgentTurn();
-      if (!state.inCall) setPhase("idle");
+      if (!state.inCall && !state.playing && !state.speakQueue.length) setPhase("idle", state.mode === "chat" ? "Ready to chat" : undefined);
     }
     updateInsights();
   }
@@ -1368,6 +1369,7 @@ async function speakGreeting(g) {
 // ---------- call controls ----------
 async function startCall() {
   if (!state.agentId) { openAgentDialog(); return; } // no agent yet: create one first
+  if (state.mode !== "call" || state.session) return;
   state.alerted = new Set(); // emergency contacts alerted during this call
   const greet = prepareGreeting(); // usually ready already; if not, it loads while the mic opens
   try {
@@ -1384,7 +1386,7 @@ async function startCall() {
   state.silenceCount = 0;
   state.silenceEnding = false;
   state.srFallback = 0;
-  state.inCall = true; renderAgents();
+  state.inCall = true; renderAgents(); renderTalk();
   state.muted = false;
   state.history = [];
   state.turns = [];
@@ -1408,7 +1410,7 @@ async function startCall() {
 
 async function endCall(endedBy = "ended by you") {
   if (!state.inCall) return;
-  state.inCall = false; renderAgents();
+  state.inCall = false; renderAgents(); renderTalk();
   state.pendingHangup = false;
   if (state.abort) state.abort.abort();
   stopSpeaking();
@@ -1633,6 +1635,7 @@ function drawViz(ts) {
     for (let i = 0; i < 64; i++) level += freq[i];
     level = level / (64 * 255);
   }
+  if (!state.analyser && state.phase === "speaking") level = Math.max(0, Math.sin(ts / 85) * .22 + Math.sin(ts / 37) * .13 + Math.sin(ts / 211) * .1);
   smoothLevel += (level - smoothLevel) * 0.25;
   const lv = Math.min(1, smoothLevel * 2.2);
   $("avatar").style.setProperty("--level", lv.toFixed(3));
@@ -1662,12 +1665,171 @@ $("avatar").addEventListener("click", () => {
   startListening();
 });
 
-$("typer").addEventListener("submit", (e) => {
+// ---------- how to talk: 📞 Web call (default) · 💬 Live chat · 🎤 Voice chat · WhatsApp ----------
+// Live chat and Voice chat are "sessions": they start with the agent's greeting, use the same agent brain (/api/chat),
+// and End & save writes them to Call summaries like a call (summary, WhatsApp/email delivery). Voice chat records while
+// the button is held, transcribes with the agent's speech-to-text provider and the agent answers out loud.
+state.mode = "call";
+const voiceMode = () => state.mode === "voice";
+function renderTalk() {
+  const busy = state.inCall || !!state.session || !!state.holding;
+  document.querySelectorAll("#talkModes button").forEach((b) => {
+    b.setAttribute("aria-pressed", String(b.dataset.talk === state.mode));
+    b.disabled = busy && b.dataset.talk !== state.mode;
+  });
+  document.querySelectorAll(".talk-pane").forEach((p) => (p.hidden = p.dataset.talk !== state.mode));
+  $("chatEnd").hidden = !(state.session?.kind === "chat");
+  $("voiceEnd").hidden = !(state.session?.kind === "voice");
+  if (!state.inCall && !state.session && state.phase !== "thinking" && !state.playing)
+    setPhase("idle", { call: "Ready to call", chat: "Ready to chat", voice: "Hold to talk", whatsapp: "Ready to send" }[state.mode]);
+}
+$("talkModes").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-talk]");
+  if (!b || b.disabled || b.dataset.talk === state.mode) return;
+  state.mode = b.dataset.talk;
+  renderTalk();
+  if (state.mode === "chat") setTimeout(() => $("chatIn").focus(), 30);
+  if (state.mode === "whatsapp") setTimeout(() => ($("waTo").value ? $("waText") : $("waTo")).focus(), 30);
+});
+
+const fmtDur = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`; };
+async function startSession(kind) {
+  if (state.session) return;
+  if (!state.agentId) { openAgentDialog(); throw new Error("no agent"); }
+  clearChat();
+  state.session = { kind, startedAt: Date.now() };
+  state.history = []; state.turns = [];
+  state.callTokens = { input: 0, output: 0, total: 0 };
+  state.callStartedAt = new Date();
+  updateInsights();
+  const pb = activePlaybook();
+  addDivider(`${kind === "chat" ? "💬 Live chat" : "🎤 Voice chat"} started · ${pb ? pb.name : "Default agent"} · ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
+  renderTalk();
+  // the agent greets first (the prepared greeting; spoken in Voice chat)
+  let g = null;
+  try { g = await Promise.race([prepareGreeting()?.ready, new Promise((r) => setTimeout(() => r(null), 5000))]); } catch {}
+  if (!g?.text) return;
+  const turn = { t0: performance.now(), hidden: true, emergency: null, bubble: null, firstText: 0, firstVoice: null, total: 0 };
+  state.turns.push(turn);
+  state.history.push({ role: "user", content: "[call connected]" });
+  state.history.push({ role: "assistant", content: `<intent:call start><mood:neutral><lang:${g.language}>[${g.emotion}] ${g.text}` });
+  turn.bubble = addMsg("assistant", g.text);
+  if (kind === "voice") { state.streamDone = true; enqueueSpeech(g.text, g.emotion, turn); }
+  state.greet = null;
+}
+async function endSession() {
+  const ses = state.session;
+  if (!ses) return;
+  if (state.abort) state.abort.abort();
+  stopSpeaking();
+  state.session = null;
+  const duration = fmtDur(Date.now() - ses.startedAt);
+  addDivider(`${ses.kind === "chat" ? "Live chat" : "Voice chat"} ended · ${duration}`);
+  renderTalk();
+  summarizeCall(duration, null, ses.kind === "chat" ? "live chat" : "voice chat");
+  setTimeout(() => prepareGreeting(), 500);
+}
+$("chatEnd").addEventListener("click", endSession);
+$("voiceEnd").addEventListener("click", endSession);
+
+// 💬 Live chat
+$("chatForm").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const text = $("typed").value.trim();
+  const text = $("chatIn").value.trim();
   if (!text) return;
-  $("typed").value = "";
+  $("chatIn").value = "";
+  try { await startSession("chat"); } catch { return; }
   sendUserText(text);
+});
+
+// 🎤 Voice chat: hold to record, let go to send
+async function voiceStream() {
+  if (state.vcStream?.active) return state.vcStream;
+  state.vcStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
+  return state.vcStream;
+}
+async function holdStart(e) {
+  e.preventDefault();
+  if (state.holding || state.inCall) return;
+  stopSpeaking(); if (state.abort) state.abort.abort();
+  let stream;
+  try { stream = await voiceStream(); } catch {
+    $("holdHint").textContent = "⚠ Allow the microphone to use Voice chat (or use Live chat).";
+    return;
+  }
+  const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find((t) => MediaRecorder.isTypeSupported(t)) || "";
+  const rec = new MediaRecorder(stream, type ? { mimeType: type } : undefined);
+  const chunks = [];
+  rec.ondataavailable = (ev) => ev.data.size && chunks.push(ev.data);
+  state.holding = { rec, chunks, at: Date.now(), done: new Promise((r) => (rec.onstop = r)) };
+  rec.start();
+  $("holdBtn").classList.add("rec");
+  setPhase("listening", "Listening… let go to send");
+  renderTalk();
+}
+async function holdEnd() {
+  const h = state.holding;
+  if (!h) return;
+  state.holding = null;
+  $("holdBtn").classList.remove("rec");
+  if (h.rec.state !== "inactive") h.rec.stop();
+  await h.done;
+  renderTalk();
+  if (Date.now() - h.at < 400) { setPhase("idle", "Hold the button while you talk"); return; }
+  const blob = new Blob(h.chunks, { type: h.rec.mimeType || "audio/webm" });
+  setPhase("thinking", "Hearing you…");
+  $("holdBtn").disabled = true;
+  try {
+    await startSession("voice");
+    const t0 = performance.now();
+    const text = (await transcribe(blob)).trim();
+    if (!text || !/[\p{L}\p{N}]/u.test(text)) { setPhase("idle", "Didn't catch that, try again"); return; }
+    const bubble = addMsg("user", text);
+    addChip(bubble, "🎤 voice", "voice");
+    sendUserText(text, { bubble, t0 });
+  } catch (err) {
+    if (String(err?.message) !== "no agent") addMsg("error", "Voice chat: " + (err?.message || err));
+    setPhase("idle");
+  } finally {
+    $("holdBtn").disabled = false;
+  }
+}
+$("holdBtn").addEventListener("pointerdown", holdStart);
+["pointerup", "pointerleave", "pointercancel"].forEach((ev) => $("holdBtn").addEventListener(ev, holdEnd));
+$("holdBtn").addEventListener("keydown", (e) => { if ((e.key === " " || e.key === "Enter") && !e.repeat) holdStart(e); });
+$("holdBtn").addEventListener("keyup", (e) => { if (e.key === " " || e.key === "Enter") holdEnd(); });
+renderTalk();
+
+// WhatsApp: send a typed message to a number (through the Telemune WhatsApp gateway)
+$("waSend").addEventListener("click", async () => {
+  const to = $("waTo").value.trim(), message = $("waText").value.trim();
+  const digits = to.replace(/[^\d]/g, "");
+  if (digits.length < 10) { $("waHint").textContent = "⚠ Enter the number with its country code, e.g. 91 98765 43210."; $("waTo").focus(); return; }
+  if (!message) { $("waHint").textContent = "⚠ Write a message first."; $("waText").focus(); return; }
+  $("waSend").disabled = true;
+  $("waSend").querySelector("span").textContent = "Sending…";
+  $("empty")?.remove();
+  const el = document.createElement("div");
+  el.className = "msg wa";
+  el.innerHTML = `<div class="wa-head">${$("waSend").querySelector("svg").outerHTML}<span></span></div><div class="wa-text"></div><div class="chips"></div><div class="meta"></div>`;
+  el.querySelector(".wa-head span").textContent = `WhatsApp to …${digits.slice(-4)}`;
+  el.querySelector(".wa-text").textContent = message;
+  el.querySelector(".meta").textContent = `${agentName()} · ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  $("msgs").appendChild(el); scrollDown();
+  try {
+    const r = await fetch("/api/whatsapp/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ to, message }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.ok) throw new Error(d.error || "WhatsApp refused the message."); // {ok:false} = refused (HTTP 200)
+    addChip(el, "✓ sent", "sent");
+    $("waHint").textContent = `✓ Sent to …${digits.slice(-4)}. If they haven't messaged your business number in the last 24 hours, WhatsApp won't deliver a typed message.`;
+    $("waText").value = "";
+  } catch (err) {
+    addChip(el, "⚠ not sent", "fail");
+    $("waHint").textContent = "⚠ " + err.message;
+  } finally {
+    $("waSend").disabled = false;
+    $("waSend").querySelector("span").textContent = "Send on WhatsApp";
+  }
 });
 
 function clearChat() {
@@ -2747,6 +2909,7 @@ route();
 
 async function switchAgent(id) {
   if (id === state.agentId || state.inCall) return;
+  if (state.session) await endSession(); // a chat with the previous agent is saved first
   // Save any unsaved change to the agent we're leaving first.
   if (state.savedSnapshot && formSnapshot() !== state.savedSnapshot) { clearTimeout(state.saveTimer); await autoSave(); }
   state.agentId = id;
