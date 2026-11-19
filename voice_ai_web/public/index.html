@@ -276,6 +276,17 @@
   .na-spacer { flex: 1; }
   .na-type-desc { font-size: 12.5px; color: var(--muted); margin-top: -4px; line-height: 1.4; }
   .na-type-desc:empty { display: none; }
+  .tools-panel { display: grid; gap: 12px; }
+  .tool-sec { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: color-mix(in srgb, var(--panel-2) 50%, transparent); scroll-margin-top: 12px; }
+  .tool-sec.flash { animation: tsa-pop .5s ease-out; border-color: var(--c1); }
+  .tool-head { margin: 0 0 6px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+  .tool-head .btn { margin-left: auto; }
+  .nf-to { width: 100%; margin: 2px 0 6px; }
+  .prov-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 640px) { .prov-grid { grid-template-columns: 1fr; } }
+  .prov-box { border: 1px solid var(--border); border-radius: 12px; padding: 10px; background: color-mix(in srgb, var(--panel-2) 60%, transparent); }
+  .prov-box .block-title { margin: 0 0 6px; }
+  .prov-box .block-title .sub { font-weight: 500; text-transform: none; letter-spacing: 0; }
   .pb-pick-row { display: flex; gap: 6px; align-items: center; }
   .pb-pick-row select { flex: 1; min-width: 0; }
   .pb-pick-row .icon-mini { align-self: stretch; width: 40px; font-size: 14px; }
@@ -786,9 +797,7 @@
           <button type="button" role="tab" data-tab="profile">👤 Profile <span class="sec-note" id="personaNote"></span></button>
           <button type="button" role="tab" data-tab="voice">🧠 Voice &amp; AI</button>
           <button type="button" role="tab" data-tab="availability">🕒 Availability <span class="sec-note" id="availNote"></span></button>
-          <button type="button" role="tab" data-tab="calendar">📅 Calendar <span class="sec-note" id="calNote"></span></button>
-          <button type="button" role="tab" data-tab="emergency">🚨 Emergency <span class="sec-note" id="emgNote"></span></button>
-          <button type="button" role="tab" data-tab="playbooks">📘 Playbooks</button>
+          <button type="button" role="tab" data-tab="tools">🧰 Tools <span class="sec-note" id="toolsNote"></span></button>
         </div>
 
         <div class="tab-panel" data-panel="profile" role="tabpanel">
@@ -812,23 +821,38 @@
         <div class="tab-panel" data-panel="voice" role="tabpanel" hidden>
           <p class="panel-lead">How the agent sounds, and which AI models it uses.</p>
           <div class="block-title">🗣️ Voice &amp; language</div>
-          <div class="vl-row">
-            <label class="mini"><span>Language</span><select id="lang"></select></label>
+          <div class="prov-grid">
+            <div class="prov-box">
+              <div class="block-title">🎙 Speech-to-text <span class="sub">hears the caller</span></div>
+              <div class="vl-row">
+                <label class="mini"><span>Provider</span><select id="sttProv"></select></label>
+                <label class="mini" title="Speech-to-text model"><span>Model</span><select id="sttSel"></select></label>
+              </div>
+            </div>
+            <div class="prov-box">
+              <div class="block-title">🔊 Text-to-speech <span class="sub">the agent's voice</span></div>
+              <div class="vl-row">
+                <label class="mini"><span>Provider</span><select id="ttsProv"></select></label>
+                <label class="mini" title="Text-to-speech model"><span>Model</span><select id="ttsSel"></select></label>
+              </div>
+            </div>
+          </div>
+          <div class="vl-row" style="margin-top:12px">
+            <label class="mini"><span>Language <em class="sub" id="langHint"></em></span><select id="lang"></select></label>
             <div class="mini"><label for="voice"><span>Voice</span></label>
               <div class="voice-row"><select id="voice"></select><button class="icon-mini" id="previewBtn" type="button" title="Preview this voice" aria-label="Preview voice">▶</button></div>
             </div>
           </div>
+          <div class="hint-line" id="provHint"></div>
           <div class="block-title" style="margin-top:16px">⏩ Speaking speed <span class="sec-note on" id="speedVal">1.00×</span></div>
         <div class="speed-picks" id="speedPicks" role="group" aria-label="Speaking speed">
           <button type="button" data-speed="0.8">🐢 Slow</button><button type="button" data-speed="1">Normal</button><button type="button" data-speed="1.2">Fast</button><button type="button" data-speed="1.4">🚀 Faster</button>
         </div>
         <input type="range" id="speedRange" min="0.5" max="2" step="0.05" value="1" aria-label="Speaking speed (fine tune)" />
         <div class="hint-line">Every sentence the agent says, and ▶ preview, play at this speed.</div>
-        <div class="block-title" style="margin-top:16px">🧠 AI models</div>
+        <div class="block-title" style="margin-top:16px">🧠 AI model</div>
           <div class="model-row">
-            <label class="mini" title="Large language model: thinks and writes replies"><span>LLM</span><select id="llmSel"></select></label>
-            <label class="mini" title="Speech-to-text: hears the caller"><span>STT</span><select id="sttSel"></select></label>
-            <label class="mini" title="Text-to-speech: the agent's voice"><span>TTS</span><select id="ttsSel"></select></label>
+            <label class="mini" title="Large language model: thinks and writes replies"><span>LLM (OpenAI)</span><select id="llmSel"></select></label>
           </div>
           <div class="hint-line" id="modelsHint"></div>
         </div>
@@ -846,7 +870,10 @@
           <button class="link" id="avClear" type="button">Clear availability</button>
         </div>
 
-        <div class="tab-panel" data-panel="calendar" role="tabpanel" hidden>
+        <!-- 🧰 Tools: calendar, emergency contacts, playbook and call-summary delivery in one tab -->
+        <div class="tab-panel tools-panel" data-panel="tools" role="tabpanel" hidden>
+        <section class="tool-sec" id="toolCalendar">
+          <h4 class="tool-head">📅 Calendar <span class="sec-note" id="calNote"></span></h4>
           <label class="switch-row" for="calToggle">
             <span><b>Book into the calendar</b><br /><span class="sub">The agent adds confirmed meetings, bookings and reminders here.</span></span>
             <input type="checkbox" id="calToggle" class="switch" />
@@ -857,9 +884,10 @@
             <div class="cal-head"><span class="sub">Upcoming events</span><a class="link" id="icsAll" href="/api/calendar/calendar.ics" download>⬇ Export all (.ics)</a></div>
             <div class="cal-list" id="calList"><div class="empty">No events yet. Ask the agent to book or remind you of something.</div></div>
           </div>
-        </div>
+        </section>
 
-        <div class="tab-panel" data-panel="emergency" role="tabpanel" hidden>
+        <section class="tool-sec" id="toolEmergency">
+          <h4 class="tool-head">🚨 Emergency contacts <span class="sec-note" id="emgNote"></span></h4>
           <label class="switch-row" for="emgToggle">
             <span><b>Emergency detection</b><br /><span class="sub">If the caller says a keyword, the agent gives the right contact straight away.</span></span>
             <input type="checkbox" id="emgToggle" class="switch" />
@@ -868,7 +896,7 @@
             <div class="emg-add-title">＋ Add emergency contact</div>
             <div class="emg-add-row three">
               <label class="mini"><span>Related to</span><select id="emgType"></select></label>
-              <label class="mini"><span>Contact by</span><select id="emgVia"><option value="phone">📞 Phone</option><option value="email">✉️ Email</option></select></label>
+              <label class="mini"><span>Contact by</span><select id="emgVia"><option value="phone">📞 Phone</option><option value="whatsapp">💬 WhatsApp</option><option value="email">✉️ Email</option></select></label>
               <label class="mini"><span id="emgNumberLabel">Number</span><input type="text" id="emgNumber" maxlength="120" inputmode="tel" placeholder="e.g. 108" /></label>
             </div>
             <label class="mini" id="emgCustomWrap" hidden><span>Name</span><input type="text" id="emgCustom" maxlength="40" placeholder="e.g. Coast guard" /></label>
@@ -884,12 +912,25 @@
           </div>
           <div class="block-title" style="margin-top:14px">Saved contacts <span class="sec-note" id="emgCount"></span></div>
           <div class="emg-rules" id="emgRules"></div>
-        </div>
+          <p class="hint-line" id="emgChanHint"></p>
+        </section>
 
-        <div class="tab-panel" data-panel="playbooks" role="tabpanel" hidden>
-          <div class="block-title">📘 Your playbooks <button class="btn btn-small" id="addPbBtn" type="button">＋ Add playbook</button></div>
+        <section class="tool-sec" id="toolPlaybooks">
+          <h4 class="tool-head">📘 Playbook <button class="btn btn-small" id="addPbBtn" type="button">＋ Add playbook</button></h4>
           <p class="panel-lead">A playbook is your own call script. Pick one for this agent here or on the call page; it takes the place of the template.</p>
           <div class="pb-list" id="pbList"></div>
+        </section>
+
+        <section class="tool-sec" id="toolSummaries">
+          <h4 class="tool-head">📨 Call summaries <span class="sec-note" id="nfNote"></span></h4>
+          <p class="panel-lead">After every call, send its AI summary to:</p>
+          <label class="switch-row" for="nfWa"><span><b>💬 WhatsApp</b> <span class="sub" id="nfWaState"></span></span><input type="checkbox" id="nfWa" class="switch" /></label>
+          <input type="text" id="nfWaTo" class="nf-to" maxlength="20" inputmode="tel" placeholder="WhatsApp number with country code, e.g. +91 98765 43210" hidden />
+          <label class="switch-row" for="nfMail"><span><b>✉️ Email</b> <span class="sub" id="nfMailState"></span></span><input type="checkbox" id="nfMail" class="switch" /></label>
+          <input type="text" id="nfMailTo" class="nf-to" maxlength="200" inputmode="email" placeholder="Email address (several: separate with commas)" hidden />
+          <label class="switch-row" for="nfSms"><span><b>⚡ Flash SMS</b> <span class="sub">coming later</span></span><input type="checkbox" id="nfSms" class="switch" disabled /></label>
+          <p class="hint-line">The summary always stays in Call summaries too.</p>
+        </section>
         </div>
       </section>
     </section>
@@ -1002,7 +1043,9 @@
       <section class="na-step" data-step="voice" hidden>
         <p class="lead">How the agent sounds. You can change this any time in My agents → Voice &amp; AI.</p>
         <div class="na-fields">
-          <div><label for="naLang">Language</label><select id="naLang"></select></div>
+          <div><label for="naSttProv">Speech-to-text (hears the caller)</label><select id="naSttProv"></select></div>
+          <div><label for="naTtsProv">Text-to-speech (its voice)</label><select id="naTtsProv"></select></div>
+          <div><label for="naLang">Language <span class="sub" id="naLangHint"></span></label><select id="naLang"></select></div>
           <div><label for="naVoice">Voice</label>
             <div class="voice-row"><select id="naVoice"></select><button class="icon-mini" id="naListen" type="button" title="Listen to this voice" aria-label="Listen to this voice">▶</button></div></div>
         </div>
@@ -1051,7 +1094,7 @@
         <div id="naEmgBox" hidden>
           <div class="na-fields">
             <div><label for="naEmgLabel">Name</label><input type="text" id="naEmgLabel" maxlength="40" placeholder="e.g. Ambulance" autocomplete="off" /></div>
-            <div><label for="naEmgType">Contact by</label><select id="naEmgType"><option value="phone">📞 Phone</option><option value="email">✉ Email</option></select></div>
+            <div><label for="naEmgType">Contact by</label><select id="naEmgType"><option value="phone">📞 Phone</option><option value="whatsapp">💬 WhatsApp</option><option value="email">✉ Email</option></select></div>
             <div><label for="naEmgNumber" id="naEmgNumberLabel">Number</label><input type="text" id="naEmgNumber" maxlength="80" placeholder="e.g. 108" autocomplete="off" /></div>
             <div><label for="naEmgWords">Words that trigger it</label><input type="text" id="naEmgWords" maxlength="200" placeholder="e.g. accident, chest pain" autocomplete="off" /></div>
           </div>

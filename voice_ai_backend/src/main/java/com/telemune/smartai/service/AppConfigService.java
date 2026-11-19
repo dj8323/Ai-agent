@@ -109,6 +109,8 @@ public class AppConfigService {
         "defaultVoice", a.get("voice"), "defaultPlaybookId", a.get("playbook_id") == null ? "" : a.get("playbook_id")));
     if (a.get("speech_speed") != null) agentSec.put("speechSpeed", J.dbl(a.get("speech_speed")));
     if (!J.blank(a.get("tts_model"))) models.put("tts", a.get("tts_model"));
+    if (!J.blank(a.get("tts_provider"))) models.put("ttsProvider", a.get("tts_provider"));
+    if (!J.blank(a.get("stt_provider"))) stt.put("provider", a.get("stt_provider"));
     if (!J.blank(a.get("stt_engine"))) stt.put("engine", a.get("stt_engine"));
     if (!J.blank(a.get("stt_model"))) stt.put("model", a.get("stt_model"));
     return J.map(
@@ -154,7 +156,9 @@ public class AppConfigService {
         "history", J.map("pageSize", section(cfg, "history").get("pageSize")),
         "speechToText", J.map("engine", stt.get("engine"), "vadThreshold", stt.get("vadThreshold"),
             "minSpeechMs", stt.get("minSpeechMs"), "maxUtteranceSeconds", stt.get("maxUtteranceSeconds")),
-        "models", J.map("chat", models.get("chat"), "tts", models.get("tts"), "stt", openaiStt ? stt.get("model") : "browser", "sttModel", stt.get("model")),
+        "models", J.map("chat", models.get("chat"), "tts", models.get("tts"), "stt", openaiStt ? stt.get("model") : "browser", "sttModel", stt.get("model"),
+            "ttsProvider", J.blank(models.get("ttsProvider")) ? "openai" : models.get("ttsProvider"),
+            "sttProvider", J.blank(stt.get("provider")) ? "openai" : stt.get("provider")),
         "calendar", cfg.get("calendar"),
         "emergency", cfg.get("emergency"));
   }

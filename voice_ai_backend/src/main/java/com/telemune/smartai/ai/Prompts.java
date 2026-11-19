@@ -49,10 +49,15 @@ public final class Prompts {
       "urgent", "Sound alert and urgent but composed, a bit faster and crisp.",
       "proud", "Sound proud and celebratory, warm and uplifting.");
 
+  /** Languages the agent can speak (the web app ranks them by speakers worldwide and by what the providers support). */
   public static final Map<String, String> LANGUAGE_NAMES = ordered(
       "en-US", "English", "en-IN", "Indian English", "hi-IN", "Hindi", "bn-IN", "Bengali", "ta-IN", "Tamil", "te-IN", "Telugu",
-      "mr-IN", "Marathi", "gu-IN", "Gujarati", "es-ES", "Spanish", "fr-FR", "French", "de-DE", "German", "pt-BR", "Portuguese",
-      "ar-SA", "Arabic", "ja-JP", "Japanese", "zh-CN", "Mandarin Chinese", "en-JM", "Jamaican Patois");
+      "mr-IN", "Marathi", "gu-IN", "Gujarati", "kn-IN", "Kannada", "ml-IN", "Malayalam", "pa-IN", "Punjabi", "ur-PK", "Urdu",
+      "es-ES", "Spanish", "fr-FR", "French", "de-DE", "German", "pt-BR", "Portuguese", "it-IT", "Italian", "nl-NL", "Dutch",
+      "pl-PL", "Polish", "ru-RU", "Russian", "uk-UA", "Ukrainian", "tr-TR", "Turkish", "ar-SA", "Arabic", "fa-IR", "Persian",
+      "ja-JP", "Japanese", "ko-KR", "Korean", "zh-CN", "Mandarin Chinese", "yue-HK", "Cantonese", "vi-VN", "Vietnamese",
+      "th-TH", "Thai", "id-ID", "Indonesian", "ms-MY", "Malay", "fil-PH", "Filipino", "sv-SE", "Swedish", "el-GR", "Greek",
+      "cs-CZ", "Czech", "ro-RO", "Romanian", "hu-HU", "Hungarian", "en-JM", "Jamaican Patois");
 
   static final String PATOIS_REPLY = "Reply in Jamaican Patois (Jamaican Creole), written the way Jamaicans naturally write it, e.g. \"Wah gwaan\", "
       + "\"Mi deh yah fi help yuh\", \"Yuh good?\", \"Nuh worry yuhself\", \"Mi soon sort it out\". Keep it warm, friendly and easy to follow. "

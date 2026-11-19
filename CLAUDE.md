@@ -168,7 +168,9 @@ voice_ai_web/          ── frontend team ──
 | GET | `/api/config` | models, voices, languages, emotions, `settings` (`currentAgent` = full agent card) |
 | POST | `/api/settings` | auto-save the active agent: agent/models/calendar/emergency/**persona** {templateId, ownerName, organization, availability, greeting} → {settings, agent} |
 | POST | `/api/chat` | SSE: `delta` {text}, `usage`, `error`, `done` |
-| POST | `/api/tts`, `/api/transcribe`, `/api/summary` | mp3 / {text} / {summary, usage} |
+| POST | `/api/tts`, `/api/transcribe`, `/api/summary` | mp3 / {text, provider} / {summary, usage} (tts/transcribe take optional provider, model) |
+| GET | `/api/voices?provider&lang` | the TTS provider's voices [{id, label}] (labels end in (male)/(female)) |
+| POST | `/api/emergency/alert` | {label, keyword}: alert that WhatsApp/email emergency contact |
 | GET | `/api/models` | OpenAI models grouped {chat, stt, tts} (cached 10 min) |
 | GET/POST/DELETE | `/api/playbooks[/:id]` | {types, saved} / add / delete (the user's own playbooks) |
 | GET/POST/DELETE | `/api/calendar[/:id]`, GET `/api/calendar/calendar.ics`, `/:id.ics` | events (POST only when the calendar is on) |
@@ -225,6 +227,21 @@ voice_ai_web/          ── frontend team ──
   speaking: mouth opens with the analyser level (lip-sync), head bobs. `FACE` maps all 20 agent emotions (smile, brows,
   tilt, one brow up, blush, eye size, mouth width; caller moods via `ALIAS`); glow behind = `--emo` colour × `--level`. **Agent bubbles** show only
   "Name · time · ⏱ reply" (`renderTiming()` writes `.meta`; details in its title); no emotion chips on agent bubbles.
+- **Speech providers** (2026-11-19): STT `openai | elevenlabs | aws` (agents.stt_provider + stt_model), TTS
+  `openai | aws | elevenlabs | cartesia` (agents.tts_provider + tts_model; voice = the provider's voice id, VARCHAR(64)).
+  Backend `ai/SpeechService` (HTTP to each; `providers()` = set-up flag from keys.env, models, supported base languages
+  → `/api/config.providers`; `voices(provider, lang)` → GET `/api/voices`), `ai/Aws` (SigV4), `ai/AwsTranscribe`
+  (Transcribe streaming over a pre-signed WebSocket, event-stream frames; the browser sends 16 kHz WAV: `toWav16k()`).
+  `/api/tts`, `/api/tts/stream` take optional `provider`/`model`; any provider error falls back to OpenAI (header
+  `X-Speech-Fallback`, WARN log). `/api/transcribe` takes `provider`; failures fall back to OpenAI. Web: `#sttProv`/`#ttsProv`,
+  `fillSttModels/fillTtsModels`, `renderLangs()` (LANGS has 39 languages with speaker counts; only those both providers
+  support, most spoken first), `renderVoices()`. Only OpenAI voices take emotion instructions.
+- **🧰 Tools tab** = Calendar + Emergency + Playbook + Call summaries (`TOOL_SECTIONS`; old `#agents/calendar|emergency|playbooks`
+  links open Tools at that section). Emergency contacts: phone | whatsapp (banner opens wa.me) | email; WhatsApp/email
+  contacts also get a server alert once per call (POST `/api/emergency/alert` → `NotifyService.emergency`). Call summaries:
+  `agents.notify` JSON {whatsapp:{on,to}, email:{on,to}, sms} (`notifyPayload()`); after POST `/api/calls` the backend sends
+  them in the background (`NotifyService.callSummary`: Spring Mail via spring.mail.*, WhatsApp via the Telemune gateway,
+  whatsapp.* in keys.env). Flash SMS is shown but off (later). `/api/config.channels` says what's set up.
 - **Speaking speed:** `agents.speech_speed` (0.5–2.0; `agent.speechSpeed` in settings), set in Voice & AI; applied as
   `audio.playbackRate` (pitch kept) to every sentence and the preview.
 

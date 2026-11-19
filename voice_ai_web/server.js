@@ -75,12 +75,14 @@ function proxy(req, res) {
       r.pipe(res);
     },
   );
+  let callerLeft = false;
   up.on("error", (e) => {
+    if (callerLeft) return; // the browser stopped the request (barge-in, hang-up): not a backend problem
     logLine("ERROR", `backend unreachable at ${BACKEND.origin}: ${e.code || e.message} (${req.method} ${req.url.split("?")[0]})`);
     if (!res.headersSent) json(res, 502, { error: "The backend isn't running. Start voice_ai_backend (./run.sh in that folder)." });
     else res.end();
   });
-  res.on("close", () => up.destroy()); // caller hung up mid-stream → stop the backend work too
+  res.on("close", () => { if (!res.writableFinished) callerLeft = true; up.destroy(); }); // caller hung up mid-stream → stop the backend work too
   req.pipe(up);
 }
 

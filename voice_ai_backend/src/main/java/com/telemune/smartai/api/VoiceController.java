@@ -2,6 +2,7 @@ package com.telemune.smartai.api;
 
 import com.telemune.smartai.ai.OpenAiClient;
 import com.telemune.smartai.ai.Prompts;
+import com.telemune.smartai.ai.SpeechService;
 import com.telemune.smartai.service.AppConfigService;
 import com.telemune.smartai.service.PlaybookService;
 import com.telemune.smartai.service.TemplateService;
@@ -42,6 +43,7 @@ public class VoiceController {
   private final TemplateService templates;
   private final PlaybookService playbooks;
   private final OpenAiClient openai;
+  private final SpeechService speech;
 
   /** Small least-recently-used cache (speech audio, translated greetings): the same line is never generated twice. */
   private static <V> Map<String, V> lru(int max) {
@@ -55,11 +57,12 @@ public class VoiceController {
   private final Map<String, byte[]> speechCache = lru(300);
   private final Map<String, String> greetingCache = lru(200);
 
-  public VoiceController(AppConfigService config, TemplateService templates, PlaybookService playbooks, OpenAiClient openai) {
+  public VoiceController(AppConfigService config, TemplateService templates, PlaybookService playbooks, OpenAiClient openai, SpeechService speech) {
     this.config = config;
     this.templates = templates;
     this.playbooks = playbooks;
     this.openai = openai;
+    this.speech = speech;
   }
 
   /** Recent user/assistant turns (the model must see a user turn first). */
@@ -240,33 +243,77 @@ public class VoiceController {
     }
   }
 
-  /** The OpenAI speech request for one sentence (same voice, emotion and language rules for every TTS route). */
-  private Map<String, Object> speechRequest(Object textIn, Object voiceIn, Object emotionIn, Object langIn, Ctx ctx) {
+  /**
+   * One sentence to speak: provider, model and voice come from the agent (models.ttsProvider / models.tts /
+   * agent.defaultVoice) unless the request names them (preview before saving). A provider that isn't set up, or has
+   * no voice chosen, falls back to OpenAI so the call never goes silent.
+   */
+  record Speech(String provider, String model, String voice, String text, String emotion, String lang) {
+    Speech openai(String model) {
+      return new Speech("openai", model, Prompts.VOICES.containsKey(voice) ? voice : "marin", text, emotion, lang);
+    }
+  }
+
+  private String openaiTtsModel(Map<String, Object> cfg, String wanted) {
+    if (wanted != null && wanted.matches("^(gpt-.*tts.*|tts-1.*)$")) return wanted;
+    String m = J.str(J.get(config.app(), "models.tts"));
+    return m.matches("^(gpt-.*tts.*|tts-1.*)$") ? m : "gpt-4o-mini-tts";
+  }
+
+  private Speech plan(Object textIn, Object voiceIn, Object emotionIn, Object langIn, Object providerIn, Object modelIn, Ctx ctx) {
     String text = J.str(textIn, 1500);
     if (text.isEmpty()) throw ApiException.bad("No text");
-    String voice = Prompts.VOICES.containsKey(J.str(voiceIn)) ? J.str(voiceIn) : "marin";
+    Map<String, Object> cfg = config.forAgent(ctx.agent);
     String emotion = Prompts.EMOTIONS.containsKey(J.str(emotionIn)) ? J.str(emotionIn) : "neutral";
-    String lang = J.str(langIn);
-    String model = J.str(J.get(config.forAgent(ctx.agent), "models.tts"));
-    boolean legacy = model.startsWith("tts-1"); // tts-1 / tts-1-hd: no emotion instructions, older voice set
-    Map<String, Object> req = J.map("model", model, "voice", legacy && !Prompts.LEGACY_VOICES.contains(voice) ? "alloy" : voice, "input", text, "response_format", "mp3");
-    if (!legacy) req.put("instructions", "You are a voice agent on a phone call. " + Prompts.voiceStyle(lang) + " " + Prompts.EMOTIONS.get(emotion));
+    String provider = speech.ttsProvider(J.blank(providerIn) ? J.get(cfg, "models.ttsProvider") : providerIn);
+    String model = J.blank(modelIn) ? J.str(J.get(cfg, "models.tts")) : J.str(modelIn, 80);
+    String voice = J.str(voiceIn, 64);
+    Speech s = new Speech(provider, model, voice, text, emotion, J.str(langIn, 12));
+    if ("openai".equals(provider)) return s.openai(openaiTtsModel(cfg, model));
+    if (!speech.ready(provider) || voice.isEmpty() || Prompts.VOICES.containsKey(voice)) {
+      log.warn("TTS {} not usable (set up: {}, voice \"{}\"), using OpenAI", provider, speech.ready(provider), voice);
+      return s.openai(openaiTtsModel(cfg, null));
+    }
+    return s;
+  }
+
+  /** The OpenAI speech request (emotion and accent go into the instructions). */
+  private Map<String, Object> openaiRequest(Speech s) {
+    boolean legacy = s.model().startsWith("tts-1"); // tts-1 / tts-1-hd: no emotion instructions, older voice set
+    Map<String, Object> req = J.map("model", s.model(), "voice", legacy && !Prompts.LEGACY_VOICES.contains(s.voice()) ? "alloy" : s.voice(), "input", s.text(), "response_format", "mp3");
+    if (!legacy) req.put("instructions", "You are a voice agent on a phone call. " + Prompts.voiceStyle(s.lang()) + " " + Prompts.EMOTIONS.get(s.emotion()));
     return req;
   }
 
+  /** Audio for one sentence from its provider; a failing provider falls back to OpenAI (logged). */
+  private java.io.InputStream open(Speech s, Map<String, Object> cfg, HttpServletResponse res) {
+    if (!"openai".equals(s.provider())) {
+      try {
+        return speech.speak(s.provider(), s.model(), s.voice(), s.text(), s.lang(), null);
+      } catch (SpeechService.SpeechException e) {
+        log.warn("TTS {} failed ({}), falling back to OpenAI: {}", s.provider(), e.status, e.getMessage());
+        if (res != null) res.setHeader("X-Speech-Fallback", SpeechService.friendly(e).replaceAll("[\\r\\n]", " "));
+        return openai.speechStream(openaiRequest(s.openai(openaiTtsModel(cfg, null))));
+      }
+    }
+    return openai.speechStream(openaiRequest(s));
+  }
+
   @PostMapping("/api/tts")
-  ResponseEntity<?> tts(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
-    Map<String, Object> req = speechRequest(body.get("text"), body.get("voice"), body.get("emotion"), body.get("lang"), ctx);
-    String cacheKey = J.json(req);
+  ResponseEntity<?> tts(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx, HttpServletResponse res) {
+    Speech s = plan(body.get("text"), body.get("voice"), body.get("emotion"), body.get("lang"), body.get("provider"), body.get("model"), ctx);
+    String cacheKey = J.json(s);
     byte[] cached = speechCache.get(cacheKey);
     if (cached != null) return ResponseEntity.ok().contentType(MediaType.parseMediaType("audio/mpeg")).header("Cache-Control", "no-store").header("X-Cache", "hit").body(cached);
-    try {
-      byte[] mp3 = openai.speech(req);
-      speechCache.put(cacheKey, mp3);
+    try (java.io.InputStream in = open(s, config.forAgent(ctx.agent), res)) {
+      byte[] mp3 = in.readAllBytes();
+      if (res.getHeader("X-Speech-Fallback") == null) speechCache.put(cacheKey, mp3);
       return ResponseEntity.ok().contentType(MediaType.parseMediaType("audio/mpeg")).header("Cache-Control", "no-store").body(mp3);
     } catch (OpenAiClient.OpenAiException e) {
       log.warn("tts failed: {} {}", e.status, e.getMessage());
       return ResponseEntity.status(502).contentType(MediaType.TEXT_PLAIN).body(OpenAiClient.friendly(e));
+    } catch (IOException e) {
+      return ResponseEntity.status(502).contentType(MediaType.TEXT_PLAIN).body("Speech failed: " + e.getMessage());
     }
   }
 
@@ -276,9 +323,10 @@ public class VoiceController {
    */
   @GetMapping("/api/tts/stream")
   void ttsStream(@RequestParam String text, @RequestParam(required = false) String voice, @RequestParam(required = false) String emotion,
-                 @RequestParam(required = false) String lang, @RequestAttribute("ctx") Ctx ctx, HttpServletResponse res) throws IOException {
-    Map<String, Object> req = speechRequest(text, voice, emotion, lang, ctx);
-    String cacheKey = J.json(req);
+                 @RequestParam(required = false) String lang, @RequestParam(required = false) String provider, @RequestParam(required = false) String model,
+                 @RequestAttribute("ctx") Ctx ctx, HttpServletResponse res) throws IOException {
+    Speech s = plan(text, voice, emotion, lang, provider, model, ctx);
+    String cacheKey = J.json(s);
     byte[] cached = speechCache.get(cacheKey);
     res.setContentType("audio/mpeg");
     res.setHeader("Cache-Control", "no-store");
@@ -290,7 +338,7 @@ public class VoiceController {
       return;
     }
     java.io.ByteArrayOutputStream copy = new java.io.ByteArrayOutputStream();
-    try (java.io.InputStream in = openai.speechStream(req)) {
+    try (java.io.InputStream in = open(s, config.forAgent(ctx.agent), res)) {
       ServletOutputStream out = res.getOutputStream();
       byte[] buf = new byte[8192];
       int n;
@@ -299,7 +347,7 @@ public class VoiceController {
         out.flush(); // hand each piece to the browser straight away
         copy.write(buf, 0, n);
       }
-      speechCache.put(cacheKey, copy.toByteArray());
+      if (res.getHeader("X-Speech-Fallback") == null) speechCache.put(cacheKey, copy.toByteArray());
     } catch (OpenAiClient.OpenAiException e) {
       log.warn("tts stream failed: {} {}", e.status, e.getMessage());
       if (!res.isCommitted()) {
@@ -309,12 +357,24 @@ public class VoiceController {
         res.getOutputStream().write(OpenAiClient.friendly(e).getBytes(StandardCharsets.UTF_8));
       }
     } catch (IOException e) {
-      // the caller hung up or interrupted: stop reading from OpenAI
+      // the caller hung up or interrupted: stop reading from the provider
       log.debug("Speech stream stopped by the browser (barge-in or hang-up) after {} KB", copy.size() / 1024);
     }
   }
 
-  /** Speech-to-text for one caller utterance. Body: { audio: base64, mime, lang, context }. */
+  /** The TTS provider's voices for the Voice & AI tab: {voices: [{id, label}]} (labels end with "(male)" / "(female)"). */
+  @GetMapping("/api/voices")
+  ResponseEntity<Map<String, Object>> voices(@RequestParam(required = false) String provider, @RequestParam(required = false) String lang) {
+    String p = speech.ttsProvider(provider);
+    try {
+      return ResponseEntity.ok(J.map("provider", p, "ready", speech.ready(p), "voices", speech.voices(p, J.str(lang, 12))));
+    } catch (SpeechService.SpeechException e) {
+      log.warn("voices {} failed: {} {}", p, e.status, e.getMessage());
+      return ResponseEntity.status(502).body(J.map("error", SpeechService.friendly(e)));
+    }
+  }
+
+  /** Speech-to-text for one caller utterance. Body: { audio: base64, mime, lang, context, provider? }. AWS gets 16 kHz WAV. */
   @PostMapping("/api/transcribe")
   ResponseEntity<Map<String, Object>> transcribe(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
     Map<String, Object> cfg = config.forAgent(ctx.agent);
@@ -337,8 +397,18 @@ public class VoiceController {
         + ", and may mix in English or other languages; transcribe exactly what they say, in the language they say it."
         + " The recording can start with a faint echo of the assistant's own voice: leave that out and write only the caller's words."
         + (J.blank(body.get("context")) ? "" : " The assistant just said: \"" + J.str(body.get("context"), 300) + "\"");
+    String provider = speech.sttProvider(J.blank(body.get("provider")) ? J.get(cfg, "speechToText.provider") : body.get("provider"));
+    String model = J.str(J.get(cfg, "speechToText.model"));
+    if (!"openai".equals(provider) && speech.ready(provider)) {
+      try {
+        return ResponseEntity.ok(J.map("text", speech.transcribe(provider, model, audio, "speech." + ext, mime, lang), "provider", provider));
+      } catch (SpeechService.SpeechException e) {
+        log.warn("STT {} failed ({}), falling back to OpenAI: {}", provider, e.status, e.getMessage());
+      }
+    }
+    if (!model.matches(".*(transcribe|whisper).*")) model = "gpt-4o-transcribe"; // the agent's model belongs to another provider
     try {
-      return ResponseEntity.ok(J.map("text", openai.transcribe(audio, "speech." + ext, mime, J.str(J.get(cfg, "speechToText.model")), hint).trim()));
+      return ResponseEntity.ok(J.map("text", openai.transcribe(audio, "speech." + ext, mime, model, hint).trim(), "provider", "openai"));
     } catch (OpenAiClient.OpenAiException e) {
       log.warn("transcribe failed: {} {}", e.status, e.getMessage());
       return ResponseEntity.status(502).body(J.map("error", OpenAiClient.friendly(e)));

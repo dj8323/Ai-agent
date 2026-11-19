@@ -90,7 +90,7 @@ public class CallService {
     String endedBy = J.str(in.get("endedBy"), 40);
     Map<String, Object> call = J.map("id", id, "agentId", agent == null ? null : agent.get("id"), "agentName", agentName,
         "startedAt", started.toString(), "endedAt", ended.toString(), "duration", duration, "endedBy", endedBy.isEmpty() ? "user" : endedBy,
-        "playbook", playbook, "language", J.str(in.get("language"), 40), "voice", J.str(in.get("voice"), 20), "stats", stats,
+        "playbook", playbook, "language", J.str(in.get("language"), 40), "voice", J.str(in.get("voice"), 64), "stats", stats,
         "summary", J.str(in.get("summary"), 8000), "transcript", transcript, "recording", null);
     final long secs = toSeconds(duration);
     db.tx(() -> {
@@ -105,7 +105,7 @@ public class CallService {
   }
 
   /** The permanent, human-readable summary for one call (the ⬇ .txt download). */
-  static String summaryText(Map<String, Object> c) {
+  public static String summaryText(Map<String, Object> c) {
     Map<String, Object> st = J.obj(c.get("stats"));
     Map<String, Object> tk = J.obj(st.get("tokens"));
     List<String> out = new ArrayList<>();

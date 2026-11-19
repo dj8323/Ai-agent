@@ -1,24 +1,50 @@
 // TelemuneSmartAi front end.
 // Browser speech recognition in → OpenAI chat (intent / mood / language / emotion tags) → OpenAI TTS out.
 
+// [code, label, preview line, speakers worldwide (millions, approx.)]. The Voice & AI tab ranks them by speakers and
+// shows only the ones both chosen speech providers support (providers' language lists come from /api/config).
 const LANGS = [
-  ["en-US", "English (US)", "Hi! I'm {name}. How can I help you today?"],
-  ["en-IN", "English (India)", "Hi! I'm {name}. How can I help you today?"],
-  ["hi-IN", "हिन्दी (Hindi)", "नमस्ते! मैं {name} हूँ। मैं आपकी क्या मदद कर सकती हूँ?"],
-  ["bn-IN", "বাংলা (Bengali)", "নমস্কার! আমি {name}। আমি কীভাবে সাহায্য করতে পারি?"],
-  ["ta-IN", "தமிழ் (Tamil)", "வணக்கம்! நான் {name}. நான் எப்படி உதவலாம்?"],
-  ["te-IN", "తెలుగు (Telugu)", "నమస్కారం! నేను {name}. నేను ఎలా సహాయం చేయగలను?"],
-  ["mr-IN", "मराठी (Marathi)", "नमस्कार! मी {name}. मी तुम्हाला कशी मदत करू?"],
-  ["gu-IN", "ગુજરાતી (Gujarati)", "નમસ્તે! હું {name}. હું તમારી કેવી રીતે મદદ કરી શકું?"],
-  ["es-ES", "Español (Spanish)", "¡Hola! Soy {name}. ¿En qué te puedo ayudar?"],
-  ["fr-FR", "Français (French)", "Bonjour ! Je suis {name}. Comment puis-je vous aider ?"],
-  ["de-DE", "Deutsch (German)", "Hallo! Ich bin {name}. Wie kann ich helfen?"],
-  ["pt-BR", "Português (Portuguese)", "Olá! Eu sou {name}. Como posso ajudar?"],
-  ["ar-SA", "العربية (Arabic)", "مرحباً! أنا {name}. كيف يمكنني مساعدتك؟"],
-  ["ja-JP", "日本語 (Japanese)", "こんにちは！{name}です。何をお手伝いしましょうか？"],
-  ["zh-CN", "中文 (Mandarin)", "你好！我是{name}。有什么可以帮你的吗？"],
-  ["en-JM", "Jamaican Patois 🇯🇲", "Wah gwaan! A {name} dis. How mi can help yuh today?"],
+  ["en-US", "English (US)", "Hi! I'm {name}. How can I help you today?", 1500],
+  ["zh-CN", "中文 (Mandarin)", "你好！我是{name}。有什么可以帮你的吗？", 1140],
+  ["hi-IN", "हिन्दी (Hindi)", "नमस्ते! मैं {name} हूँ। मैं आपकी क्या मदद कर सकती हूँ?", 610],
+  ["es-ES", "Español (Spanish)", "¡Hola! Soy {name}. ¿En qué te puedo ayudar?", 560],
+  ["fr-FR", "Français (French)", "Bonjour ! Je suis {name}. Comment puis-je vous aider ?", 310],
+  ["ar-SA", "العربية (Arabic)", "مرحباً! أنا {name}. كيف يمكنني مساعدتك؟", 275],
+  ["bn-IN", "বাংলা (Bengali)", "নমস্কার! আমি {name}। আমি কীভাবে সাহায্য করতে পারি?", 274],
+  ["en-IN", "English (India)", "Hi! I'm {name}. How can I help you today?", 265],
+  ["pt-BR", "Português (Portuguese)", "Olá! Eu sou {name}. Como posso ajudar?", 264],
+  ["ru-RU", "Русский (Russian)", "Здравствуйте! Я {name}. Чем могу помочь?", 255],
+  ["ur-PK", "اردو (Urdu)", "السلام علیکم! میں {name} ہوں۔ میں آپ کی کیا مدد کر سکتی ہوں؟", 230],
+  ["id-ID", "Bahasa Indonesia", "Halo! Saya {name}. Ada yang bisa saya bantu?", 200],
+  ["de-DE", "Deutsch (German)", "Hallo! Ich bin {name}. Wie kann ich helfen?", 135],
+  ["ja-JP", "日本語 (Japanese)", "こんにちは！{name}です。何をお手伝いしましょうか？", 125],
+  ["pa-IN", "ਪੰਜਾਬੀ (Punjabi)", "ਸਤ ਸ੍ਰੀ ਅਕਾਲ! ਮੈਂ {name} ਹਾਂ। ਮੈਂ ਤੁਹਾਡੀ ਕਿਵੇਂ ਮਦਦ ਕਰ ਸਕਦੀ ਹਾਂ?", 113],
+  ["mr-IN", "मराठी (Marathi)", "नमस्कार! मी {name}. मी तुम्हाला कशी मदत करू?", 99],
+  ["te-IN", "తెలుగు (Telugu)", "నమస్కారం! నేను {name}. నేను ఎలా సహాయం చేయగలను?", 96],
+  ["tr-TR", "Türkçe (Turkish)", "Merhaba! Ben {name}. Size nasıl yardımcı olabilirim?", 90],
+  ["ta-IN", "தமிழ் (Tamil)", "வணக்கம்! நான் {name}. நான் எப்படி உதவலாம்?", 86],
+  ["yue-HK", "粵語 (Cantonese)", "你好！我係{name}。有咩可以幫到你？", 86],
+  ["vi-VN", "Tiếng Việt (Vietnamese)", "Xin chào! Tôi là {name}. Tôi có thể giúp gì cho bạn?", 85],
+  ["ko-KR", "한국어 (Korean)", "안녕하세요! 저는 {name}입니다. 무엇을 도와드릴까요?", 82],
+  ["ms-MY", "Bahasa Melayu (Malay)", "Helo! Saya {name}. Boleh saya bantu?", 77],
+  ["it-IT", "Italiano (Italian)", "Ciao! Sono {name}. Come posso aiutarti?", 68],
+  ["gu-IN", "ગુજરાતી (Gujarati)", "નમસ્તે! હું {name}. હું તમારી કેવી રીતે મદદ કરી શકું?", 62],
+  ["fa-IR", "فارسی (Persian)", "سلام! من {name} هستم. چطور می‌توانم کمک کنم؟", 62],
+  ["th-TH", "ไทย (Thai)", "สวัสดีค่ะ! ฉันชื่อ{name} มีอะไรให้ช่วยไหมคะ?", 61],
+  ["kn-IN", "ಕನ್ನಡ (Kannada)", "ನಮಸ್ಕಾರ! ನಾನು {name}. ನಾನು ಹೇಗೆ ಸಹಾಯ ಮಾಡಬಹುದು?", 59],
+  ["pl-PL", "Polski (Polish)", "Cześć! Jestem {name}. Jak mogę pomóc?", 41],
+  ["ml-IN", "മലയാളം (Malayalam)", "നമസ്കാരം! ഞാൻ {name}. എങ്ങനെ സഹായിക്കാം?", 38],
+  ["uk-UA", "Українська (Ukrainian)", "Вітаю! Я {name}. Чим можу допомогти?", 33],
+  ["fil-PH", "Filipino", "Kumusta! Ako si {name}. Paano kita matutulungan?", 28],
+  ["nl-NL", "Nederlands (Dutch)", "Hallo! Ik ben {name}. Waarmee kan ik helpen?", 25],
+  ["ro-RO", "Română (Romanian)", "Bună! Sunt {name}. Cu ce vă pot ajuta?", 24],
+  ["sv-SE", "Svenska (Swedish)", "Hej! Jag heter {name}. Hur kan jag hjälpa dig?", 13],
+  ["el-GR", "Ελληνικά (Greek)", "Γεια σας! Είμαι η {name}. Πώς μπορώ να βοηθήσω;", 13],
+  ["hu-HU", "Magyar (Hungarian)", "Szia! {name} vagyok. Miben segíthetek?", 13],
+  ["cs-CZ", "Čeština (Czech)", "Dobrý den! Jsem {name}. Jak vám mohu pomoci?", 11],
+  ["en-JM", "Jamaican Patois 🇯🇲", "Wah gwaan! A {name} dis. How mi can help yuh today?", 3],
 ];
+const langBase = (code) => { const c = String(code || "").toLowerCase(); return c.startsWith("yue") ? "yue" : c.startsWith("fil") ? "fil" : c.split("-")[0]; };
 
 // Speech-recognition locale to try for each language, then fallbacks if the browser doesn't support it.
 // Chrome has no Patois model, so Jamaican English is tried first, then plain English.
@@ -100,7 +126,7 @@ paintThemeBtn();
 // ---------- basic settings ----------
 // Agent name, language, voice, playbook, models, calendar and emergency rules all come from config.json.
 // Changes in the Agent setup panel apply to the next call straight away and are kept for good with 💾 Save agent.
-for (const [code, label] of LANGS) $("lang").add(new Option(label, code));
+for (const [code, label] of LANGS) $("lang").add(new Option(label, code)); // narrowed by renderLangs() once the providers are known
 const lang = () => $("lang").value;
 const agentName = () => $("nameInput").value.trim() || SETTINGS.agent.defaultName;
 
@@ -153,7 +179,7 @@ function renderSummary() {
 }
 $("nameInput").addEventListener("input", () => { refreshName(); markDirty(); });
 refreshName();
-$("lang").addEventListener("change", () => { state.srFallback = 0; markDirty(); });
+$("lang").addEventListener("change", () => { state.srFallback = 0; if ($("ttsProv").value === "aws") renderVoices($("voice").value); markDirty(); });
 $("voice").addEventListener("change", markDirty);
 
 // Banner shown when the running server is older than the code on disk.
@@ -173,12 +199,15 @@ async function loadConfig() {
   setupUserMenu(c.me);
   if (c.stale || !c.settings?.calendar) showStaleServer();
   state.voices = c.voices;
+  state.providers = c.providers;
+  state.channels = c.channels || {};
   const cfg = c.settings || {};
   Object.assign(SETTINGS, cfg);
   Object.assign(CONFIG, cfg.conversation || {});
   applyBranding(cfg.branding || {});
   $("modelInfo").textContent = `${cfg.models.chat} · ${cfg.models.stt} · ${cfg.models.tts}`;
   if (!$("voice").options.length) for (const [id, label] of Object.entries(c.voices)) $("voice").add(new Option(label, id));
+  fillProviders();
   return cfg;
 }
 
@@ -374,15 +403,22 @@ function fillForm() {
   const a = SETTINGS.agent || {};
   $("nameInput").value = a.defaultName || "Aria";
   refreshName();
-  if (a.defaultLanguage) $("lang").value = a.defaultLanguage;
-  if (a.defaultVoice && state.voices?.[a.defaultVoice]) $("voice").value = a.defaultVoice;
+  $("ttsProv").value = SETTINGS.models?.ttsProvider || "openai";
+  $("sttProv").value = SETTINGS.models?.sttProvider || "openai";
+  if ($("ttsProv").selectedOptions[0]?.disabled || !$("ttsProv").value) $("ttsProv").value = "openai"; // its keys were removed
+  if ($("sttProv").selectedOptions[0]?.disabled || !$("sttProv").value) $("sttProv").value = "openai";
+  fillSttModels(SETTINGS.models?.stt === "browser" ? "browser" : SETTINGS.models?.sttModel);
+  fillTtsModels(SETTINGS.models?.tts);
+  renderLangs(a.defaultLanguage || "en-US");
+  if (ttsProv() === "openai") {
+    if (!$("voice").options.length || $("voice").options[0].value === "") renderVoices(a.defaultVoice);
+    else if (a.defaultVoice && state.voices?.[a.defaultVoice]) $("voice").value = a.defaultVoice;
+  } else renderVoices(a.defaultVoice);
   $("speedRange").value = String(a.speechSpeed ?? 1);
   renderSpeed();
   state.playbookId = state.saved.some((p) => p.id === a.defaultPlaybookId) ? a.defaultPlaybookId : "";
   renderPlaybooks();
   setSelect($("llmSel"), SETTINGS.models.chat);
-  setSelect($("ttsSel"), SETTINGS.models.tts);
-  setSelect($("sttSel"), SETTINGS.speechToText?.engine === "browser" ? "browser" : SETTINGS.models.sttModel);
   $("calToggle").checked = !!SETTINGS.calendar?.enabled;
   const len = String(SETTINGS.calendar?.defaultDurationMin || 30);
   if (![...$("calLen").options].some((o) => o.value === len)) $("calLen").add(new Option(`${len} minutes`, len));
@@ -390,6 +426,7 @@ function fillForm() {
   $("emgToggle").checked = !!SETTINGS.emergency?.enabled;
   state.rules = structuredClone(SETTINGS.emergency?.rules || []);
   renderRules();
+  fillNotify(SETTINGS.currentAgent?.notify);
   fillPersona();
   state.savedSnapshot = formSnapshot();
   $("calendarCard").hidden = !SETTINGS.calendar?.enabled;
@@ -664,11 +701,11 @@ function tickTimer() {
 const stripTags = (t) => t.replace(/<[a-z]+:[^>]*>/gi, "").replace(/<[^>]*$/, "").replace(/\[[a-z]*\]?/gi, "").replace(/\s{2,}/g, " ").trimStart();
 
 // ---------- speech output (OpenAI TTS, one request per sentence, fetched ahead) ----------
-async function fetchSpeech(text, emotion, { voice = $("voice").value, language = lang() } = {}) {
+async function fetchSpeech(text, emotion, { voice = $("voice").value, language = lang(), provider = ttsProv(), model = $("ttsSel").value } = {}) {
   const res = await fetch("/api/tts", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text, emotion, voice, lang: language }),
+    body: JSON.stringify({ text, emotion, voice, lang: language, provider, model }),
   });
   if (!res.ok) throw new Error(await res.text());
   return URL.createObjectURL(await res.blob());
@@ -676,7 +713,7 @@ async function fetchSpeech(text, emotion, { voice = $("voice").value, language =
 
 // Live replies are streamed: the <audio> element points at /api/tts/stream and starts playing while the mp3 is still
 // arriving. Creating it starts the download, so sentences further down the queue load while this one plays.
-const streamUrl = (text, emotion) => `/api/tts/stream?${new URLSearchParams({ text, emotion, voice: $("voice").value, lang: lang(), agentId: state.agentId || "" })}`;
+const streamUrl = (text, emotion) => `/api/tts/stream?${new URLSearchParams({ text, emotion, voice: $("voice").value, lang: lang(), provider: ttsProv(), model: $("ttsSel").value, agentId: state.agentId || "" })}`;
 function enqueueSpeech(text, emotion = "neutral", turn = null) {
   text = text.trim();
   if (!text || !/[\p{L}\p{N}]/u.test(text)) return;
@@ -1056,12 +1093,36 @@ async function blobToBase64(blob) {
   return btoa(bin);
 }
 
+// AWS Transcribe takes raw PCM: decode the recording and resample it to 16 kHz mono 16-bit WAV.
+async function toWav16k(blob) {
+  const ctx = new AudioContext();
+  try {
+    const decoded = await ctx.decodeAudioData(await blob.arrayBuffer());
+    const frames = Math.ceil(decoded.duration * 16000);
+    const off = new OfflineAudioContext(1, Math.max(1, frames), 16000);
+    const src = off.createBufferSource();
+    src.buffer = decoded; src.connect(off.destination); src.start();
+    const pcm = (await off.startRendering()).getChannelData(0);
+    const buf = new ArrayBuffer(44 + pcm.length * 2), v = new DataView(buf);
+    const w = (o, str) => [...str].forEach((ch, i) => v.setUint8(o + i, ch.charCodeAt(0)));
+    w(0, "RIFF"); v.setUint32(4, 36 + pcm.length * 2, true); w(8, "WAVE"); w(12, "fmt ");
+    v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, 16000, true);
+    v.setUint32(28, 32000, true); v.setUint16(32, 2, true); v.setUint16(34, 16, true); w(36, "data"); v.setUint32(40, pcm.length * 2, true);
+    for (let i = 0; i < pcm.length; i++) v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, pcm[i])) * 0x7fff, true);
+    return new Blob([buf], { type: "audio/wav" });
+  } finally {
+    ctx.close();
+  }
+}
+
 async function transcribe(blob) {
   const lastAgent = [...state.history].reverse().find((m) => m.role === "assistant");
+  const provider = sttProv();
+  if (provider === "aws") { try { blob = await toWav16k(blob); } catch (e) { console.warn("Couldn't convert to WAV for AWS:", e); } }
   const res = await fetch("/api/transcribe", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ audio: await blobToBase64(blob), mime: blob.type, lang: lang(), context: lastAgent ? stripTags(lastAgent.content) : "" }),
+    body: JSON.stringify({ audio: await blobToBase64(blob), mime: blob.type, lang: lang(), provider, context: lastAgent ? stripTags(lastAgent.content) : "" }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Transcription failed");
@@ -1307,6 +1368,7 @@ async function speakGreeting(g) {
 // ---------- call controls ----------
 async function startCall() {
   if (!state.agentId) { openAgentDialog(); return; } // no agent yet: create one first
+  state.alerted = new Set(); // emergency contacts alerted during this call
   const greet = prepareGreeting(); // usually ready already; if not, it loads while the mic opens
   try {
     state.micStream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
@@ -1763,20 +1825,108 @@ function setSelect(sel, value) {
   sel.value = value;
 }
 
-async function loadModels() {
-  const m = await fetch("/api/models").then((r) => r.json());
-  const fill = (sel, list, extra = []) => {
+// ---------- speech providers (Voice & AI tab) ----------
+// Speech-to-text: OpenAI, ElevenLabs Scribe, AWS Transcribe. Text-to-speech: OpenAI, AWS Polly, ElevenLabs, Cartesia.
+// The backend says which are set up (keys.env) and which languages each supports (/api/config → providers). Models:
+// OpenAI's from /api/models, the others' from the provider list. Voices: OpenAI's from /api/config, the others' from
+// /api/voices (labels end with "(male)" / "(female)", which also picks the cartoon agent).
+const ttsProv = () => $("ttsProv").value || "openai";
+const sttProv = () => $("sttProv").value || "openai";
+const provInfo = (kind, p) => state.providers?.[kind]?.[p] || { label: p, ready: p === "openai", models: [], langs: ["*"] };
+
+function fillProviders() {
+  for (const [kind, sel] of [["tts", $("ttsProv")], ["stt", $("sttProv")]]) {
     const keep = sel.value;
     sel.innerHTML = "";
-    for (const [v, l] of extra) sel.add(new Option(l, v));
-    for (const id of list) sel.add(new Option(id, id));
-    if (keep) setSelect(sel, keep);
-  };
-  fill($("llmSel"), m.chat);
-  fill($("sttSel"), m.stt, [["browser", "Browser captions only (free, less accurate)"]]);
-  fill($("ttsSel"), m.tts);
-  for (const id of ["llmSel", "sttSel", "ttsSel"]) $(id).title = $(id).value;
-  $("modelsHint").textContent = m.source === "account" ? "Lists show the models your OpenAI account can use." : "Couldn't reach OpenAI; showing common models.";
+    for (const [id, p] of Object.entries(state.providers?.[kind] || { openai: { label: "OpenAI", ready: true } })) {
+      const o = new Option(p.ready ? p.label : `${p.label} · not set up`, id);
+      o.disabled = !p.ready;
+      sel.add(o);
+    }
+    sel.value = keep && [...sel.options].some((o) => o.value === keep && !o.disabled) ? keep : "openai";
+  }
+}
+
+function fillModelSel(sel, list, keep, extra = []) {
+  sel.innerHTML = "";
+  for (const [v, l] of extra) sel.add(new Option(l, v));
+  for (const id of list) sel.add(new Option(id, id));
+  if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
+  sel.title = sel.value;
+}
+function fillSttModels(keep = $("sttSel").value) {
+  if (sttProv() === "openai") fillModelSel($("sttSel"), state.openaiModels?.stt || ["gpt-4o-transcribe", "gpt-4o-mini-transcribe", "whisper-1"], keep,
+    [["browser", "Browser captions only (free, less accurate)"]]);
+  else fillModelSel($("sttSel"), provInfo("stt", sttProv()).models, keep);
+}
+function fillTtsModels(keep = $("ttsSel").value) {
+  if (ttsProv() === "openai") fillModelSel($("ttsSel"), state.openaiModels?.tts || ["gpt-4o-mini-tts", "tts-1-hd", "tts-1"], keep);
+  else fillModelSel($("ttsSel"), provInfo("tts", ttsProv()).models, keep);
+}
+
+// Languages both providers support, most-spoken first.
+const supports = (langs, code) => !langs || langs.includes("*") || langs.includes(langBase(code));
+function renderLangs(keep = $("lang").value) {
+  const t = provInfo("tts", ttsProv()).langs, sttBrowser = $("sttSel").value === "browser", st = sttBrowser ? ["*"] : provInfo("stt", sttProv()).langs;
+  const ok = [...LANGS].sort((a, b) => b[3] - a[3]).filter(([c]) => supports(t, c) && supports(st, c));
+  const sel = $("lang");
+  sel.innerHTML = "";
+  ok.forEach(([c, label]) => sel.add(new Option(label, c)));
+  const gone = !!keep && !ok.some(([c]) => c === keep);
+  sel.value = !gone && keep ? keep : ok[0]?.[0] || "en-US";
+  const names = `${provInfo("stt", sttProv()).label}${sttBrowser ? " (browser)" : ""} + ${provInfo("tts", ttsProv()).label}`;
+  $("langHint").textContent = `(${ok.length}, most spoken first)`;
+  $("provHint").textContent = gone
+    ? `⚠ ${LANGS.find((l) => l[0] === keep)?.[1] || keep} isn't available with ${names}, so the language was set to ${sel.selectedOptions[0]?.text}.`
+    : `${ok.length} languages work with ${names}.`;
+  return gone;
+}
+
+// Voices of the TTS provider (cached per provider + language; Polly voices depend on the language).
+async function renderVoices(keep = $("voice").value) {
+  const p = ttsProv(), sel = $("voice");
+  let list;
+  if (p === "openai") list = Object.entries(state.voices || {}).map(([id, label]) => ({ id, label }));
+  else {
+    const key = `${p}|${p === "aws" ? lang() : ""}`;
+    state.voiceLists ||= {};
+    if (!state.voiceLists[key]) {
+      sel.innerHTML = ""; sel.add(new Option("Loading voices…", ""));
+      try {
+        const r = await fetch(`/api/voices?provider=${encodeURIComponent(p)}&lang=${encodeURIComponent(lang())}`);
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Couldn't load voices");
+        state.voiceLists[key] = d.voices || [];
+      } catch (e) {
+        sel.innerHTML = ""; sel.add(new Option("⚠ " + e.message, ""));
+        $("provHint").textContent = "⚠ " + e.message;
+        return;
+      }
+    }
+    list = state.voiceLists[key];
+    if (ttsProv() !== p) return; // the provider changed while loading
+  }
+  sel.innerHTML = "";
+  for (const v of list) sel.add(new Option(v.label, v.id));
+  if (!list.length) sel.add(new Option(p === "aws" ? "No Polly voice for this language" : "No voices", ""));
+  sel.value = keep && list.some((v) => v.id === keep) ? keep : list[0]?.id || "";
+  if (state.savedSnapshot && sel.value !== keep) markDirty();
+  renderSummary();
+}
+
+$("ttsProv").addEventListener("change", async () => {
+  fillTtsModels(""); renderLangs(); await renderVoices(""); prepareGreeting(); markDirty();
+});
+$("sttProv").addEventListener("change", () => { fillSttModels(""); if (renderLangs() && ttsProv() === "aws") renderVoices(); markDirty(); });
+$("sttSel").addEventListener("change", () => { if (renderLangs() && ttsProv() === "aws") renderVoices(); });
+
+async function loadModels() {
+  const m = await fetch("/api/models").then((r) => r.json());
+  state.openaiModels = m;
+  fillModelSel($("llmSel"), m.chat, $("llmSel").value || SETTINGS.models?.chat);
+  fillSttModels($("sttSel").value || (SETTINGS.models?.stt === "browser" ? "browser" : SETTINGS.models?.sttModel));
+  fillTtsModels($("ttsSel").value || SETTINGS.models?.tts);
+  $("modelsHint").textContent = m.source === "account" ? "The LLM list shows the models your OpenAI account can use." : "Couldn't reach OpenAI; showing common models.";
 }
 ["llmSel", "sttSel", "ttsSel"].forEach((id) => $(id).addEventListener("change", () => { $(id).title = $(id).value; markDirty(); }));
 $("calToggle").addEventListener("change", () => { renderNotes(); markDirty(); });
@@ -1799,6 +1949,12 @@ function renderNotes() {
   $("emgNote").className = "sec-note" + (on ? " on" : "");
   $("calNote").textContent = cal ? "On" : "Off";
   $("calNote").className = "sec-note" + (cal ? " on" : "");
+  const nfOn = ["nfWa", "nfMail"].filter((id) => $(id).checked).length;
+  $("nfNote").textContent = nfOn ? `On · ${nfOn}` : "Off";
+  $("nfNote").className = "sec-note" + (nfOn ? " on" : "");
+  const parts = [cal && "📅", on && "🚨", state.playbookId && "📘", nfOn && "📨"].filter(Boolean);
+  $("toolsNote").textContent = parts.join("");
+  $("toolsNote").className = "sec-note" + (parts.length ? " on" : "");
   renderSummary();
 }
 
@@ -1813,7 +1969,7 @@ function renderRules() {
     el.innerHTML = `
       <div class="rule-top">
         <input type="text" class="r-label" placeholder="Service, e.g. Ambulance" maxlength="40" aria-label="Emergency service name" />
-        <select class="r-type" aria-label="Contact by"><option value="phone">📞 Phone</option><option value="email">✉️ Email</option></select>
+        <select class="r-type" aria-label="Contact by"><option value="phone">📞 Phone</option><option value="whatsapp">💬 WhatsApp</option><option value="email">✉️ Email</option></select>
         <input type="text" class="r-num" placeholder="Number" maxlength="120" inputmode="tel" aria-label="Emergency number or email" />
         <button type="button" class="rule-del" title="Remove this emergency number" aria-label="Remove">🗑</button>
       </div>
@@ -1824,8 +1980,8 @@ function renderRules() {
       </div>`;
     el.querySelector(".r-label").value = r.label;
     el.querySelector(".r-num").value = r.number;
-    el.querySelector(".r-type").value = r.type === "email" ? "email" : "phone";
-    el.querySelector(".r-num").placeholder = r.type === "email" ? "name@example.com" : "Number";
+    el.querySelector(".r-type").value = ["email", "whatsapp"].includes(r.type) ? r.type : "phone";
+    el.querySelector(".r-num").placeholder = r.type === "email" ? "name@example.com" : r.type === "whatsapp" ? "WhatsApp number" : "Number";
     el.querySelector(".r-type").addEventListener("change", (e) => { r.type = e.target.value; renderRules(); markDirty(); });
     el.querySelector(".r-label").addEventListener("input", (e) => { r.label = e.target.value; markDirty(); });
     el.querySelector(".r-num").addEventListener("input", (e) => { r.number = e.target.value; markDirty(); });
@@ -1905,8 +2061,8 @@ function toggleKw(k) {
 }
 function setEmgVia(via) {
   $("emgVia").value = via;
-  $("emgNumberLabel").textContent = via === "email" ? "Email" : "Number";
-  $("emgNumber").placeholder = via === "email" ? "e.g. help@company.com" : "e.g. 108";
+  $("emgNumberLabel").textContent = via === "email" ? "Email" : via === "whatsapp" ? "WhatsApp number" : "Number";
+  $("emgNumber").placeholder = via === "email" ? "e.g. help@company.com" : via === "whatsapp" ? "e.g. +91 98765 43210" : "e.g. 108";
   $("emgNumber").inputMode = via === "email" ? "email" : "tel";
 }
 $("emgVia").addEventListener("change", () => { setEmgVia($("emgVia").value); $("emgNumber").value = ""; $("emgNumber").focus(); });
@@ -1955,13 +2111,41 @@ resetEmgForm();
 function formPayload() {
   return {
     agent: { defaultName: agentName(), defaultLanguage: lang(), defaultVoice: $("voice").value, defaultPlaybookId: state.playbookId, speechSpeed: speed() },
-    models: { chat: $("llmSel").value, stt: $("sttSel").value, tts: $("ttsSel").value },
+    models: { chat: $("llmSel").value, stt: $("sttSel").value, tts: $("ttsSel").value, ttsProvider: ttsProv(), sttProvider: sttProv() },
     calendar: { enabled: $("calToggle").checked, defaultDurationMin: Number($("calLen").value) || 30 },
     emergency: { enabled: $("emgToggle").checked, rules: state.rules },
     persona: personaPayload(),
+    notify: notifyPayload(),
   };
 }
 const formSnapshot = () => JSON.stringify(formPayload());
+
+// ---------- call summaries: send after every call by WhatsApp / email (Flash SMS later) ----------
+function notifyPayload() {
+  return { whatsapp: { on: $("nfWa").checked, to: $("nfWaTo").value.trim() }, email: { on: $("nfMail").checked, to: $("nfMailTo").value.trim() },
+    sms: { on: false, to: "" } };
+}
+function renderNotify() {
+  for (const [sw, to, st, ch] of [["nfWa", "nfWaTo", "nfWaState", "whatsapp"], ["nfMail", "nfMailTo", "nfMailState", "email"]]) {
+    $(to).hidden = !$(sw).checked;
+    const ready = state.channels?.[ch] !== false;
+    $(st).textContent = ready ? "" : "not set up on the server yet";
+    $(sw).disabled = !ready && !$(sw).checked;
+  }
+  renderNotes();
+}
+function fillNotify(n) {
+  n ||= {};
+  $("nfWa").checked = !!n.whatsapp?.on; $("nfWaTo").value = n.whatsapp?.to || "";
+  $("nfMail").checked = !!n.email?.on; $("nfMailTo").value = n.email?.to || "";
+  renderNotify();
+}
+["nfWa", "nfMail"].forEach((id) => $(id).addEventListener("change", () => {
+  renderNotify(); markDirty();
+  const to = $(id === "nfWa" ? "nfWaTo" : "nfMailTo");
+  if ($(id).checked && !to.value) to.focus();
+}));
+["nfWaTo", "nfMailTo"].forEach((id) => $(id).addEventListener("input", markDirty));
 
 // Every change in Agent setup is saved to config.json automatically (no Save button).
 // Selects and switches save almost at once; typing saves after a short pause.
@@ -2040,13 +2224,24 @@ function showEmergency(rule) {
   el.setAttribute("role", "alert");
   el.innerHTML = `<div class="big">🚨</div><div><div class="t"></div><div class="s"></div></div><a></a>`;
   el.querySelector(".t").textContent = `Emergency: ${rule.label}`;
-  const email = rule.type === "email";
-  el.querySelector(".s").textContent = `Heard “${rule.keyword}”. ${email ? "Contact now" : "Call now"}:`;
+  const email = rule.type === "email", wa = rule.type === "whatsapp";
+  el.querySelector(".s").textContent = `Heard “${rule.keyword}”. ${email || wa ? "Contact now" : "Call now"}:`;
   const a = el.querySelector("a");
-  a.href = email ? `mailto:${rule.number}` : `tel:${rule.number.replace(/\s/g, "")}`;
-  a.textContent = `${email ? "✉️" : "📞"} ${rule.number}`;
+  a.href = email ? `mailto:${rule.number}` : wa ? `https://wa.me/${rule.number.replace(/[^\d]/g, "")}` : `tel:${rule.number.replace(/\s/g, "")}`;
+  if (wa) { a.target = "_blank"; a.rel = "noopener"; }
+  a.textContent = `${email ? "✉️" : wa ? "💬" : "📞"} ${rule.number}`;
   $("msgs").appendChild(el);
   scrollDown();
+  // WhatsApp / email contacts are also alerted by the server, once per contact per call
+  if ((email || wa) && state.inCall) {
+    state.alerted ||= new Set();
+    if (!state.alerted.has(rule.label)) {
+      state.alerted.add(rule.label);
+      fetch("/api/emergency/alert", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label: rule.label, keyword: rule.keyword }) })
+        .then((r) => r.json()).then((d) => { if (d.channel === "whatsapp" || d.channel === "email") addChip(el, `${wa ? "💬" : "✉️"} ${rule.label} alerted`, "alerted"); })
+        .catch(() => {});
+    }
+  }
 }
 
 // ---------- calendar ----------
@@ -2293,19 +2488,20 @@ const TOURS = [
         ready: () => $("calToggle").checked, auto: true },
       { target: "#calLen", before: goTab("calendar"), title: "Meeting length", text: "How long each booked meeting is. Booked meetings show below, and **⬇ Export all (.ics)** adds them to your own calendar.", next: true },
     ] },
-  { id: "voice", icon: "🧠", title: "Voice & speed", needsAgent: true, desc: "Language, voice, speaking speed and AI models.",
+  { id: "voice", icon: "🧠", title: "Voice & speed", needsAgent: true, desc: "Speech providers, language, voice, speaking speed and AI model.",
     steps: [
-      { target: "#lang", before: goTab("voice"), title: "Language", text: "The language the agent speaks. It also matches callers who mix languages.", next: true },
-      { target: "#voice", before: goTab("voice"), title: "Voice", text: "Pick one of 10 voices.", next: true },
+      { target: ".prov-grid", before: goTab("voice"), title: "Speech providers", text: "**Speech-to-text** hears the caller (OpenAI, ElevenLabs or AWS). **Text-to-speech** is the agent's voice (OpenAI, AWS Polly, ElevenLabs or Cartesia). Each has its own models.", next: true },
+      { target: "#lang", before: goTab("voice"), title: "Language", text: "Only languages both providers support are listed, the most spoken first. It also matches callers who mix languages.", next: true },
+      { target: "#voice", before: goTab("voice"), title: "Voice", text: "The voices of the chosen text-to-speech provider. The cartoon agent on the call page follows: a man for male voices, a woman for the others.", next: true },
       { target: "#previewBtn", before: goTab("voice"), title: "Hear it", text: "👉 Click **▶** to hear a sample.", clickIn: "#previewBtn", next: true, nextLabel: "Skip" },
       { target: "#speedPicks", before: goTab("voice"), title: "Speaking speed", text: "👉 Pick a speed: 🐢 Slow, Normal, Fast or 🚀 Faster. The slider below fine-tunes it.", clickIn: "#speedPicks button", next: true, nextLabel: "Skip" },
-      { target: ".model-row", before: goTab("voice"), title: "AI models", text: "LLM thinks and writes, STT hears the caller, TTS speaks. **gpt-4.1-mini** answers fastest.", next: true },
+      { target: ".model-row", before: goTab("voice"), title: "AI model", text: "The LLM thinks and writes the replies. **gpt-4.1-mini** answers fastest.", next: true },
     ] },
-  { id: "emergency", icon: "🚨", title: "Emergency contact", needsAgent: true, desc: "Give callers the right number or email in an emergency.",
+  { id: "emergency", icon: "🚨", title: "Emergency contact", needsAgent: true, desc: "Give callers the right number, WhatsApp or email in an emergency.",
     steps: [
       { target: "label[for=emgToggle]", before: goTab("emergency"), title: "Switch it on", text: "👉 Switch on **Emergency detection**.", ready: () => $("emgToggle").checked, auto: true },
       { target: "#emgType", before: goTab("emergency"), title: "Related to", text: "What the contact is for: Ambulance, Police, Fire, a helpline, or Other.", next: true },
-      { target: "#emgVia", before: goTab("emergency"), title: "Phone or email", text: "How to reach it: 📞 Phone or ✉️ Email.", next: true },
+      { target: "#emgVia", before: goTab("emergency"), title: "Phone, WhatsApp or email", text: "How to reach it: 📞 Phone, 💬 WhatsApp or ✉️ Email. WhatsApp and email contacts also get an alert from the server when the word is heard.", next: true },
       { target: "#emgNumber", before: goTab("emergency"), title: "Number or email", text: "Check the number (it's filled in for the usual services) or type the email address.", next: true },
       { target: "#emgSuggest", before: goTab("emergency"), title: "Keywords", text: "Words that trigger it. Tap suggestions or type your own below.", next: true },
       { target: "#emgAddBtn", before: goTab("emergency"), title: "Add it", text: "👉 Click **＋ Add**.", done: () => state.rules.length > tourCtx.rules, warn: () => $("emgMsg").classList.contains("err") ? $("emgMsg").textContent : "" },
@@ -2511,11 +2707,15 @@ $("firstAgentBtn").addEventListener("click", () => openAgentDialog());
 $("firstAgentLearn").addEventListener("click", () => startTour("first-agent"));
 
 // ---------- menu: 🎙 Call (main page) · 🤖 My agents (editor, in tabs) · 📚 Tutorials ----------
-const TABS = ["profile", "voice", "availability", "calendar", "emergency", "playbooks"];
+const TABS = ["profile", "voice", "availability", "tools"];
+// Calendar, Emergency and Playbooks now live in 🧰 Tools: their old links open Tools at that section.
+const TOOL_SECTIONS = { calendar: "toolCalendar", emergency: "toolEmergency", playbooks: "toolPlaybooks", summaries: "toolSummaries" };
 function showTab(tab) {
-  state.tab = TABS.includes(tab) ? tab : "profile";
+  const section = TOOL_SECTIONS[tab];
+  state.tab = section ? "tools" : TABS.includes(tab) ? tab : "profile";
   document.querySelectorAll(".tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === state.tab)));
   document.querySelectorAll(".tab-panel").forEach((p) => (p.hidden = p.dataset.panel !== state.tab));
+  if (section) requestAnimationFrame(() => { const el = $(section); el.scrollIntoView({ block: "start", behavior: "smooth" }); el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); });
 }
 function route() {
   const [view, tab] = location.hash.replace(/^#/, "").split("/");
@@ -2529,7 +2729,7 @@ function route() {
   $("navLearn").setAttribute("aria-current", learn ? "page" : "false");
   if (agents) {
     showTab(tab || state.tab);
-    if (state.tab === "calendar" && SETTINGS.calendar?.enabled) loadCalendar().catch(() => {});
+    if (state.tab === "tools" && SETTINGS.calendar?.enabled) loadCalendar().catch(() => {});
   }
 }
 document.querySelectorAll(".tabs [data-tab]").forEach((b) => (b.onclick = () => (location.hash = `agents/${b.dataset.tab}`)));
@@ -2605,10 +2805,11 @@ function openAgentDialog() {
   Object.assign(na, { type: "personal", step: 0, days: [], rules: [], busy: false, calTouched: false, created: null, playbookId: "" });
   $("naForm").reset();
   $("naErr").textContent = "";
-  // Voice step starts from the app's defaults (or the agent in use)
-  if (!$("naLang").options.length) for (const o of $("lang").options) $("naLang").add(new Option(o.text, o.value));
+  // Voice step starts from the agent in use (or the app's defaults): providers, language, voice
+  $("naTtsProv").innerHTML = $("ttsProv").innerHTML; $("naTtsProv").value = ttsProv();
+  $("naSttProv").innerHTML = $("sttProv").innerHTML; $("naSttProv").value = sttProv();
+  naLangs($("lang").value);
   $("naVoice").innerHTML = $("voice").innerHTML;
-  $("naLang").value = $("lang").value;
   $("naVoice").value = $("voice").value;
   $("naSpeed").value = "1";
   // Availability step
@@ -2671,13 +2872,50 @@ function renderNaSpeed() {
 $("naSpeedPicks").querySelectorAll("button").forEach((b) => (b.onclick = () => { $("naSpeed").value = b.dataset.speed; renderNaSpeed(); }));
 $("naSpeed").addEventListener("input", renderNaSpeed);
 
+// providers in the wizard: same rules as the Voice & AI tab (languages both support, the provider's voices)
+function naLangs(keep = $("naLang").value) {
+  const t = provInfo("tts", $("naTtsProv").value).langs, st = provInfo("stt", $("naSttProv").value).langs;
+  const ok = [...LANGS].sort((a, b) => b[3] - a[3]).filter(([c]) => supports(t, c) && supports(st, c));
+  $("naLang").innerHTML = "";
+  ok.forEach(([c, label]) => $("naLang").add(new Option(label, c)));
+  $("naLang").value = ok.some(([c]) => c === keep) ? keep : ok[0]?.[0] || "en-US";
+  $("naLangHint").textContent = `(${ok.length}, most spoken first)`;
+}
+async function naVoices() {
+  const p = $("naTtsProv").value, sel = $("naVoice");
+  let list;
+  if (p === "openai") list = Object.entries(state.voices || {}).map(([id, label]) => ({ id, label }));
+  else {
+    const key = `${p}|${p === "aws" ? $("naLang").value : ""}`;
+    state.voiceLists ||= {};
+    if (!state.voiceLists[key]) {
+      sel.innerHTML = ""; sel.add(new Option("Loading voices…", ""));
+      try {
+        const r = await fetch(`/api/voices?provider=${encodeURIComponent(p)}&lang=${encodeURIComponent($("naLang").value)}`);
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Couldn't load voices");
+        state.voiceLists[key] = d.voices || [];
+      } catch (e) { sel.innerHTML = ""; sel.add(new Option("⚠ " + e.message, "")); return; }
+    }
+    list = state.voiceLists[key];
+  }
+  if ($("naTtsProv").value !== p) return;
+  sel.innerHTML = "";
+  for (const v of list) sel.add(new Option(v.label, v.id));
+  if (!list.length) sel.add(new Option("No voice for this language", ""));
+}
+$("naTtsProv").addEventListener("change", () => { naLangs(); naVoices(); });
+$("naSttProv").addEventListener("change", () => { const was = $("naLang").value; naLangs(); if ($("naTtsProv").value === "aws" && $("naLang").value !== was) naVoices(); });
+$("naLang").addEventListener("change", () => { if ($("naTtsProv").value === "aws") naVoices(); });
+
 // ▶ listen: a short hello in the chosen language and voice, at the chosen speed
 $("naListen").addEventListener("click", async () => {
   const btn = $("naListen");
   btn.disabled = true; btn.textContent = "…";
   try {
     const sample = (LANGS.find((l) => l[0] === $("naLang").value) || LANGS[0])[2].replace("{name}", $("naName").value.trim() || "your agent");
-    const url = await fetchSpeech(sample, "cheerful", { voice: $("naVoice").value, language: $("naLang").value });
+    const model = $("naTtsProv").value === ttsProv() ? $("ttsSel").value : provInfo("tts", $("naTtsProv").value).models?.[0] || "";
+    const url = await fetchSpeech(sample, "cheerful", { voice: $("naVoice").value, language: $("naLang").value, provider: $("naTtsProv").value, model });
     const a = new Audio(url);
     a.preservesPitch = true;
     a.playbackRate = naSpeed();
@@ -2756,8 +2994,9 @@ $("naCal").addEventListener("change", () => { na.calTouched = true; });
 $("naEmg").addEventListener("change", () => { $("naEmgBox").hidden = !$("naEmg").checked; if ($("naEmg").checked) $("naEmgLabel").focus(); });
 $("naEmgType").addEventListener("change", () => {
   const mail = $("naEmgType").value === "email";
-  $("naEmgNumberLabel").textContent = mail ? "Email" : "Number";
-  $("naEmgNumber").placeholder = mail ? "e.g. help@company.com" : "e.g. 108";
+  const wa = $("naEmgType").value === "whatsapp";
+  $("naEmgNumberLabel").textContent = mail ? "Email" : wa ? "WhatsApp number" : "Number";
+  $("naEmgNumber").placeholder = mail ? "e.g. help@company.com" : wa ? "e.g. +91 98765 43210" : "e.g. 108";
 });
 function naAddRule() {
   const label = $("naEmgLabel").value.trim(), number = $("naEmgNumber").value.trim();
@@ -2778,7 +3017,7 @@ function renderNaRules() {
     const row = document.createElement("div");
     row.className = "na-item";
     const t = document.createElement("span");
-    t.textContent = `${r.type === "email" ? "✉" : "📞"} ${r.label} · ${r.number} — when the caller says: ${r.keywords.join(", ")}`;
+    t.textContent = `${r.type === "email" ? "✉" : r.type === "whatsapp" ? "💬" : "📞"} ${r.label} · ${r.number} — when the caller says: ${r.keywords.join(", ")}`;
     const del = document.createElement("button");
     del.type = "button"; del.className = "link"; del.textContent = "Remove";
     del.onclick = () => { na.rules.splice(i, 1); renderNaRules(); };
@@ -2845,6 +3084,7 @@ function renderNaReview() {
     ["Template", tp ? tp.name : "Free conversation", 0],
     ["Works for", [$("naOwner").value.trim(), $("naOrg").value.trim()].filter(Boolean).join(" · ") || "—", 0],
     ["What it's for", $("naDesc").value.trim() || "—", 0],
+    ["Speech", `hears with ${provInfo("stt", $("naSttProv").value).label} · speaks with ${provInfo("tts", $("naTtsProv").value).label}`, 1],
     ["Language · voice", `${$("naLang").selectedOptions[0]?.text} · ${voiceText.split(" — ")[0]}`, 1],
     ["Speaking speed", `${naSpeed().toFixed(2)}×`, 1],
     ["Availability", naPlanText() || "Not set (asks the caller)", 2],
@@ -2894,8 +3134,10 @@ $("naForm").addEventListener("submit", async (e) => {
     await switchAgent(a.id);
 
     naProgress(65, "Saving voice, playbook, availability, calendar and emergency contacts…");
-    $("lang").value = $("naLang").value;
-    $("voice").value = $("naVoice").value;
+    $("ttsProv").value = $("naTtsProv").value; $("sttProv").value = $("naSttProv").value;
+    fillTtsModels(""); fillSttModels("");
+    renderLangs($("naLang").value);
+    await renderVoices($("naVoice").value);
     $("speedRange").value = String(naSpeed()); renderSpeed();
     state.playbookId = state.saved.some((p) => p.id === na.playbookId) ? na.playbookId : ""; renderPlaybooks();
     av.days = [...na.days]; $("avFrom").value = $("naFrom").value; $("avTo").value = $("naTo").value;

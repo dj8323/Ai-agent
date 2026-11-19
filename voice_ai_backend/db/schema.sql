@@ -65,10 +65,12 @@ CREATE TABLE IF NOT EXISTS agents (
   agent_type        VARCHAR(30)  NOT NULL DEFAULT 'personal',
   description       VARCHAR(300) NOT NULL DEFAULT '',
   language          VARCHAR(10)  NOT NULL DEFAULT 'en-US',
-  voice             VARCHAR(20)  NOT NULL DEFAULT 'marin',
+  voice             VARCHAR(64)  NOT NULL DEFAULT 'marin',   -- voice id of the TTS provider (OpenAI name, ElevenLabs/Cartesia id, Polly name)
   chat_model        VARCHAR(80)  NULL,
+  tts_provider      VARCHAR(20)  NULL,   -- openai | aws | elevenlabs | cartesia; NULL = openai
   tts_model         VARCHAR(80)  NULL,
-  stt_engine        VARCHAR(10)  NULL,   -- openai | browser
+  stt_provider      VARCHAR(20)  NULL,   -- openai | elevenlabs | aws; NULL = openai
+  stt_engine        VARCHAR(10)  NULL,   -- openai (= a provider above) | browser
   stt_model         VARCHAR(80)  NULL,
   playbook_id       VARCHAR(16)  NULL,
   calendar_enabled  TINYINT(1)   NOT NULL DEFAULT 0,
@@ -82,6 +84,7 @@ CREATE TABLE IF NOT EXISTS agents (
   availability_plan JSON         NULL,                    -- {days:[1..7], from:"15:00", to:"18:00", tz, note}; owner_availability is its text
   meeting_minutes   INT          NULL,                    -- meeting length for calendar bookings; NULL = app default
   speech_speed      DECIMAL(3,2) NULL,                    -- how fast the agent speaks (0.50–2.00, 1 = normal); NULL = app default
+  notify            JSON         NULL,                    -- send call summaries: {whatsapp:{on,to}, email:{on,to}, sms:{on,to}}
   created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   INDEX idx_agents_user (user_id),
@@ -93,8 +96,8 @@ CREATE TABLE IF NOT EXISTS emergency_rules (
   id         INT          NOT NULL AUTO_INCREMENT PRIMARY KEY,
   agent_id   VARCHAR(16)  NOT NULL,
   label        VARCHAR(40)  NOT NULL,
-  contact_type VARCHAR(10)  NOT NULL DEFAULT 'phone',   -- phone | email
-  number       VARCHAR(120) NOT NULL,                   -- phone number, or email address when contact_type = email
+  contact_type VARCHAR(10)  NOT NULL DEFAULT 'phone',   -- phone | whatsapp | email
+  number       VARCHAR(120) NOT NULL,                   -- phone / WhatsApp number, or email address when contact_type = email
   keywords   JSON         NOT NULL,
   sort_order INT          NOT NULL DEFAULT 0,
   INDEX idx_emergency_agent (agent_id),
@@ -130,7 +133,7 @@ CREATE TABLE IF NOT EXISTS calls (
   ended_by         VARCHAR(40)  NOT NULL DEFAULT 'user',
   playbook         JSON         NULL,
   language         VARCHAR(40)  NOT NULL DEFAULT '',
-  voice            VARCHAR(20)  NOT NULL DEFAULT '',
+  voice            VARCHAR(64)  NOT NULL DEFAULT '',
   turns            INT          NOT NULL DEFAULT 0,
   tokens_input     INT          NOT NULL DEFAULT 0,
   tokens_output    INT          NOT NULL DEFAULT 0,

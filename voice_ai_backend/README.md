@@ -92,7 +92,9 @@ All routes are under `/api`, JSON in and out (errors are `{"error": "…"}`). Si
 | POST | `/api/greeting` | the agent's first line (+ cached speech) |
 | POST | `/api/chat` | SSE stream: `delta` {text}, `usage`, `error`, `done` |
 | POST / GET | `/api/tts`, `/api/tts/stream` | speech (mp3) / streamed speech |
-| POST | `/api/transcribe`, `/api/summary` | speech-to-text {text} / call summary {summary, usage} |
+| POST | `/api/transcribe`, `/api/summary` | speech-to-text {text, provider} (optional provider) / call summary {summary, usage} |
+| GET | `/api/voices?provider&lang` | voices of a TTS provider: openai, aws (Polly), elevenlabs, cartesia |
+| POST | `/api/emergency/alert` | {label, keyword}: WhatsApp / email alert to that emergency contact |
 | GET | `/api/models` | OpenAI models {chat, stt, tts} |
 | GET/POST/DELETE | `/api/playbooks[/:id]` | the user's own playbooks |
 | GET/POST/DELETE | `/api/calendar[/:id]`, `/api/calendar/calendar.ics` | meetings the agent booked |
@@ -102,6 +104,21 @@ All routes are under `/api`, JSON in and out (errors are `{"error": "…"}`). Si
 | POST/GET/PATCH/DELETE | `/api/admin/users[/:id]` | admin: users |
 | GET / PUT | `/api/admin/config[/:section]`, `/api/admin/log-level` | admin: app settings, live log level |
 | GET, POST/PUT/DELETE | `/api/admin/templates`, `/api/admin/types[/:key]`, `/api/admin/templates[/:id]` | admin: agent types and templates |
+
+## Speech providers and messages
+
+| | Providers | Code |
+|---|---|---|
+| Speech-to-text | OpenAI, ElevenLabs Scribe, Amazon Transcribe (streaming WebSocket, 16 kHz PCM) | `ai/SpeechService`, `ai/AwsTranscribe`, `ai/Aws` (SigV4, no SDK) |
+| Text-to-speech | OpenAI, Amazon Polly (neural), ElevenLabs, Cartesia Sonic | `ai/SpeechService` |
+| Call summaries | Email (Spring Mail), WhatsApp (Telemune gateway); Flash SMS later | `service/NotifyService` |
+| Emergency alerts | WhatsApp, email (phone contacts are only shown to the caller) | `service/NotifyService` |
+
+Each agent picks its providers (agents.tts_provider / stt_provider). A provider without keys is shown as "not set up";
+if a provider fails during a call, speech and transcription fall back to OpenAI so the call keeps going (WARN in the log).
+Messages are sent in the background after the call is saved. **WhatsApp gateway parameter names** (`whatsapp.param.*`) and
+the values each template takes (`whatsapp.summary-params`, `whatsapp.emergency-params`) are settings in `keys.env`:
+confirm them with the gateway team.
 
 ## Voices
 

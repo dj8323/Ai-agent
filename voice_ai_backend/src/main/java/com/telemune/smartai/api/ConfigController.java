@@ -2,6 +2,7 @@ package com.telemune.smartai.api;
 
 import com.telemune.smartai.ai.OpenAiClient;
 import com.telemune.smartai.ai.Prompts;
+import com.telemune.smartai.ai.SpeechService;
 import com.telemune.smartai.service.AgentService;
 import com.telemune.smartai.service.AppConfigService;
 import com.telemune.smartai.service.LogService;
@@ -32,10 +33,15 @@ public class ConfigController {
   private final AgentService agents;
   private final OpenAiClient openai;
   private final LogService logs;
+  private final SpeechService speech;
+  private final com.telemune.smartai.service.NotifyService notify;
   private volatile Map<String, Object> modelCache;
   private volatile long modelCacheAt;
 
-  public ConfigController(AppConfigService config, AgentService agents, OpenAiClient openai, LogService logs) {
+  public ConfigController(AppConfigService config, AgentService agents, OpenAiClient openai, LogService logs, SpeechService speech,
+                          com.telemune.smartai.service.NotifyService notify) {
+    this.speech = speech;
+    this.notify = notify;
     this.config = config;
     this.agents = agents;
     this.openai = openai;
@@ -48,7 +54,7 @@ public class ConfigController {
     Map<String, Object> pub = config.publicConfig(cfg, agents.card(ctx.agent));
     return J.map("stale", false, "me", ctx.user, "model", J.get(cfg, "models.chat"), "ttsModel", J.get(cfg, "models.tts"),
         "sttModel", J.get(pub, "models.stt"), "languages", Prompts.LANGUAGE_NAMES, "voices", Prompts.VOICES,
-        "emotions", Prompts.EMOTIONS.keySet(), "settings", pub);
+        "emotions", Prompts.EMOTIONS.keySet(), "providers", speech.providers(), "channels", notify.channels(), "settings", pub);
   }
 
   /** Saves the Agent setup card into the active agent only (other agents and other users are untouched). */

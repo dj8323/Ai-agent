@@ -91,6 +91,8 @@ public/
   login.html        sign in + create account
   index.html        call page + My agents + dialogs (layout + CSS, light/dark theme tokens)
   app.js            routing, agent setup, call flow, speech in/out, live caller bubble, tours
+  (Voice & AI: speech provider pickers, models and voices per provider, 39 languages ranked by speakers;
+   🧰 Tools: calendar, emergency contacts (phone/WhatsApp/email), playbook, call-summary delivery)
   agent-face.js     the cartoon agent on the call card (woman for female voices, man for male voices): talks with the voice, listens, thinks, 20 emotions
   admin.html, admin.js   admin dashboard
   motion.css, motion.js  shared motion theme (network background, glass cards, pill menu, chat animations)

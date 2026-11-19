@@ -41,9 +41,11 @@ public class DataController {
   private final CalendarService calendar;
   private final MessageService messages;
   private final LogService logs;
+  private final com.telemune.smartai.service.NotifyService notify;
 
   public DataController(AppConfigService config, TemplateService templates, PlaybookService playbooks, CallService calls,
-                        CalendarService calendar, MessageService messages, LogService logs) {
+                        CalendarService calendar, MessageService messages, LogService logs, com.telemune.smartai.service.NotifyService notify) {
+    this.notify = notify;
     this.config = config;
     this.templates = templates;
     this.playbooks = playbooks;
@@ -91,7 +93,21 @@ public class DataController {
     Map<String, Object> call = calls.save(body, ctx.dataUserId, ctx.agent);
     logs.activity(ctx, "call.save", (String) call.get("agentName"), J.map("id", call.get("id"), "duration", call.get("duration"),
         "tokens", J.num(J.get(J.obj(call.get("stats")), "tokens.total"))));
+    if (ctx.agent != null && ctx.dataUserId.equals(ctx.agent.get("user_id"))) notify.callSummary(ctx.agent, call); // WhatsApp / email, in the background
     return ResponseEntity.status(201).body(call);
+  }
+
+  /** The caller said an emergency word: alert that contact by WhatsApp or email (phone contacts are only shown). Body {label, keyword}. */
+  @PostMapping("/api/emergency/alert")
+  ResponseEntity<Map<String, Object>> emergencyAlert(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    if (ctx.agent == null) return ResponseEntity.badRequest().body(J.map("error", "No agent"));
+    String label = J.str(body.get("label"), 40), keyword = J.str(body.get("keyword"), 40);
+    Map<String, Object> rule = null;
+    for (Object o : J.list(ctx.agent.get("rules"))) if (label.equals(J.str(J.obj(o).get("label")))) { rule = J.obj(o); break; }
+    if (rule == null) return ResponseEntity.status(404).body(J.map("error", "No such emergency contact"));
+    String sent = notify.emergency(ctx.agent, rule, keyword);
+    logs.activity(ctx, "emergency.alert", label, J.map("keyword", keyword, "channel", sent));
+    return ResponseEntity.ok(J.map("ok", true, "channel", sent));
   }
 
   @GetMapping("/api/calls/{id}")

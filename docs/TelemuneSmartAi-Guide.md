@@ -250,11 +250,9 @@ Every change saves itself within a second: there is no Save button. A small pill
 | Tab | What you set |
 | --- | --- |
 | 👤 Profile | **Agent type** (change it any time, for example Personal Assistant → Call Assistant); Template; **Works for** (required for a Call Assistant); Organization; what it's for; the first line of every call, with a live preview. Text can use `{agent}`, `{owner}` and `{org}` |
-| 🧠 Voice & AI | Language (16) and voice (10, ▶ plays a sample); **speaking speed** (🐢 Slow · Normal · Fast · 🚀 Faster, or fine-tune from 0.5× to 2×); LLM, speech-to-text and text-to-speech models (lists come live from your OpenAI account) |
+| 🧠 Voice & AI | **Speech-to-text** provider and model (OpenAI, ElevenLabs Scribe, AWS Transcribe, or browser captions) and **text-to-speech** provider and model (OpenAI, AWS Polly, ElevenLabs, Cartesia). **Language**: only the languages both providers support, the most spoken in the world first (up to 39). **Voice**: the chosen provider's voices (▶ plays a sample; the cartoon agent becomes a man or a woman to match). **Speaking speed** (🐢 Slow · Normal · Fast · 🚀 Faster, or 0.5× to 2×) and the LLM. A provider without keys on the server shows "not set up"; if one fails during a call, the agent quietly switches to OpenAI |
 | 🕒 Availability | Days (tap Mon … Sun, or Weekdays / Every day), From and To time, time zone and an optional note. The agent only offers meeting times inside these hours, and says when the person is back |
-| 📅 Calendar | Switch on to let the agent book confirmed meetings; meeting length (15 minutes to 2 hours); upcoming events with .ics export |
-| 🚨 Emergency | Switch, plus emergency contacts by **phone or email** (below) |
-| 📘 Playbooks | Your own call scripts: add, pick, remove |
+| 🧰 Tools | 📅 **Calendar**: book confirmed meetings, meeting length, upcoming events with .ics export · 🚨 **Emergency contacts** by **📞 phone, 💬 WhatsApp or ✉️ email** (below) · 📘 **Playbook**: add, pick, remove · 📨 **Call summaries**: after every call send the AI summary by **WhatsApp** and/or **email** (Flash SMS comes later) |
 
 ### Playbooks
 
@@ -264,16 +262,24 @@ A playbook is your own script: role, goal, steps, rules and what the summary sho
 - **📘 Playbooks → ＋ Add playbook** → pick an agent type → pick a ready-made script or Custom → edit the fields → save.
 - Choose the playbook for a call from the **Playbook** dropdown on the main page or in the Playbooks tab. Playbooks belong to the user, so all of their agents can use them; each agent remembers its own choice.
 
+### Call summaries by WhatsApp and email
+
+In **🧰 Tools → 📨 Call summaries**, switch on **WhatsApp** and/or **Email** and enter the number (with country code) or
+email address (several: separate with commas). After every call the AI summary is sent there automatically, in the
+background; it also stays in Call summaries as always. Email uses the Gmail account in `voice_ai_backend/keys.env`;
+WhatsApp uses the Telemune WhatsApp gateway (template `ai_message_summary`). **Flash SMS** is shown and will be added later.
+A channel the server isn't set up for shows "not set up on the server yet".
+
 ### Emergency contacts
 
-Turn Emergency on and an **＋ Add emergency contact** form appears:
+In **🧰 Tools → 🚨 Emergency contacts**, turn it on and an **＋ Add emergency contact** form appears:
 
 1. **Related to**: Ambulance, Police, Fire, Women helpline, Mental-health helpline, Child helpline, Disaster, All emergencies or Other (give it a name).
-2. **Contact by**: 📞 Phone or ✉️ Email.
+2. **Contact by**: 📞 Phone, 💬 WhatsApp or ✉️ Email.
 3. **Number** or **Email**: a phone number is filled in for the chosen service (108, 100, 101, 1091, 14416, 1098, 1078, 112) and editable; for email, type the address (for example the office security desk).
 4. **Keywords**: tap suggestions or type your own (for example "chest pain", "bachao", "intruder").
 
-Adding the same service again updates it instead of duplicating it. During a call, a matching word shows a red 🚨 banner with a tap-to-call link (or an email link), and the agent leads its reply with that contact. The agent also spots emergencies described in other words or languages.
+Adding the same service again updates it instead of duplicating it. During a call, a matching word shows a red 🚨 banner with a tap-to-call, WhatsApp-chat or email link, and the agent leads its reply with that contact. A WhatsApp or email contact also gets an **alert message from the server** (once per call): the WhatsApp emergency template, or an email saying which word was heard. The agent also spots emergencies described in other words or languages.
 
 ## Making a call
 

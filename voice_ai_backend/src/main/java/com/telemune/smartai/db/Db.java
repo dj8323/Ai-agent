@@ -58,6 +58,21 @@ public class Db {
     Long len = jdbc.queryForObject("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
         + "AND TABLE_NAME = 'emergency_rules' AND COLUMN_NAME = 'number'", Long.class);
     if (len != null && len < 120) jdbc.execute("ALTER TABLE emergency_rules MODIFY number VARCHAR(120) NOT NULL");
+    // Speech providers (2026-11-19): provider per agent, summary delivery, and longer voice ids (ElevenLabs, Cartesia).
+    addColumn("agents", "tts_provider", "VARCHAR(20) NULL AFTER chat_model");
+    addColumn("agents", "stt_provider", "VARCHAR(20) NULL AFTER tts_model");
+    addColumn("agents", "notify", "JSON NULL AFTER speech_speed");
+    widen("agents", "voice", 64, "VARCHAR(64) NOT NULL DEFAULT 'marin'");
+    widen("calls", "voice", 64, "VARCHAR(64) NOT NULL DEFAULT ''");
+  }
+
+  private void widen(String table, String column, int size, String definition) {
+    Long len = jdbc.queryForObject("SELECT CHARACTER_MAXIMUM_LENGTH FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() "
+        + "AND TABLE_NAME = ? AND COLUMN_NAME = ?", Long.class, table, column);
+    if (len != null && len < size) {
+      jdbc.execute("ALTER TABLE " + table + " MODIFY " + column + " " + definition);
+      log.info("Widened {}.{} to {}", table, column, size);
+    }
   }
 
   private void addColumn(String table, String column, String definition) {

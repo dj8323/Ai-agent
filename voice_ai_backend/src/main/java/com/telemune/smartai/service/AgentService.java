@@ -1,5 +1,7 @@
 package com.telemune.smartai.service;
 
+import com.telemune.smartai.ai.SpeechService;
+
 import com.telemune.smartai.db.Db;
 import com.telemune.smartai.util.J;
 import com.telemune.smartai.web.ApiException;
@@ -70,6 +72,9 @@ public class AgentService {
         "needsOwner", type != null && J.bool(type.get("needsOwner")),
         "description", a.get("description"), "language", a.get("language"), "voice", a.get("voice"),
         "chatModel", a.get("chat_model"), "ttsModel", a.get("tts_model"),
+        "ttsProvider", J.blank(a.get("tts_provider")) ? "openai" : a.get("tts_provider"),
+        "sttProvider", J.blank(a.get("stt_provider")) ? "openai" : a.get("stt_provider"),
+        "notify", a.get("notify") == null ? cleanNotify(J.map()) : J.parse(a.get("notify")),
         "stt", "browser".equals(a.get("stt_engine")) ? "browser" : a.get("stt_model"),
         "playbookId", a.get("playbook_id") == null ? "" : a.get("playbook_id"),
         "templateId", a.get("template_id") == null ? "" : a.get("template_id"), "templateName", tp == null ? null : tp.get("name"),
@@ -222,6 +227,7 @@ public class AgentService {
       Map<String, Object> r = J.obj(o);
       String label = J.str(r.get("label"), 40);
       boolean email = "email".equals(r.get("type"));
+      String kind = email ? "email" : "whatsapp".equals(r.get("type")) ? "whatsapp" : "phone";
       String number = email ? J.str(r.get("number"), 120).toLowerCase() : J.str(r.get("number"), 20).replaceAll("[^\\d+*# -]", "");
       if (email && !EMAIL.matcher(number).matches()) continue;
       LinkedHashSet<String> kws = new LinkedHashSet<>();
@@ -232,8 +238,24 @@ public class AgentService {
       if (label.isEmpty() || number.isEmpty() || kws.isEmpty()) continue;
       if (i >= 20) break;
       db.exec("INSERT INTO emergency_rules (agent_id, label, contact_type, number, keywords, sort_order) VALUES (?, ?, ?, ?, ?, ?)",
-          agentId, label, email ? "email" : "phone", number, J.json(new ArrayList<>(kws)), i++);
+          agentId, label, kind, number, J.json(new ArrayList<>(kws)), i++);
     }
+  }
+
+  /** Call-summary delivery: {whatsapp:{on,to}, email:{on,to}, sms:{on,to}} with tidy numbers / addresses. */
+  static Map<String, Object> cleanNotify(Map<String, Object> in) {
+    Map<String, Object> out = new java.util.LinkedHashMap<>();
+    for (String ch : List.of("whatsapp", "email", "sms")) {
+      Map<String, Object> c = J.obj(in.get(ch));
+      String to = "email".equals(ch) ? J.str(c.get("to"), 200).toLowerCase().replaceAll("\\s+", "") : J.str(c.get("to"), 20).replaceAll("[^\\d+]", "");
+      if ("email".equals(ch)) {
+        List<String> ok = new ArrayList<>();
+        for (String e : to.split("[,;]")) if (EMAIL.matcher(e).matches() && ok.size() < 5) ok.add(e);
+        to = String.join(",", ok);
+      }
+      out.put(ch, J.map("on", J.bool(c.get("on")) && !to.isEmpty(), "to", to));
+    }
+    return out;
   }
 
   /** Saves from the Agent setup card (auto-save). Runs one at a time per agent, so quick edits can't interleave. */
@@ -247,7 +269,7 @@ public class AgentService {
       db.tx(() -> {
         if (!J.blank(a.get("defaultName"))) db.exec("UPDATE agents SET name = ? WHERE id = ? AND user_id = ?", J.str(a.get("defaultName"), 24), agentId, userId);
         if (!J.blank(a.get("defaultLanguage"))) db.exec("UPDATE agents SET language = ? WHERE id = ? AND user_id = ?", J.str(a.get("defaultLanguage"), 10), agentId, userId);
-        if (!J.blank(a.get("defaultVoice"))) db.exec("UPDATE agents SET voice = ? WHERE id = ? AND user_id = ?", J.str(a.get("defaultVoice"), 20), agentId, userId);
+        if (!J.blank(a.get("defaultVoice"))) db.exec("UPDATE agents SET voice = ? WHERE id = ? AND user_id = ?", J.str(a.get("defaultVoice"), 64), agentId, userId);
         if (a.containsKey("speechSpeed")) {
           Double sp = J.dbl(a.get("speechSpeed"));
           db.exec("UPDATE agents SET speech_speed = ? WHERE id = ?", sp == null ? null : Math.round(Math.min(2.0, Math.max(0.5, sp)) * 100) / 100.0, agentId);
@@ -259,6 +281,8 @@ public class AgentService {
         }
         if (modelId(m.get("chat")) != null) db.exec("UPDATE agents SET chat_model = ? WHERE id = ?", m.get("chat"), agentId);
         if (modelId(m.get("tts")) != null) db.exec("UPDATE agents SET tts_model = ? WHERE id = ?", m.get("tts"), agentId);
+        if (m.containsKey("ttsProvider")) db.exec("UPDATE agents SET tts_provider = ? WHERE id = ?", SpeechService.TTS.contains(J.str(m.get("ttsProvider"))) ? m.get("ttsProvider") : null, agentId);
+        if (m.containsKey("sttProvider")) db.exec("UPDATE agents SET stt_provider = ? WHERE id = ?", SpeechService.STT.contains(J.str(m.get("sttProvider"))) ? m.get("sttProvider") : null, agentId);
         if ("browser".equals(m.get("stt"))) db.exec("UPDATE agents SET stt_engine = 'browser' WHERE id = ?", agentId);
         else if (modelId(m.get("stt")) != null) db.exec("UPDATE agents SET stt_engine = 'openai', stt_model = ? WHERE id = ?", m.get("stt"), agentId);
         if (in.get("calendar") instanceof Map<?, ?>) {
@@ -275,6 +299,7 @@ public class AgentService {
           writeRules(agentId, J.list(e.get("rules")));
         }
         if (in.get("persona") instanceof Map<?, ?>) writePersona(agentId, userId, J.obj(in.get("persona")));
+        if (in.get("notify") instanceof Map<?, ?>) db.exec("UPDATE agents SET notify = ? WHERE id = ?", J.json(cleanNotify(J.obj(in.get("notify")))), agentId);
       });
       return get(agentId, userId);
     }
