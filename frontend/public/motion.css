@@ -1,0 +1,58 @@
+/*
+  TelemuneSmartAi motion theme, shared by every page (index, login, admin).
+  - Floating clouds behind the page (the layer is added by motion.js).
+  - Cards rise in on load and lift a little on hover; dialogs and chat bubbles pop in.
+  - The title shimmers; the Start call button pulses while idle.
+  Colours come from the page's theme variables (--c1/--c2/--c3), so light and dark both work.
+  People with "reduce motion" turned on get no animation.
+*/
+:root { --cloud: #ffffff; --cloud-op: .9; --sky-1: color-mix(in srgb, var(--c3) 26%, transparent); --sky-2: color-mix(in srgb, var(--c1) 12%, transparent); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --cloud: #2a1f4d; --cloud-op: .6;
+  --sky-1: color-mix(in srgb, var(--c3) 14%, transparent); --sky-2: color-mix(in srgb, var(--c1) 16%, transparent); } }
+:root[data-theme="dark"] { --cloud: #2a1f4d; --cloud-op: .6;
+  --sky-1: color-mix(in srgb, var(--c3) 14%, transparent); --sky-2: color-mix(in srgb, var(--c1) 16%, transparent); }
+
+/* ---------- Clouds ---------- */
+.sky { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
+  background: linear-gradient(180deg, var(--sky-1), var(--sky-2) 55%, transparent 90%); }
+.sky .cloud { position: absolute; left: -340px; width: 260px; height: 80px; border-radius: 80px;
+  background: var(--cloud); opacity: var(--cloud-op);
+  filter: drop-shadow(0 10px 22px color-mix(in srgb, var(--c1) 26%, transparent));
+  animation: tsa-float linear infinite; will-change: transform; }
+.sky .cloud::before, .sky .cloud::after { content: ""; position: absolute; background: inherit; border-radius: 50%; }
+.sky .cloud::before { width: 120px; height: 120px; top: -60px; left: 40px; }
+.sky .cloud::after { width: 90px; height: 90px; top: -40px; right: 40px; }
+@keyframes tsa-float { to { transform: translateX(calc(100vw + 680px)); } }
+
+/* ---------- Cards, dialogs, bubbles ---------- */
+.card { animation: tsa-rise .6s ease-out both; transition: box-shadow .25s, transform .25s; }
+.wrap > .card:nth-child(2), .wrap > * > .card:nth-child(2) { animation-delay: .08s; }
+.wrap > .card:nth-child(3), .wrap > * > .card:nth-child(3) { animation-delay: .16s; }
+.wrap > .card:nth-child(4), .wrap > * > .card:nth-child(4) { animation-delay: .24s; }
+.wrap > .card:nth-child(n+5), .wrap > * > .card:nth-child(n+5) { animation-delay: .3s; }
+.card:hover { box-shadow: 0 18px 50px color-mix(in srgb, var(--c1) 22%, transparent); }
+@keyframes tsa-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+
+.shell { animation: tsa-rise .7s ease-out both; }              /* login box */
+.dialog { animation: tsa-pop .25s ease-out both; }
+.msg { animation: tsa-pop .35s ease-out both; }
+@keyframes tsa-pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* ---------- Title shimmer ---------- */
+header h1 { background-size: 200% 200%; animation: tsa-shine 7s ease-in-out infinite; }
+@keyframes tsa-shine { 50% { background-position: 100% 50%; } }
+
+/* ---------- Start call button: gentle pulse while idle ---------- */
+.btn-call { animation: tsa-pulse 2.4s ease-out infinite; }
+@keyframes tsa-pulse {
+  0%   { box-shadow: 0 8px 24px color-mix(in srgb, #10b981 40%, transparent), 0 0 0 0 color-mix(in srgb, #10b981 45%, transparent); }
+  70%  { box-shadow: 0 8px 24px color-mix(in srgb, #10b981 40%, transparent), 0 0 0 14px transparent; }
+  100% { box-shadow: 0 8px 24px color-mix(in srgb, #10b981 40%, transparent), 0 0 0 0 transparent; }
+}
+
+/* ---------- Buttons: small press feedback ---------- */
+button:not(:disabled):active { transform: scale(.97); }
+
+@media (prefers-reduced-motion: reduce) {
+  .sky .cloud, .card, .shell, .dialog, .msg, header h1, .btn-call { animation: none !important; }
+}
