@@ -117,7 +117,7 @@ $("speedRange").addEventListener("input", () => { renderSpeed(); markDirty(); })
 
 function refreshName() {
   $("agentName").textContent = agentName();
-  $("avatar").textContent = agentName()[0].toUpperCase();
+  $("avatar").setAttribute("aria-label", agentName());
   $("miniAvatar").textContent = agentName()[0].toUpperCase();
   renderSummary();
 }
@@ -1552,52 +1552,16 @@ $("recBtn").addEventListener("click", async () => {
   } else startRecording();
 });
 
-// ---------- visualizer: frequency ring that reacts to voices, coloured by phase / emotion ----------
-const viz = $("viz"), vctx = viz.getContext("2d");
-(function sizeCanvas() {
-  const dpr = window.devicePixelRatio || 1;
-  viz.width = 240 * dpr; viz.height = 240 * dpr;
-  vctx.scale(dpr, dpr);
-})();
+// ---------- the agent on the call card ----------
 const freq = new Uint8Array(128);
 let smoothLevel = 0;
 
-function phaseColor() {
-  if (state.phase === "speaking") return EMO_COLOR[state.emotion] || EMO_COLOR.neutral;
-  if (state.phase === "listening") return state.muted ? "#94a3b8" : getComputedStyle(document.documentElement).getPropertyValue("--green").trim();
-  if (state.phase === "thinking") return getComputedStyle(document.documentElement).getPropertyValue("--amber").trim();
-  return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
-}
-
-// Agent animation on the call card (drawn around the avatar):
-//   idle      a slowly turning gradient ring that breathes
-//   listening ripples spreading out (green; grey when muted), stronger while the caller is loud
-//   thinking  a gradient arc spinning, with dots orbiting the other way
-//   speaking  three soft "liquid" blobs that wobble with the agent's voice, in the emotion colour + theme colours
-let vizCols = null, vizColsAt = 0;
-function vizColors(ts) {
-  if (!vizCols || ts - vizColsAt > 500) {
-    const css = getComputedStyle(document.documentElement);
-    const g = (n, d) => css.getPropertyValue(n).trim() || d;
-    vizCols = { c1: g("--c1", "#7c3aed"), c2: g("--c2", "#ec4899"), c3: g("--c3", "#06b6d4") };
-    vizColsAt = ts;
-  }
-  return vizCols;
-}
-function ringGradient(angle, cols) {
-  if (!vctx.createConicGradient) return cols[0];
-  const gr = vctx.createConicGradient(angle, 120, 120);
-  cols.forEach((c, i) => gr.addColorStop(i / (cols.length - 1), c));
-  return gr;
-}
+// Ava, the cartoon agent (agent-face.js), follows the call: phase, the emotion of the sentence being spoken, and the
+// loudness of the voice (the agent's while speaking, the caller's while listening) for the lip-sync and the glow.
+AgentFace.mount($("avatar"));
 
 function drawViz(ts) {
-  const W = 240, cx = 120, cy = 120, base = 64;
-  vctx.clearRect(0, 0, W, W);
-  const { c1, c2, c3 } = vizColors(ts);
-  const color = phaseColor();
   let level = 0;
-
   if (state.analyser && (state.phase === "speaking" || state.phase === "listening")) {
     state.analyser.getByteFrequencyData(freq);
     for (let i = 0; i < 64; i++) level += freq[i];
@@ -1606,60 +1570,7 @@ function drawViz(ts) {
   smoothLevel += (level - smoothLevel) * 0.25;
   const lv = Math.min(1, smoothLevel * 2.2);
   $("avatar").style.setProperty("--level", lv.toFixed(3));
-  vctx.lineCap = "round";
-
-  if (state.phase === "speaking") {
-    const blobCols = [color, c2, c3];
-    for (let k = 2; k >= 0; k--) {
-      const amp = 5 + lv * (26 - k * 5), t = ts / (900 + k * 260);
-      vctx.beginPath();
-      for (let i = 0; i <= 90; i++) {
-        const a = (i / 90) * Math.PI * 2;
-        const r = base + 4 + k * 5 + amp * (0.55 * Math.sin(a * 3 + t * 2 + k) + 0.3 * Math.sin(a * 5 - t * 3 + k * 2) + 0.15 * Math.sin(a * 7 + t * 4));
-        const x = cx + Math.cos(a) * r, y = cy + Math.sin(a) * r;
-        i ? vctx.lineTo(x, y) : vctx.moveTo(x, y);
-      }
-      vctx.closePath();
-      vctx.globalAlpha = 0.28 + lv * 0.25;
-      vctx.fillStyle = blobCols[k];
-      vctx.fill();
-    }
-    // a thin turning ring on top keeps the shape crisp
-    vctx.globalAlpha = 0.9;
-    vctx.strokeStyle = ringGradient(ts / 900, [color, c2, c3, color]);
-    vctx.lineWidth = 3;
-    vctx.beginPath(); vctx.arc(cx, cy, base + 2, 0, Math.PI * 2); vctx.stroke();
-  } else if (state.phase === "thinking") {
-    const a = ts / 420;
-    vctx.globalAlpha = 0.18; vctx.strokeStyle = c1; vctx.lineWidth = 6;
-    vctx.beginPath(); vctx.arc(cx, cy, base + 12, 0, Math.PI * 2); vctx.stroke();
-    vctx.globalAlpha = 1; vctx.lineWidth = 6;
-    vctx.strokeStyle = ringGradient(a, ["transparent", c1, c2, c3]);
-    vctx.beginPath(); vctx.arc(cx, cy, base + 12, a, a + Math.PI * 1.6); vctx.stroke();
-    for (let i = 0; i < 3; i++) {
-      const b = -ts / 600 + (i * Math.PI * 2) / 3;
-      vctx.globalAlpha = 0.85; vctx.fillStyle = [c1, c2, c3][i];
-      vctx.beginPath(); vctx.arc(cx + Math.cos(b) * (base + 30), cy + Math.sin(b) * (base + 30), 5, 0, Math.PI * 2); vctx.fill();
-    }
-  } else if (state.phase === "listening") {
-    for (let i = 0; i < 3; i++) {
-      const p = (ts / 1800 + i / 3) % 1;
-      vctx.globalAlpha = (1 - p) * (0.45 + lv * 0.5);
-      vctx.strokeStyle = color;
-      vctx.lineWidth = 2 + lv * 4;
-      vctx.beginPath(); vctx.arc(cx, cy, base + 4 + p * 48, 0, Math.PI * 2); vctx.stroke();
-    }
-    vctx.globalAlpha = 0.9; vctx.lineWidth = 3 + lv * 3; vctx.strokeStyle = color;
-    vctx.beginPath(); vctx.arc(cx, cy, base + 4 + lv * 6, 0, Math.PI * 2); vctx.stroke();
-  } else {
-    const breathe = 0.5 + 0.5 * Math.sin(ts / 900);
-    vctx.globalAlpha = 0.25 + breathe * 0.2; vctx.lineWidth = 10 + breathe * 6;
-    vctx.strokeStyle = ringGradient(ts / 3000, [c1, c2, c3, c1]);
-    vctx.beginPath(); vctx.arc(cx, cy, base + 12, 0, Math.PI * 2); vctx.stroke();
-    vctx.globalAlpha = 0.95; vctx.lineWidth = 3;
-    vctx.beginPath(); vctx.arc(cx, cy, base + 12, 0, Math.PI * 2); vctx.stroke();
-  }
-  vctx.globalAlpha = 1;
+  AgentFace.frame(ts, { phase: state.phase, emotion: state.emotion, level: lv, muted: state.muted });
   requestAnimationFrame(drawViz);
 }
 requestAnimationFrame(drawViz);

@@ -68,13 +68,29 @@
   /* call stage */
   .phone { display: flex; flex-direction: column; align-items: center; }
   .stage { position: relative; width: 240px; height: 240px; display: grid; place-items: center; }
-  .stage canvas { position: absolute; inset: 0; width: 240px; height: 240px; pointer-events: none; }
-  .avatar { position: relative; width: 120px; height: 120px; border-radius: 50%; display: grid; place-items: center; font-size: 46px; font-weight: 700; color: #fff; cursor: pointer; user-select: none;
-    background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--emo, var(--c1)) 45%, white), var(--emo, var(--c1)) 60%, color-mix(in srgb, var(--emo, var(--c1)) 60%, black));
-    box-shadow: 0 0 calc(10px + var(--level, 0) * 50px) color-mix(in srgb, var(--emo, var(--c1)) 70%, transparent);
-    transform: scale(calc(1 + var(--level, 0) * .08)); transition: background .6s, box-shadow .08s, transform .08s; }
-  .emo-badge { position: absolute; right: 52px; bottom: 50px; width: 38px; height: 38px; border-radius: 50%; background: var(--panel); border: 2px solid var(--border); display: grid; place-items: center; font-size: 20px; opacity: 0; transform: scale(.6); transition: .25s; }
-  .emo-badge.show { opacity: 1; transform: scale(1); }
+  /* Ava, the cartoon agent (agent-face.js): glow behind her in the emotion colour, grows with the voice */
+  .avatar { position: relative; width: 240px; height: 240px; cursor: pointer; user-select: none; }
+  .avatar::before { content: ""; position: absolute; inset: 24px; border-radius: 50%; z-index: 0;
+    background: radial-gradient(circle, color-mix(in srgb, var(--emo, var(--c1)) 34%, transparent), transparent 70%);
+    transform: scale(calc(1 + var(--level, 0) * .25)); transition: background .6s, transform .08s; }
+  .agent-face { position: relative; z-index: 1; width: 100%; height: 100%; overflow: visible;
+    --af-skin: #ffd9b8; --af-skin-2: #f4b98f; --af-hair: #3b2a5a; --af-ink: #2a1f3d; }
+  .agent-face .af-char { transform-origin: 120px 200px; transition: transform .2s; }
+  .agent-face .af-eyeball, .agent-face .af-pupils, .agent-face .af-brow { transform-box: fill-box; transform-origin: center; transition: transform .25s; }
+  .agent-face .af-lids { transform-box: fill-box; transform-origin: top; transform: scaleY(0); }
+  .agent-face .af-cheek { opacity: 0; transition: opacity .4s; }
+  .agent-face .af-thought, .agent-face .af-ear { opacity: 0; transition: opacity .3s; }
+  .avatar[data-phase="thinking"] .af-thought, .avatar[data-phase="listening"] .af-ear { opacity: 1; }
+  .af-thought circle { animation: af-bob 1.2s ease-in-out infinite; }
+  .af-thought circle:nth-child(2) { animation-delay: .2s; } .af-thought circle:nth-child(3) { animation-delay: .4s; }
+  @keyframes af-bob { 50% { transform: translateY(-4px); } }
+  .af-ear path { transform-box: fill-box; transform-origin: left center; animation: af-wave 1.2s ease-out infinite; }
+  .af-ear path:nth-child(2) { animation-delay: .3s; }
+  @keyframes af-wave { from { opacity: .9; transform: scale(.7); } to { opacity: 0; transform: scale(1.3); } }
+  .avatar[data-phase="speaking"] .af-mic { animation: af-mic .4s ease-in-out infinite alternate; }
+  @keyframes af-mic { to { opacity: .45; } }
+  @media (prefers-reduced-motion: reduce) { .af-thought circle, .af-ear path, .af-mic { animation: none !important; } }
+  .emo-badge { display: none; }
   .name { font-size: 20px; font-weight: 650; } .status { color: var(--muted); font-size: 14px; margin-top: 2px; min-height: 20px; }
   .meta-line { font-size: 13px; color: var(--muted); min-height: 18px; margin-top: 2px; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
   .meta-line b { color: var(--text); font-weight: 600; }
@@ -605,8 +621,7 @@
     </div>
     <div class="phone">
       <div class="stage">
-        <canvas id="viz" width="240" height="240"></canvas>
-        <div class="avatar" id="avatar" title="Tap to interrupt and speak">A</div>
+        <div class="avatar" id="avatar" title="Tap to interrupt and speak" role="img" aria-label="Agent"></div>
         <div class="emo-badge" id="emoBadge"></div>
       </div>
       <div class="name" id="agentName">Aria</div>
@@ -943,6 +958,7 @@
   </div>
 </div>
 
+<script src="agent-face.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
