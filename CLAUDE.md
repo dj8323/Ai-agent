@@ -194,8 +194,9 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 - **Speaking speed:** `agents.speech_speed` (0.5–2.0; `agent.speechSpeed` in settings), set in Voice & AI; applied as
   `audio.playbackRate` (pitch kept) to every sentence and the preview.
 
-- Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions /
-  fallback. The agent replies after `conversation.responseDelayMs` of silence.
+- Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions
+  (`#interim` under the avatar, `showLive()`) / fallback. The caller's chat bubble is added only in `commitUtterance()`
+  with the final text (no draft bubble, no "corrected" chip). The agent replies after `conversation.responseDelayMs` of silence.
 - **📚 Tutorials = guided tours** (`#learn` opens the launcher pop-up `#learnModal` / `#tourGrid`): the `TOURS` array in
   app.js; each step has `target` (selector/array/fn), `title`, `text`, and `done()` (auto-advance when the user did it) or
   Next; also `ready`, `clickIn`, `before` (goTab/goCall), `warn`. Engine: `startTour` → `tourGo` → `tourTick` (200 ms:

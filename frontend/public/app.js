@@ -784,9 +784,9 @@ $("previewBtn").addEventListener("click", async () => {
 // ---------- speech input ----------
 // How listening works (fixes missed words and lets the transcript correct itself):
 // 1. While listening, the mic is recorded (MediaRecorder) from the very first moment, and its loudness is
-//    watched (voice activity detection). Browser speech recognition runs alongside only to show live words.
+//    watched (voice activity detection). Browser speech recognition runs alongside only to show live captions under the avatar.
 // 2. When the caller has been quiet for responseDelayMs after speaking, the whole recording goes to OpenAI
-//    speech-to-text, which hears far more accurately. The live bubble is then replaced with the corrected text.
+//    speech-to-text, which hears far more accurately. Only then is the caller's bubble added to the chat.
 // 3. If OpenAI STT is switched off in config.json or fails, the browser's own text is used.
 const sttOn = () => (SETTINGS.speechToText?.engine || "openai") === "openai" && !!window.MediaRecorder && !!state.micStream;
 const now = () => performance.now();
@@ -838,9 +838,8 @@ function safeStart() {
 function showLive(text) {
   const u = state.utter;
   if (!u || !text) return;
+  // Live captions only under the avatar; the chat shows the caller's words once the accurate transcript is back.
   $("interim").textContent = text;
-  if (!u.bubble) { u.bubble = addMsg("user", text); u.bubble.classList.add("live"); }
-  else setMsgText(u.bubble, text);
 }
 
 function micLevel() {
@@ -1014,7 +1013,7 @@ async function transcribe(blob) {
   return data.text;
 }
 
-// The caller finished speaking: get the accurate text, correct the live bubble, and reply.
+// The caller finished speaking: get the accurate text, add the caller's bubble, and reply.
 async function commitUtterance() {
   const u = state.utter;
   if (!u || u.committing) return;
@@ -1025,26 +1024,23 @@ async function commitUtterance() {
   setPhase("thinking", "Got it…");
   $("interim").textContent = "";
   const t0 = now();
-  if (!u.bubble) { u.bubble = addMsg("user", "…"); u.bubble.classList.add("live"); }
 
-  let text = u.srText, sttMs = null, corrected = false;
+  let text = u.srText, sttMs = null;
   const early = u.spec && u.spec.voiceAt === u.lastVoiceAt ? u.spec.promise : null; // started during the silence
   const blob = await stopRecorder(u);
   if (blob && sttOn()) {
     try {
       const heard = (early && (await early)) ?? (await transcribe(blob));
       sttMs = Math.round(now() - t0);
-      if (heard) { corrected = !!u.srText && heard.trim().toLowerCase() !== u.srText.trim().toLowerCase(); text = heard; }
+      if (heard) text = heard;
     } catch (e) {
       console.warn("OpenAI transcription failed, using browser text:", e);
     }
   }
   text = (text || "").trim();
-  if (!state.inCall) { u.bubble.remove(); return; }
-  if (!text || !/[\p{L}\p{N}]/u.test(text)) { u.bubble.remove(); startListening(); return; } // just noise
-  setMsgText(u.bubble, text);
-  u.bubble.classList.remove("live");
-  if (corrected) { addChip(u.bubble, "✏️ corrected", "corrected"); u.bubble.querySelector('[data-k="corrected"]').title = `Live captions heard: "${u.srText}"`; }
+  if (!state.inCall) return;
+  if (!text || !/[\p{L}\p{N}]/u.test(text)) { startListening(); return; } // just noise
+  u.bubble = addMsg("user", text);
   if (sttMs != null) u.bubble.querySelector(".timing").textContent = `🎙 transcribed in ${fmtS(sttMs)}`;
   sendUserText(text, { bubble: u.bubble, t0 });
 }
