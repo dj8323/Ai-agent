@@ -144,7 +144,7 @@ voice_ai_web/          ── frontend team ──
                        conversation, call summaries), My agents view (list + tabbed editor), dialogs.
   public/app.js        Menu/tab routing, agent picker + summary, persona/availability/emergency editors, call flow,
                        speech in/out, tag parsing, messages, calendar, playbooks, call summaries.
-  public/agent-face.js Ava, the cartoon agent on the call card (states, 20 emotions, lip-sync).
+  public/agent-face.js The cartoon agent on the call card: female or male by voice; states, 20 emotions, lip-sync.
   public/motion.css + motion.js   Shared motion theme on all three pages: "Network" canvas background (`.net-bg`,
                        z-index -1, drawn by motion.js, colour --net-dot), glass cards rise in + lift on hover,
                        pill menu bar (.topnav, .tabs), bubbles pop in, typing dots (`showTyping()` in app.js while
@@ -214,8 +214,10 @@ voice_ai_web/          ── frontend team ──
 - **Silence re-ask:** `conversation.silenceRetrySeconds` (8) / `silenceRetries` (2) in app_config (Admin → App settings).
   `vadTick()` → `silencePrompt()` sends a hidden `[no response]` turn; after the re-asks `[no response, end call]` and
   `state.silenceEnding` hangs up after that goodbye even without `<hangup:yes>`. Markers are filtered out of summaries.
-- **Call card agent = "Ava"**, a cartoon person with a headset (`voice_ai_web/public/agent-face.js`, SVG in `#avatar`):
-  `drawViz()` calls `AgentFace.frame(ts, {phase, emotion, level, muted})` every frame. idle: breathes/blinks/glances ·
+- **Call card agent** = a cartoon person with a headset (`voice_ai_web/public/agent-face.js`, SVG in `#avatar`), **female**
+  (long hair, lashes, blouse) for female voices and Alloy, **male** (short spiky hair, wider jaw, shirt + tie) for Cedar, Ballad,
+  Ash, Echo, Verse (`MALE_VOICES`, `characterFor(voice)`). `drawViz()` calls `AgentFace.setCharacter($("voice").value)`
+  (switches at once when the voice changes) and `AgentFace.frame(ts, {phase, emotion, level, muted})` every frame. idle: breathes/blinks/glances ·
   listening: leans in, brows up, sound waves at the ear (eyes down when muted) · thinking: tilt, looks up, thought bubbles ·
   speaking: mouth opens with the analyser level (lip-sync), head bobs. `FACE` maps all 20 agent emotions (smile, brows,
   tilt, one brow up, blush, eye size, mouth width; caller moods via `ALIAS`); glow behind = `--emo` colour × `--level`. **Agent bubbles** show only

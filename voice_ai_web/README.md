@@ -91,7 +91,7 @@ public/
   login.html        sign in + create account
   index.html        call page + My agents + dialogs (layout + CSS, light/dark theme tokens)
   app.js            routing, agent setup, call flow, speech in/out, live caller bubble, tours
-  agent-face.js     "Ava", the cartoon agent on the call card: talks with the voice, listens, thinks, 20 emotions
+  agent-face.js     the cartoon agent on the call card (woman for female voices, man for male voices): talks with the voice, listens, thinks, 20 emotions
   admin.html, admin.js   admin dashboard
   motion.css, motion.js  shared motion theme (network background, glass cards, pill menu, chat animations)
   telemune-mark.png, telemune-logo.svg   logo / favicon

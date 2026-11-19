@@ -1556,7 +1556,7 @@ $("recBtn").addEventListener("click", async () => {
 const freq = new Uint8Array(128);
 let smoothLevel = 0;
 
-// Ava, the cartoon agent (agent-face.js), follows the call: phase, the emotion of the sentence being spoken, and the
+// The cartoon agent (agent-face.js: a woman for female voices, a man for male voices) follows the call: phase, the emotion of the sentence being spoken, and the
 // loudness of the voice (the agent's while speaking, the caller's while listening) for the lip-sync and the glow.
 AgentFace.mount($("avatar"));
 
@@ -1570,6 +1570,7 @@ function drawViz(ts) {
   smoothLevel += (level - smoothLevel) * 0.25;
   const lv = Math.min(1, smoothLevel * 2.2);
   $("avatar").style.setProperty("--level", lv.toFixed(3));
+  AgentFace.setCharacter($("voice").value); // female or male character, from the agent's voice (no-op when unchanged)
   AgentFace.frame(ts, { phase: state.phase, emotion: state.emotion, level: lv, muted: state.muted });
   requestAnimationFrame(drawViz);
 }
