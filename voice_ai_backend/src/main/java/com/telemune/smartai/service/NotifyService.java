@@ -27,7 +27,7 @@ import java.util.concurrent.Executors;
  * (WhatsApp, email). Everything runs in the background so a slow gateway never holds up the call.
  *
  * Email: Spring Mail (spring.mail.* in keys.env). WhatsApp: the Telemune WhatsApp gateway (whatsapp.* in keys.env):
- *   GET {base-url}{template-send-path}?{param.to}=<number>&{param.template}=<template>&{param.params}=<v1>,<v2>,...
+ *   POST {base-url}{template-send-path}  {"to": "+<number>", "template": <name>, "reply": <text>, "params": [<v1>, <v2>, ...]}
  * The query parameter names and the values each template takes are settings (whatsapp.param.*, whatsapp.*-params),
  * so they can match the gateway without code changes. Values: agent, owner, caller, date, duration, summary, label,
  * keyword, number.
@@ -134,19 +134,27 @@ public class NotifyService {
     return one.length() > 900 ? one.substring(0, 897) + "…" : one.isEmpty() ? "-" : one;
   }
 
+  /**
+   * One template message through the Telemune WhatsApp gateway: POST {base}{template-send-path} with JSON
+   * {"to": "+<number>", "template": <name>, "reply": <reply text>, "params": [v1, v2, …]}; the values are also sent as
+   * ?params=v1,v2 (the form the gateway used before). The gateway answers {"error": …} when something is wrong.
+   */
   private void whatsapp(String base, String to, String template, String paramNames, Map<String, String> v, String what) {
-    String number = to.replaceAll("[^\\d]", "");
+    String number = "+" + to.replaceAll("[^\\d]", "");
     List<String> params = new ArrayList<>();
     for (String name : paramNames.split(",")) if (!name.isBlank()) params.add(param(v.getOrDefault(name.trim(), "-")));
     String url = base.replaceAll("/+$", "") + prop("whatsapp.template-send-path", "/sendWhatsApp")
-        + "?" + prop("whatsapp.param.to", "msisdn") + "=" + enc(number)
-        + "&" + prop("whatsapp.param.template", "templateName") + "=" + enc(template)
-        + "&" + prop("whatsapp.param.params", "params") + "=" + enc(String.join(",", params));
+        + (params.isEmpty() ? "" : "?" + prop("whatsapp.param.params", "params") + "=" + enc(String.join(",", params)));
+    Map<String, Object> body = J.map(prop("whatsapp.param.to", "to"), number, prop("whatsapp.param.template", "template"), template,
+        prop("whatsapp.param.reply", "reply"), prop("emergency".equals(what) ? "whatsapp.emergency-reply" : "whatsapp.summary-reply", "Thanks"),
+        prop("whatsapp.param.params", "params"), params);
     try {
-      HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20)).GET().build();
+      HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20)).header("Content-Type", "application/json")
+          .POST(HttpRequest.BodyPublishers.ofString(J.json(body))).build();
       HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
-      if (res.statusCode() / 100 == 2) log.info("WhatsApp {} sent to {} with template {} (HTTP {}): {}", what, mask(number), template, res.statusCode(), J.str(res.body(), 200));
-      else log.warn("WhatsApp {} to {} failed: HTTP {} {}", what, mask(number), res.statusCode(), J.str(res.body(), 300));
+      boolean error = res.statusCode() / 100 != 2 || res.body().contains("\"error\"");
+      if (!error) log.info("WhatsApp {} sent to {} with template {} (HTTP {}): {}", what, mask(number), template, res.statusCode(), J.str(res.body(), 200));
+      else log.warn("WhatsApp {} to {} failed: HTTP {} {}", what, mask(number), res.statusCode(), J.str(res.body(), 400));
     } catch (Exception e) {
       log.warn("WhatsApp {} to {} failed: {}", what, mask(number), e.toString());
     }
