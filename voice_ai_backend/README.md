@@ -50,7 +50,8 @@ Run it from this folder (or set `APP_HOME`): it reads `.env`, `config.json` and 
 
 **`keys.env`** (optional, never commit; template `keys.env.example`): keys for the planned providers and channels:
 ElevenLabs (STT + TTS), AWS Transcribe + Polly, Cartesia (TTS), WhatsApp Cloud API, SMTP email, Flash SMS gateway.
-Read like `.env`; an empty key leaves that provider off.
+Spring property names (`aws.access-key`, `elevenlabs.api-key`, `cartesia.api-key`, `spring.mail.*`, `whatsapp.*`,
+`sms.*`), read after `.env`; an empty key leaves that provider off.
 
 **`config.json`** seeds the app settings (`app_config` table) on the **first** start only: branding, agent defaults,
 models, speech-to-text, conversation timing, history, calendar, emergency, auth. After that, change them in the admin
