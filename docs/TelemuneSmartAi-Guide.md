@@ -48,20 +48,28 @@ The app is two applications: a **Spring Boot backend** (Java) that holds all the
 
 ## Getting started
 
-One command starts everything: `./runScript.sh` in the `voice-assistant` folder, then open http://localhost:8323 in Chrome or Edge.
+The project is two separate applications, each in its own folder with its own settings, run script, logs and README:
+
+| App | Folder | For | Start |
+| --- | --- | --- | --- |
+| Backend (API) | `voice_ai_backend/` | backend team | `./run.sh` (port 8324) |
+| Web app (pages) | `voice_ai_web/` | frontend team | `./run.sh` (ports 8323 http, 8443 https) |
+
+On one computer, `./runScript.sh` in the `voice-assistant` folder starts both; then open http://localhost:8323 in Chrome or Edge.
 
 ### What you need
 
 | Item | Detail |
 | --- | --- |
-| Java | JDK 21 or newer (runs the Spring Boot backend) |
-| Maven | Builds the backend the first time and after code changes |
-| Node.js | Version 22 or newer (runs the web frontend; no packages to install) |
+| Java | JDK 21 or newer (voice_ai_backend) |
+| Maven | Builds voice_ai_backend the first time and after code changes |
+| Node.js | Version 22 or newer (voice_ai_web; no packages to install) |
+| openssl | Makes voice_ai_web's HTTPS certificate |
 | MySQL | Version 8, running locally (the database and tables are created automatically) |
 | OpenAI API key | From platform.openai.com; pays for chat, voice and transcription |
 | Browser | Chrome or Edge for live captions; any browser with a microphone works for OpenAI speech-to-text |
 
-### The .env file (secrets only)
+### The backend's .env file (secrets only)
 
 ```
 OPENAI_API_KEY=sk-...
@@ -70,33 +78,35 @@ MYSQL_PORT=3306
 MYSQL_USER=root
 MYSQL_PASSWORD=...
 MYSQL_DATABASE=ai-agent
-# BACKEND_PORT=8324   (optional)
+BACKEND_PORT=8324
+BACKEND_HOST=127.0.0.1
 ```
 
-Copy `.env.example` to `.env` and fill it in. It is never committed to git.
+Copy `voice_ai_backend/.env.example` to `voice_ai_backend/.env` and fill it in. It is never committed to git.
+The web app needs no secrets: its `voice_ai_web/config.json` holds `port`, `httpsPort` and `backendUrl` (where the backend runs).
 
 ### Starting the app
 
-1. Run `./runScript.sh`. It checks Java and Node, checks `.env`, builds the backend when its code changed, stops any older copy of the app, starts the backend (port 8324, logs in `logs/backend.log` and `logs/error.log`) and then the frontend (port 8323), and opens Chrome (`NO_OPEN=1 ./runScript.sh` skips the browser). Ctrl+C stops both.
-2. On every start the backend creates any missing tables, adds the ready-made agent types and templates (`db/seed.sql`) if they're not there yet, copies the default settings from `config.json` into the database the first time, and creates the admin account if there are no users.
+1. Run `./runScript.sh`. It starts `voice_ai_backend/run.sh` (checks Java and `.env`, builds when the code changed, restarts an older copy, starts on port 8324, logs in `voice_ai_backend/logs/`) and then `voice_ai_web/run.sh` (checks Node, makes the HTTPS certificate, starts on 8323 and 8443, logs in `voice_ai_web/logs/`), and opens Chrome (`NO_OPEN=1 ./runScript.sh` skips the browser). Ctrl+C stops both. Each app can also be started on its own with `./run.sh` in its folder.
+2. On every start the backend creates any missing tables, adds the ready-made agent types and templates (`voice_ai_backend/db/seed.sql`) if they're not there yet, copies the default settings from `voice_ai_backend/config.json` into the database the first time, and creates the admin account if there are no users.
 3. Open http://localhost:8323. Signed-out visitors are sent to the login page.
 4. Sign in as **admin / admin@123** and change the password straight away (a banner reminds you).
 
-The page port (8323) is set in `config.json` under `server.port`; the backend port in `.env` as `BACKEND_PORT`. After changing backend code, run `./runScript.sh` again: it rebuilds and restarts. The backend only listens on this computer; the browser always goes through the frontend.
+The page ports are in `voice_ai_web/config.json` (`port`, `httpsPort`); the backend port in `voice_ai_backend/.env` as `BACKEND_PORT`. After changing backend code, run `./run.sh` (or `./runScript.sh`) again: it rebuilds and restarts. The backend listens only on this computer by default; the browser always goes through the web app. To run the two on different servers: set `backendUrl` in the web app's config.json, and `BACKEND_HOST=0.0.0.0` plus `TRUSTED_PROXIES=<web server IP>` in the backend's `.env`.
 
 ### Opening the app from other computers (HTTPS)
 
 Browsers only allow the **microphone** on `https://` pages or on `localhost`. So on this computer you use
 `http://localhost:8323`, but other computers on the network must use **https**:
 
-1. `./runScript.sh` makes an HTTPS certificate for this computer once (`certs/server.crt` + `certs/server.key`, made by
-   `scripts/make-cert.sh`; it covers localhost, the computer's name and its current IP addresses) and prints the
+1. `voice_ai_web/run.sh` makes an HTTPS certificate for this computer once (`voice_ai_web/certs/server.crt` + `.key`, made by
+   `voice_ai_web/scripts/make-cert.sh`; it covers localhost, the computer's name and its current IP addresses) and prints the
    address to share, e.g. `From other computers: https://192.168.0.100:8443`.
 2. On the other computer, open that address. Someone who opens `http://192.168.0.100:8323` is sent there automatically.
 3. The first time, the browser warns "Your connection is not private" because the certificate is made by this computer,
    not by a public authority. Click **Advanced → Proceed to 192.168.0.100 (unsafe)**. The page opens and the microphone works.
 
-**To remove the warning for good**, copy `certs/server.crt` to the other computer and trust it once:
+**To remove the warning for good**, copy `voice_ai_web/certs/server.crt` to the other computer and trust it once:
 
 | Computer | How |
 | --- | --- |
@@ -107,9 +117,9 @@ Browsers only allow the **microphone** on `https://` pages or on `localhost`. So
 
 Good to know:
 
-- **IP address changed** (e.g. a new Wi-Fi)? `./runScript.sh` notices and makes a new certificate; computers that trusted
-  the old one need the new `server.crt`. `./scripts/make-cert.sh --force` makes a new one by hand.
-- HTTPS port: `server.httpsPort` in `config.json` (8443) or `HTTPS_PORT` in `.env`. `HTTPS=off` in `.env` turns it off.
+- **IP address changed** (e.g. a new Wi-Fi)? `voice_ai_web/run.sh` notices and makes a new certificate; computers that trusted
+  the old one need the new `server.crt`. `voice_ai_web/scripts/make-cert.sh --force` makes a new one by hand.
+- HTTPS port: `httpsPort` in `voice_ai_web/config.json` (8443) or `HTTPS_PORT` in `voice_ai_web/.env`. `HTTPS=off` there turns it off.
   Allow ports 8323 and 8443 in the computer's firewall if other computers can't connect.
 - Over https the sign-in cookie is marked **Secure** (never sent over plain http).
 - For a real server with a domain name, use a trusted certificate instead (e.g. Caddy or nginx with Let's Encrypt in
@@ -421,16 +431,19 @@ Deleting an agent keeps its calls, events and messages (their agent link is clea
 
 | Location | Contents |
 | --- | --- |
-| `data/users/<userId>/recordings/` | Call recordings (.webm) |
+| `voice_ai_backend/data/users/<userId>/recordings/` | Call recordings (.webm) |
 | `backups/pre-mysql-2026-11-17/` | Full copy of the old file-based data before the move to MySQL |
 | `backups/pre-login-2026-11-17/` | Older copy from before accounts were added |
-| `.env` | OpenAI key and MySQL login (never committed) |
-| `config.json` | Page port, and the first-start defaults copied into `app_config` |
-| `logs/backend.log`, `logs/error.log` | The backend's logs: everything / problems only |
+| `voice_ai_backend/.env` | OpenAI key, MySQL login, backend port (never committed) |
+| `voice_ai_backend/config.json` | First-start defaults copied into `app_config` |
+| `voice_ai_backend/logs/backend.log`, `error.log` | The backend's logs: everything / problems only |
+| `voice_ai_web/config.json` | Page ports and the backend address |
+| `voice_ai_web/logs/web.log`, `error.log` | The web app's logs: every request / problems only |
+| `voice_ai_web/certs/` | The HTTPS certificate (never committed) |
 
 ### Version history (git)
 
-The code is in a git repository and every change is committed first, so any earlier version can be restored. Secrets, the `data/` folder and backups are excluded from git.
+The code is in a git repository and every change is committed first, so any earlier version can be restored. Secrets, recordings (`voice_ai_backend/data/`), logs, certificates and backups are excluded from git.
 
 ## How it works (architecture)
 
@@ -440,8 +453,8 @@ The browser talks only to the web frontend; the frontend passes every `/api` req
 
 | App | Folder | Built with | Job |
 | --- | --- | --- | --- |
-| Web frontend | `frontend/` | Node.js, no packages; plain HTML, CSS and JavaScript, no build step | Serves the pages, sends signed-out visitors to the login page, forwards `/api` (including the streamed replies) to the backend |
-| Backend | `backend/` | Spring Boot 3.5, Java 21, JdbcTemplate, MySQL Connector/J | Accounts, agents, templates, calls, messages, calendar, admin, logs; OpenAI chat, voice, transcription and summaries |
+| Web app | `voice_ai_web/` | Node.js, no packages; plain HTML, CSS and JavaScript, no build step | Serves the pages, sends signed-out visitors to the login page, forwards `/api` (including the streamed replies) to the backend |
+| Backend | `voice_ai_backend/` | Spring Boot 3.5, Java 21, JdbcTemplate, MySQL Connector/J | Accounts, agents, templates, calls, messages, calendar, admin, logs; OpenAI chat, voice, transcription and summaries |
 
 Because the browser sees one address, the sign-in cookie and the live reply stream work without extra setup, and the backend stays private to the computer.
 
@@ -532,7 +545,7 @@ The auth, agent-limit and silence settings are editable in the admin dashboard; 
 
 ### Logs
 
-The backend writes two log files in `logs/` (times in UTC, like the database):
+The backend writes two log files in `voice_ai_backend/logs/` (times in UTC, like the database):
 
 | File | What's in it |
 | --- | --- |
@@ -540,20 +553,21 @@ The backend writes two log files in `logs/` (times in UTC, like the database):
 | `error.log` | Problems only (failed sign-ins, errors, OpenAI and database failures). Look here first |
 
 Every line has a **request id**, e.g. `[08c2f1f2]`. The browser gets the same id in the `X-Request-Id` header, and it is
-saved in the `api_logs` and `activity_logs` tables, so `grep 08c2f1f2 logs/backend.log` shows one request from start to end.
-Set `LOG_LEVEL=INFO` / `SQL_LOG=INFO` in `.env` for less detail. **docs/Troubleshooting.md** lists every table and
+saved in the `api_logs` and `activity_logs` tables, so `grep 08c2f1f2 voice_ai_backend/logs/backend.log` shows one request from start to end. The web app keeps its own
+`voice_ai_web/logs/web.log` (one line per request, ending with the same `[08c2f1f2]`) and `error.log`.
+Set `LOG_LEVEL=INFO` / `SQL_LOG=INFO` in the backend's `.env` for less detail. **voice_ai_backend/Troubleshooting.md** lists every table and
 ready-made SQL queries for sign-in, error, speed, call and agent problems.
 
 ### Troubleshooting
 
 | Symptom | Fix |
 | --- | --- |
-| "The microphone needs https or localhost" | You opened the page by IP over http. Use the https address `./runScript.sh` prints (e.g. `https://192.168.0.100:8443`); see *Opening the app from other computers* |
-| "The backend stopped while starting" | Start MySQL and check the `MYSQL_*` values in `.env`; details in `logs/error.log` |
-| "The backend isn't running" page or error | Start everything with `./runScript.sh` |
+| "The microphone needs https or localhost" | You opened the page by IP over http. Use the https address the web app prints (e.g. `https://192.168.0.100:8443`); see *Opening the app from other computers* |
+| "The backend stopped while starting" | Start MySQL and check the `MYSQL_*` values in `voice_ai_backend/.env`; details in `voice_ai_backend/logs/error.log` |
+| "The backend isn't running" page or error | Start voice_ai_backend (`./run.sh` in its folder) or everything with `./runScript.sh`; check `backendUrl` in `voice_ai_web/config.json` |
 | "Backend build failed" | Install a JDK 21+ and Maven, then run `./runScript.sh` again |
-| "Server is missing a valid OPENAI_API_KEY" | Add the key to `.env` and restart |
-| Anything else | Open `logs/error.log`, take the request id from the line, then `grep <id> logs/*.log` (see docs/Troubleshooting.md) |
+| "Server is missing a valid OPENAI_API_KEY" | Add the key to `voice_ai_backend/.env` and restart the backend |
+| Anything else | Open `voice_ai_backend/logs/error.log`, take the request id from the line, then `grep <id> voice_ai_backend/logs/*.log voice_ai_web/logs/*.log` (see voice_ai_backend/Troubleshooting.md) |
 | "Rate limited or out of credit" | Check OpenAI billing |
 | Microphone doesn't work | Use Chrome or Edge at http://localhost (the Claude in-app browser blocks the mic) |
 | Agent cuts in too early or waits too long | Change `conversation.responseDelayMs` |

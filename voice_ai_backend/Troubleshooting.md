@@ -5,7 +5,8 @@ what each table holds, and ready-to-run SQL queries.
 
 ## 1. Log files
 
-All logs are in `logs/` in the project folder (`LOG_DIR` in `.env` moves them). Old files are rotated daily (or at the
+voice_ai_backend writes its logs to `voice_ai_backend/logs/` (`LOG_DIR` in `.env` moves them). The web app has its own:
+`voice_ai_web/logs/web.log` (one line per request with the same `[request id]`) and `voice_ai_web/logs/error.log`. Old files are rotated daily (or at the
 size limit) into `logs/archive/` as `.gz`.
 
 Only two files:
@@ -55,6 +56,9 @@ grep "\[qa.logs\]" logs/backend.log
 
 # 4. live view while you reproduce the problem
 tail -f logs/backend.log
+
+# 5. the same request in the web app's log (run in voice_ai_web/)
+grep "\[08c2f1f2\]" logs/web.log
 ```
 
 Example: one chat turn in `backend.log`
@@ -84,7 +88,7 @@ The OpenAI `request id` (`req_…`) is what OpenAI support asks for.
 | Caller's words wrong | `backend.log`: `Transcript: "…"` and `Caller said: "…"` | Mic, language setting, `speechToText.model` |
 | User can't sign in | `error.log`: `Sign-in FAILED: <user> from <ip> - <reason>` | reason = unknown user / wrong password / locked / disabled. Queries in §5 |
 | "Please sign in." on every click | `backend.log`: `Refused 401: Please sign in.` | Session expired or deleted (`sessions` table) |
-| "Cross-site request blocked." | `backend.log`: `Refused 403` | Page opened from another host/port than the frontend |
+| "Cross-site request blocked." | `backend.log`: `Refused 403` | Page opened from another host/port than voice_ai_web |
 | "Create an agent first." | `backend.log`: `API answered 400: Create an agent first.` | User has no agents (normal for new accounts) |
 | Something saved wrong | `backend.log` SQL lines for that request id: the exact UPDATE/INSERT and its values | |
 | Server error 500 | `error.log`: `Request failed with an unexpected error` + Java stack trace | Send the stack trace to the developer |

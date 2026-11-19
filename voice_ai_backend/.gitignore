@@ -1,0 +1,5 @@
+# secrets, runtime data, logs, build output
+.env
+data/
+logs/
+target/

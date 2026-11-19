@@ -8,27 +8,33 @@ Branding: "TelemuneSmartAi", footer "Powered by Telemune © 2027 · Designed by 
 
 ## Two applications (read this first)
 
+Split on 2026-11-19 into two self-contained apps (own settings, run script, logs, README, .gitignore) for two teams:
+
 | App | Folder | Port | What it does |
 |---|---|---|---|
-| **Backend** | `backend/` | `BACKEND_PORT` (8324), bound to 127.0.0.1 | Spring Boot 3.5 (Java 21+, Maven). Every `/api` route, MySQL, OpenAI |
-| **Frontend** | `frontend/` | `server.port` in `config.json` (8323) | Node 22+, no dependencies. Serves `frontend/public/` and forwards `/api/*` to the backend (same origin, so cookies and SSE just work) |
+| **Backend** | `voice_ai_backend/` | `BACKEND_PORT` (8324), `BACKEND_HOST` (127.0.0.1) | Spring Boot 3.5 (Java 21+, Maven). Every `/api` route, MySQL, OpenAI. Own `.env`, `config.json`, `db/`, `data/`, `logs/`, `run.sh`, `README.md`, `Troubleshooting.md` |
+| **Web** | `voice_ai_web/` | `port` (8323) / `httpsPort` (8443) in its `config.json` | Node 22+, no dependencies. Serves `voice_ai_web/public/` and forwards `/api/*` to `backendUrl` (same origin, so cookies and SSE just work). Own `config.json`, optional `.env`, `certs/`, `logs/`, `run.sh`, `README.md` |
 
-- The browser only talks to the frontend. Signed-out visits to `/`, `/index.html`, `/admin.html` → `/login.html`
+- Root keeps only `runScript.sh` (starts both: backend `run.sh` in the background, then web `run.sh`), `README.md`,
+  `CLAUDE.md`, `docs/` (product guide) and `backups/`. Each app's `run.sh` works on its own from its folder.
+- Separate servers: web `backendUrl` → backend address; backend `.env` `BACKEND_HOST=0.0.0.0` + `TRUSTED_PROXIES=<web IP>`
+  (X-Forwarded-For trusted only from loopback and those).
+- The browser only talks to the web app. Signed-out visits to `/`, `/index.html`, `/admin.html` → `/login.html`
   (the frontend asks the backend `/api/me`); `/admin.html` is admins only; `/api/*` returns 401 when signed out.
 - The old single Node server (`server.js`, `auth.js`, …) was replaced on 2026-11-18; it is in git history
   (commit `1bc7bec` and earlier).
 
 ## Storage = MySQL
 
-- Everything lives in MySQL, database **`ai-agent`** (connection in `.env`: `MYSQL_HOST/PORT/USER/PASSWORD/DATABASE`).
-  `db/schema.sql` = all tables (IF NOT EXISTS); `db/seed.sql` = ready-made agent types + templates (INSERT IGNORE, so
+- Everything lives in MySQL, database **`ai-agent`** (connection in `voice_ai_backend/.env`: `MYSQL_HOST/PORT/USER/PASSWORD/DATABASE`).
+  `voice_ai_backend/db/schema.sql` = all tables (IF NOT EXISTS); `db/seed.sql` = ready-made agent types + templates (INSERT IGNORE, so
   admin edits are kept). Both are copied into the backend jar and run on every backend start (`db/Db.java`), which
   also adds missing columns to old tables (`Db.migrate()`). Connections use UTC: every DATETIME is UTC.
 - Tables: `roles` (1 admin, 2 user) · `users` · `sessions` · `login_attempts` (every sign-in, drives the lockout) ·
   `app_config` (shared settings, one JSON per section) · `agent_types` + `agent_templates` (personas, greetings, scripts) ·
   `agents` + `emergency_rules` (each agent's own setup) · `playbooks` · `calls` + `call_summaries` · `calendar_events` ·
   `messages` (messages callers left) · `activity_logs` (who did what) · `api_logs` (every API request).
-- Only call recordings stay on disk: `data/users/<userId>/recordings/<file>` (file name in `calls.recording_file`).
+- Only call recordings stay on disk: `voice_ai_backend/data/users/<userId>/recordings/<file>` (file name in `calls.recording_file`).
 - Backups of the pre-MySQL JSON data: `backups/pre-mysql-2026-11-17/`, `backups/pre-login-2026-11-17/`.
 
 ## Accounts & roles
@@ -68,70 +74,85 @@ Branding: "TelemuneSmartAi", footer "Powered by Telemune © 2027 · Designed by 
 ## Run
 
 ```bash
-./runScript.sh            # checks Node 22+ / Java 21+, builds the backend if its code or db/*.sql changed, starts both, opens Chrome
-NO_OPEN=1 ./runScript.sh  # same, without opening a browser
+./runScript.sh                    # both: voice_ai_backend/run.sh (bg) then voice_ai_web/run.sh; opens Chrome
+NO_OPEN=1 ./runScript.sh          # same, without opening a browser
+cd voice_ai_backend && ./run.sh   # backend only (checks Java 21+, builds when src/pom/db changed); ./run.sh --build
+cd voice_ai_web && ./run.sh       # web only (checks Node 22+, makes the HTTPS cert, warns if the backend is down)
 ```
 
 - URL: http://localhost:8323. Ctrl+C stops both.
-- **HTTPS for other computers** (mic needs https off localhost): `frontend/server.js` also serves https on
-  `server.httpsPort` (8443) when `certs/server.crt` + `.key` exist (made by `scripts/make-cert.sh`, run by runScript; it
+- **HTTPS for other computers** (mic needs https off localhost): `voice_ai_web/server.js` also serves https on
+  `httpsPort` (8443) when `voice_ai_web/certs/server.crt` + `.key` exist (made by `scripts/make-cert.sh`, run by run.sh; it
   remakes them when the machine's IP changes). http://<IP>:8323 page GETs redirect there; localhost stays http. Over https
-  the proxy adds `x-forwarded-proto: https` and marks Set-Cookie `Secure`. `HTTPS=off` / `HTTPS_PORT` in .env. `certs/` is gitignored.
-- **Logs** (`backend/src/main/resources/logback-spring.xml`, times UTC): only two files: `logs/backend.log`
+  the proxy adds `x-forwarded-proto: https` and marks Set-Cookie `Secure`. `HTTPS=off` / `HTTPS_PORT` in voice_ai_web/.env. `certs/` is gitignored.
+- **Web logs** (`voice_ai_web/logs/`, written by server.js): `web.log` one line per request (http/https, method, path
+  without query, status, ms, IP, `[backend request id]`) and `error.log` (backend unreachable, 5xx, server errors).
+- **Backend logs** (`voice_ai_backend/src/main/resources/logback-spring.xml`, times UTC, in `voice_ai_backend/logs/`): `backend.log`
   (everything: every request `← METHOD path status in N ms`, sign-ins, activity, OpenAI calls with timings/tokens, at
   DEBUG the caller words, replies and every SQL statement via logger `SQL`, hashes masked) and `logs/error.log` (WARN+,
-  plus anything the JVM prints itself). Line = time · level · [requestId] · [user] · [agentId]. The request id (MDC, set in `ApiFilter`) is also the
+  plus anything the JVM prints itself; `GET /api/me` 401 stays INFO). Line = time · level · [requestId] · [user] · [agentId]. The request id (MDC, set in `ApiFilter`) is also the
   `X-Request-Id` header and `api_logs.request_id` / `activity_logs.request_id`. Levels: `LOG_LEVEL`, `SQL_LOG` in .env, or
   live via admin `GET/PUT /api/admin/log-level`. Slow SQL > 500 ms and slow requests > 3 s → WARN. Rotated into
-  `logs/archive/`. Troubleshooting guide with all tables and SQL queries: `docs/Troubleshooting.md`. New code: log
+  `logs/archive/`. Troubleshooting guide with all tables and SQL queries: `voice_ai_backend/Troubleshooting.md`. New code: log
   actions at INFO, details at DEBUG, never log secrets or the OpenAI key.
-- Build only: `cd backend && mvn -q -DskipTests package` → `backend/target/smartai-backend.jar`
-  (run it from the project folder: it reads `.env`, `config.json` and `data/` from the working directory).
-- Needs `OPENAI_API_KEY` and `MYSQL_*` in `.env` (copy `.env.example`). `.env` is the only place for secrets.
+- Build only: `cd voice_ai_backend && mvn -q -DskipTests package` → `voice_ai_backend/target/smartai-backend.jar`
+  (run it from `voice_ai_backend/`: it reads `.env`, `config.json` and `data/` from the working directory; `APP_HOME`).
+- Needs `OPENAI_API_KEY` and `MYSQL_*` in `voice_ai_backend/.env` (copy `.env.example`). That `.env` is the only place for secrets.
 - Best in **Chrome or Edge** (live captions use the Web Speech API). The Claude desktop in-app browser blocks the mic.
 
 ## File map
 
 ```
-config.json            Seed for app_config on first start + server.port (frontend port).
-db/schema.sql          All tables.     db/seed.sql   Agent types + templates (generated once from the old playbooks.js).
-backend/pom.xml        Spring Boot 3.5.6, Java 21, starter-web + starter-jdbc, mysql-connector-j, bcprov (scrypt).
-backend/src/main/resources/application.properties   Ports, datasource (UTC), .env import, app.home.
-backend/src/main/resources/defaults.json            Default settings (bottom layer).
-backend/src/main/java/com/telemune/smartai/
-  SmartAiApplication.java   main.        Bootstrap.java   seeds app_config, creates the first admin.
-  db/Db.java                schema + migrations + seed on start; query/one/count/exec/tx helpers.
-  web/ApiFilter.java        sign-in check, origin check, admin-only, ?as=, X-Agent-Id → Ctx, api_logs.
-  web/Ctx.java · ApiException.java · ErrorAdvice.java (every error is JSON {error}).
-  util/J.java               JSON/map helpers (rows are Map<String,Object>).
-  ai/OpenAiClient.java      HTTPS to OpenAI: chat (streamed + plain), speech, transcriptions, models.
-  ai/Prompts.java           voices (10), emotions (20), languages (16), system prompt + tag protocol.
-  service/                  AuthService, AgentService, TemplateService, PlaybookService, CallService,
-                            CalendarService, MessageService, AppConfigService, LogService.
-  api/                      AuthController, AgentController (+ /api/templates), ConfigController (config, settings,
-                            models), VoiceController (chat SSE, tts, transcribe, summary), DataController (playbooks,
-                            calls, calendar, messages), AdminController.
-frontend/server.js     Static files + /api proxy + page guard.  frontend/package.json (no deps).
-frontend/public/login.html   Sign in + Create account.
-frontend/public/admin.html + admin.js   KPIs, users, 🧩 agent types & templates editor, ⚙️ settings, 🔐 sign-ins, 📜 log.
-frontend/public/index.html   Layout + CSS (light/dark tokens): top menu, Call view (call card + summary card,
-                             conversation, call summaries), My agents view (list + tabbed editor), dialogs.
-frontend/public/app.js       Menu/tab routing, agent picker + summary, persona/availability/emergency editors, call flow,
-                             speech in/out, tag parsing, messages, calendar, playbooks, call summaries.
-frontend/public/motion.css + motion.js   Shared motion theme on all three pages: "Network" canvas background (`.net-bg`,
-                             z-index -1, drawn by motion.js, colour --net-dot), glass cards rise in + lift on hover,
-                             pill menu bar (.topnav, .tabs), bubbles pop in, typing dots (`showTyping()` in app.js while
-                             phase = thinking), title shimmer, rings on `.btn-call`; off with prefers-reduced-motion.
-frontend/public/telemune-mark.png / telemune-logo.svg   Logo (CSS mask, theme gradient) / favicon.
-runScript.sh           One-command start of both apps.  scripts/make-cert.sh  self-signed HTTPS cert (certs/).
-docs/Troubleshooting.md  Log files, tracing a request, common problems, every table, ready SQL queries.
+runScript.sh           Starts both apps (backend run.sh in the background, then web run.sh).
 docs/                  TelemuneSmartAi-Guide.md (+ PDF, images/). Keep it in step when features change. PDF rebuild:
                        node docs/md2html.mjs docs/TelemuneSmartAi-Guide.md /tmp/guide.html, then Chrome headless
                        --print-to-pdf=docs/TelemuneSmartAi-Guide.pdf file:///tmp/guide.html
-data/                  Call recordings only. Never wipe it.     logs/   backend.log + error.log (gitignored).
+
+voice_ai_backend/      ── backend team ──
+  run.sh               Java check, build when src/pom/db changed, restart an older copy, start, wait for /api/health.
+  .env(.example)       Secrets + MySQL + BACKEND_PORT/HOST + TRUSTED_PROXIES + LOG_LEVEL/SQL_LOG.  .gitignore
+  config.json          Seed for app_config on first start (no ports in it any more).
+  README.md            Requirements, config, logs, API.   Troubleshooting.md  logs, tracing, every table, SQL queries.
+  db/schema.sql        All tables.     db/seed.sql   Agent types + templates (copied into the jar by pom.xml).
+  pom.xml              Spring Boot 3.5.6, Java 21, starter-web + starter-jdbc, mysql-connector-j, bcprov (scrypt).
+  src/main/resources/application.properties   Ports, datasource (UTC), .env import, app.home.
+  src/main/resources/defaults.json            Default settings (bottom layer).   logback-spring.xml  logs.
+  src/main/java/com/telemune/smartai/
+    SmartAiApplication.java   main.        Bootstrap.java   seeds app_config, creates the first admin.
+    db/Db.java                schema + migrations + seed on start; query/one/count/exec/tx helpers.
+    web/ApiFilter.java        sign-in check, origin check, admin-only, ?as=, X-Agent-Id → Ctx, api_logs, request ids.
+    web/Ctx.java · ApiException.java · ErrorAdvice.java (every error is JSON {error}).
+    util/J.java               JSON/map helpers (rows are Map<String,Object>).
+    ai/OpenAiClient.java      HTTPS to OpenAI: chat (streamed + plain), speech, transcriptions, models.
+    ai/Prompts.java           voices (10), emotions (20), languages (16), system prompt + tag protocol.
+    service/                  AuthService, AgentService, TemplateService, PlaybookService, CallService,
+                              CalendarService, MessageService, AppConfigService, LogService.
+    api/                      AuthController, AgentController (+ /api/templates), ConfigController (config, settings,
+                              models), VoiceController (chat SSE, tts, transcribe, summary), DataController (playbooks,
+                              calls, calendar, messages), AdminController.
+  data/                Call recordings only. Never wipe it.   logs/  backend.log + error.log.   target/  (all gitignored)
+
+voice_ai_web/          ── frontend team ──
+  run.sh               Node check, HTTPS cert, restart an older copy, warn if backend down, open Chrome, node server.js.
+  config.json          port, httpsPort, backendUrl.   .env(.example)  optional overrides, no secrets.   .gitignore
+  README.md            Requirements, config, HTTPS + trusting the cert, logs, folder.   package.json (no deps, npm run check)
+  server.js            Static files + /api proxy + page guard + https + web.log/error.log.
+  scripts/make-cert.sh self-signed HTTPS cert → certs/ (remade when the IP changes; --force).
+  public/login.html    Sign in + Create account.
+  public/admin.html + admin.js   KPIs, users, 🧩 agent types & templates editor, ⚙️ settings, 🔐 sign-ins, 📜 log.
+  public/index.html    Layout + CSS (light/dark tokens): top menu, Call view (call card + summary card,
+                       conversation, call summaries), My agents view (list + tabbed editor), dialogs.
+  public/app.js        Menu/tab routing, agent picker + summary, persona/availability/emergency editors, call flow,
+                       speech in/out, tag parsing, messages, calendar, playbooks, call summaries.
+  public/motion.css + motion.js   Shared motion theme on all three pages: "Network" canvas background (`.net-bg`,
+                       z-index -1, drawn by motion.js, colour --net-dot), glass cards rise in + lift on hover,
+                       pill menu bar (.topnav, .tabs), bubbles pop in, typing dots (`showTyping()` in app.js while
+                       phase = thinking), title shimmer, rings on `.btn-call`; off with prefers-reduced-motion.
+  public/telemune-mark.png / telemune-logo.svg   Logo (CSS mask, theme gradient) / favicon.
+  certs/  logs/        (gitignored)
 ```
 
-## API (all served by the backend, reached through the frontend)
+## API (all served by voice_ai_backend, reached through voice_ai_web)
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -227,7 +248,7 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
 - Call flow: `startCall` → greeting turn → listen → `sendUserText` (SSE) → `speakNext` → `afterAgentTurn` → `endCall`
   → `summarizeCall` → POST `/api/calls` (+ PUT recording).
 
-## Settings reference (MySQL `app_config`; `config.json` only seeds it)
+## Settings reference (MySQL `app_config`; `voice_ai_backend/config.json` only seeds it)
 
 Edit in the admin dashboard, `PUT /api/admin/config/<section>`, or SQL. Per-agent values live in `agents`.
 Sections/keys: `branding.*` (appName, tagline, footer, logo, favicon, theme.primary/secondary/tertiary) ·
@@ -235,28 +256,30 @@ Sections/keys: `branding.*` (appName, tagline, footer, logo, favicon, theme.prim
 `models.chat/tts/reasoningEffort/maxReplyTokens/maxSummaryTokens` · `speechToText.engine/model/vadThreshold/minSpeechMs/maxUtteranceSeconds` ·
 `conversation.responseDelayMs/hangupDelayMs/historyTurnsSentToModel` · `history.pageSize/maxRecordingMB` ·
 `calendar.enabled/defaultDurationMin` · `emergency.enabled/rules[]` · `auth.allowSignup/sessionHours/rememberDays`.
-Env overrides: `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT`, `BACKEND_PORT`, `PORT`.
+Env overrides (backend .env): `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT`, `BACKEND_PORT`, `BACKEND_HOST`. Web: `PORT`, `HTTPS_PORT`, `BACKEND_URL` (voice_ai_web/.env or config.json).
 New tunables: `defaults.json` (+ `publicConfig()` in AppConfigService if the browser needs it).
 
 ## Conventions & preferences (from the project owner)
 
 - **Git: commit the current state before every change, then commit the change** — everything must be recoverable.
-  Never commit `.env`, `data/`, `backups/`, `logs/`, `backend/target/`.
+  Never commit any `.env`, `voice_ai_backend/data/`, `backups/`, `*/logs/`, `voice_ai_backend/target/`, `voice_ai_web/certs/`.
+- Keep the two apps separate: the web app never reads backend files (only `backendUrl`), the backend never serves pages.
+  A new setting goes in the app that uses it (its `.env.example`, `config.json` and README).
 - Settings and data go in MySQL. New tables/columns go in `db/schema.sql` (IF NOT EXISTS); for a new column on an
   existing table also add it to `Db.migrate()`. New ready-made types/templates go in `db/seed.sql`.
 - Backend = Spring Boot (JdbcTemplate, no JPA); frontend = plain HTML/CSS/JS, no framework, no build step, no npm deps.
 - Agent replies must sound **human and short**: 1–2 sentences, one question at a time, no bot phrases, no lists.
 - Provider is **OpenAI** (owner's choice). Don't switch unless asked.
 - Keep the light/dark theme working: colours are CSS variables (`--c1/--c2/--c3`, `--grad`). Don't hard-code colours.
-- Don't delete anything in `data/` while testing — clean up only what your test created.
+- Don't delete anything in `voice_ai_backend/data/` while testing — clean up only what your test created.
 
 ## Testing tips
 
-- Backend: `cd backend && mvn -q -o -DskipTests package`, then restart with `./runScript.sh`.
-  Frontend syntax: `node --check frontend/server.js frontend/public/app.js frontend/public/admin.js`.
+- Backend: `cd voice_ai_backend && ./run.sh --build` (or `mvn -q -o -DskipTests package`), then restart with `./runScript.sh`.
+  Web syntax: `cd voice_ai_web && npm run check`.
 - API tests with curl against `http://127.0.0.1:8324` and a cookie jar (sign up a throw-away user and delete it after:
   `DELETE FROM users WHERE id=…` cascades its agents, calls, messages and events; also clear its activity_logs,
-  api_logs, login_attempts and `data/users/<id>/`).
+  api_logs, login_attempts and `voice_ai_backend/data/users/<id>/`).
 - In the in-app browser the mic is blocked. Drive turns with `sendUserText("…")` after seeding `state.history`, or
   stub the mic before Start call:
   ```js

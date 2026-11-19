@@ -1,0 +1,5 @@
+{
+  "port": 8323,
+  "httpsPort": 8443,
+  "backendUrl": "http://127.0.0.1:8324"
+}

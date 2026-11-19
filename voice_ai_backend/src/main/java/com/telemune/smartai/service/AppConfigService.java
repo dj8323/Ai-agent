@@ -21,7 +21,7 @@ import java.util.Map;
 /**
  * App settings. Layers, last wins:
  * defaults.json ← MySQL app_config (shared settings, one JSON per section) ← the active agent's own setup ← env overrides.
- * config.json (project folder) only seeds app_config on first start.
+ * config.json (voice_ai_backend folder) only seeds app_config on first start.
  * Env overrides (optional): OPENAI_MODEL, OPENAI_TTS_MODEL, OPENAI_REASONING_EFFORT.
  */
 @Service

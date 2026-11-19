@@ -1,8 +1,4 @@
 {
-  "server": {
-    "port": 8323,
-    "httpsPort": 8443
-  },
   "branding": {
     "appName": "TelemuneSmartAi",
     "tagline": "Talk naturally, get things done ⚡",

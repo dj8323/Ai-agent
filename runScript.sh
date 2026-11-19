@@ -1,121 +1,23 @@
 #!/usr/bin/env bash
-# Starts TelemuneSmartAi: two apps.
-#   backend/   Spring Boot (Java 21+) — every /api route, MySQL, OpenAI. Port BACKEND_PORT (8324), this machine only.
-#   frontend/  Node (22+, no dependencies) — the pages, forwards /api/* to the backend. Port server.port in config.json (8323).
-# Builds the backend when its code changed, restarts older copies of either app, and opens the browser.
+# Starts both TelemuneSmartAi apps on this machine (a shortcut for development):
+#   voice_ai_backend/run.sh   the API (Spring Boot, port 8324)      — started in the background
+#   voice_ai_web/run.sh       the web app (Node, ports 8323 / 8443)  — started in the foreground
+# Each app can also be started on its own from its folder. Ctrl+C stops both.
 #
-#   ./runScript.sh            start and open the browser
-#   NO_OPEN=1 ./runScript.sh  start without opening a browser
-#   Ctrl+C                    stops both
+#   ./runScript.sh            start both and open the browser
+#   NO_OPEN=1 ./runScript.sh  start both without opening a browser
 set -euo pipefail
-
 cd "$(dirname "$0")"
-HERE="$(pwd -P)"
 
-say()  { printf '\033[1;36m▸ %s\033[0m\n' "$*"; }
-warn() { printf '\033[1;33m⚠ %s\033[0m\n' "$*"; }
-fail() { printf '\033[1;31m✖ %s\033[0m\n' "$*"; exit 1; }
+./voice_ai_backend/run.sh &
+BACK=$!
+trap 'kill "$BACK" 2>/dev/null || true; wait "$BACK" 2>/dev/null || true' EXIT INT TERM
 
-# 1. Tools
-command -v node >/dev/null 2>&1 || fail "Node.js is not installed. Get it from https://nodejs.org (version 22 or newer)."
-[ "$(node -p 'process.versions.node.split(".")[0]')" -ge 22 ] || fail "Node.js $(node -v) is too old. Please install version 22 or newer."
-command -v java >/dev/null 2>&1 || fail "Java is not installed. Install a JDK 21 or newer (e.g. brew install openjdk@21)."
-JAVA_MAJOR="$(java -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1)"
-[ "${JAVA_MAJOR:-0}" -ge 21 ] || fail "Java ${JAVA_MAJOR:-?} is too old. Please install JDK 21 or newer."
-
-# 2. Secrets (.env: OPENAI_API_KEY, MYSQL_*)
-if [ ! -f .env ]; then
-  cp .env.example .env
-  warn "Created .env from .env.example. Open .env, paste your OPENAI_API_KEY and MySQL password, then run this script again."
-  exit 1
-fi
-grep -Eq '^OPENAI_API_KEY=.+' .env || warn "OPENAI_API_KEY is empty in .env. The page will load, but the agent can't reply until you add it."
-grep -Eq '^MYSQL_USER=.+' .env || warn "MYSQL_* settings are missing in .env (see .env.example). Everything is stored in MySQL (database ai-agent)."
-
-BACKEND_PORT="$(sed -n 's/^BACKEND_PORT=//p' .env | tail -1)"
-BACKEND_PORT="${BACKEND_PORT:-8324}"
-PORT="${PORT:-$(node -p 'try { require("./config.json").server.port } catch { 8323 }')}"
-HTTPS_PORT="${HTTPS_PORT:-$(node -p 'try { require("./config.json").server.httpsPort || 8443 } catch { 8443 }')}"
-URL="http://localhost:${PORT}"
-JAR="backend/target/smartai-backend.jar"
-export BACKEND_PORT PORT HTTPS_PORT
-
-# 3. Build the backend when it's missing or its code / SQL changed
-if [ ! -f "$JAR" ] || [ -n "$(find backend/src backend/pom.xml db -newer "$JAR" -type f 2>/dev/null | head -1)" ]; then
-  command -v mvn >/dev/null 2>&1 || fail "Maven is needed to build the backend (brew install maven)."
-  say "Building the backend (Spring Boot)…"
-  (cd backend && mvn -q -DskipTests package) || fail "Backend build failed (see the errors above)."
-fi
-
-# 4. Free the ports: restart older copies of this app, refuse to touch anything else
-free_port() { # port, what-it-should-be (pattern in the command line)
-  local port="$1" pattern="$2" pid cmd
-  for pid in $(lsof -ti tcp:"$port" -sTCP:LISTEN 2>/dev/null || true); do
-    cmd="$(ps -o command= -p "$pid" 2>/dev/null || true)"
-    local cwd; cwd="$(lsof -a -p "$pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1)"
-    if [[ "$cmd" == *$pattern* ]] && [[ "$cwd" == "$HERE"* ]]; then
-      say "Stopping the TelemuneSmartAi copy already on port $port (pid $pid)…"
-      kill "$pid" 2>/dev/null || true
-      for _ in $(seq 1 40); do kill -0 "$pid" 2>/dev/null || break; sleep 0.25; done
-    else
-      warn "Port $port is used by another program: ${cmd:-unknown}"
-      fail "Stop it, or change the port (server.port in config.json / BACKEND_PORT in .env)."
-    fi
-  done
-}
-free_port "$BACKEND_PORT" "smartai-backend.jar"
-free_port "$PORT" "server.js"
-free_port "$HTTPS_PORT" "server.js"
-
-# 4b. HTTPS for other computers (the browser allows the microphone only on https or localhost).
-#     Makes certs/server.crt once, and again when this machine's IP address changed. HTTPS=off skips it.
-LAN_URL=""
-if [ "${HTTPS:-on}" != "off" ]; then
-  if ./scripts/make-cert.sh >/dev/null 2>&1; then
-    LAN_IP="$( (ipconfig getifaddr en0 || ipconfig getifaddr en1 || hostname -I | awk '{print $1}') 2>/dev/null | head -1 || true)"
-    LAN_URL="https://${LAN_IP:-your-IP}:${HTTPS_PORT}"
-  else
-    warn "Couldn't make the HTTPS certificate (is openssl installed?). Other computers can open the page, but not use the microphone."
-  fi
-fi
-
-# 5. Backend in the background, stopped again when this script ends.
-#    It writes logs/backend.log (everything) and logs/error.log (problems) itself; anything the JVM
-#    prints on its own (e.g. a crash before logging starts) is added to logs/error.log.
-mkdir -p logs
-say "Starting the backend on port ${BACKEND_PORT}…"
-java -jar "$JAR" > /dev/null 2>> logs/error.log &
-BACK_PID=$!
-cleanup() { kill "$BACK_PID" 2>/dev/null || true; }
-trap cleanup EXIT INT TERM
-for i in $(seq 1 120); do
-  curl -fs "http://127.0.0.1:${BACKEND_PORT}/api/health" >/dev/null 2>&1 && break
-  if ! kill -0 "$BACK_PID" 2>/dev/null; then
-    tail -25 logs/error.log
-    fail "The backend stopped while starting (see logs/error.log and logs/backend.log). Is MySQL running and are MYSQL_* in .env right?"
-  fi
-  [ "$i" -eq 120 ] && fail "The backend didn't start within 60 seconds (see logs/backend.log)."
+PORT="$(sed -n 's/^BACKEND_PORT=//p' voice_ai_backend/.env 2>/dev/null | tail -1)"
+for i in $(seq 1 240); do
+  curl -fs "http://127.0.0.1:${PORT:-8324}/api/health" >/dev/null 2>&1 && break
+  kill -0 "$BACK" 2>/dev/null || { echo "voice_ai_backend didn't start (see voice_ai_backend/logs/error.log)."; exit 1; }
   sleep 0.5
 done
 
-# 6. Open the browser once the frontend answers (Chrome preferred: it supports speech recognition)
-if [ -z "${NO_OPEN:-}" ]; then
-  (
-    for _ in $(seq 1 40); do
-      if curl -fs "$URL/api/auth-options" >/dev/null 2>&1; then
-        if [ "$(uname)" = "Darwin" ]; then
-          open -a "Google Chrome" "$URL" 2>/dev/null || open "$URL"
-        elif command -v xdg-open >/dev/null 2>&1; then
-          xdg-open "$URL" >/dev/null 2>&1
-        fi
-        exit 0
-      fi
-      sleep 0.5
-    done
-  ) &
-fi
-
-say "TelemuneSmartAi is running at $URL  (logs: logs/backend.log, logs/error.log · Ctrl+C stops both)"
-[ -n "$LAN_URL" ] && say "From other computers: $LAN_URL  (first visit: Advanced → Proceed; see docs for trusting the certificate)"
-cd frontend
-node server.js
+./voice_ai_web/run.sh

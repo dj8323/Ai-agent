@@ -1,0 +1,5 @@
+# local settings, HTTPS certificate, logs
+.env
+certs/
+logs/
+node_modules/

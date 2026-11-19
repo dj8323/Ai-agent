@@ -42,17 +42,24 @@ public class ApiFilter extends OncePerRequestFilter {
   private final AgentService agents;
   private final LogService logs;
 
-  public ApiFilter(AuthService auth, AgentService agents, LogService logs) {
+  /** Extra addresses of voice_ai_web servers whose X-Forwarded-For is trusted (TRUSTED_PROXIES in .env, comma list). */
+  private static volatile java.util.Set<String> trustedProxies = java.util.Set.of();
+
+  public ApiFilter(AuthService auth, AgentService agents, LogService logs,
+                   @org.springframework.beans.factory.annotation.Value("${TRUSTED_PROXIES:}") String trusted) {
+    trustedProxies = java.util.Arrays.stream(trusted.split(",")).map(String::trim).filter(x -> !x.isEmpty())
+        .collect(java.util.stream.Collectors.toUnmodifiableSet());
     this.auth = auth;
     this.agents = agents;
     this.logs = logs;
   }
 
-  /** The caller's IP: the frontend app forwards it in X-Forwarded-For (only trusted from this machine). */
+  /** The caller's IP: voice_ai_web forwards it in X-Forwarded-For (trusted from this machine and TRUSTED_PROXIES). */
   static String clientIp(HttpServletRequest req) {
     String remote = req.getRemoteAddr();
     String fwd = req.getHeader("X-Forwarded-For");
-    boolean local = "127.0.0.1".equals(remote) || "0:0:0:0:0:0:0:1".equals(remote) || "::1".equals(remote);
+    boolean local = "127.0.0.1".equals(remote) || "0:0:0:0:0:0:0:1".equals(remote) || "::1".equals(remote)
+        || trustedProxies.contains(remote);
     if (local && fwd != null && !fwd.isBlank()) return fwd.split(",")[0].trim();
     return remote;
   }
@@ -147,6 +154,8 @@ public class ApiFilter extends OncePerRequestFilter {
       int status = res.getStatus();
       boolean streaming = path.equals("/api/chat") || path.startsWith("/api/tts") || path.equals("/api/transcribe");
       if (status >= 500) log.error("← {} {} {} in {} ms", method, path, status, ms);
+      // "Who is signed in?" answering 401 is normal (signed-out visitors), so it stays out of error.log
+      else if (status == 401 && "/api/me".equals(path)) log.info("← {} {} {} in {} ms", method, path, status, ms);
       else if (status >= 400) log.warn("← {} {} {} in {} ms", method, path, status, ms);
       else if (ms > SLOW_MS && !streaming) log.warn("← {} {} {} in {} ms (slow)", method, path, status, ms);
       else log.info("← {} {} {} in {} ms", method, path, status, ms);

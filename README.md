@@ -5,30 +5,44 @@ OpenAI (streamed), and every sentence is spoken by OpenAI TTS in the emotion the
 
 Full guide: [docs/TelemuneSmartAi-Guide.md](docs/TelemuneSmartAi-Guide.md) (features, how it works, admin, database, settings, troubleshooting).
 
-Two applications:
+Two separate applications, each with its own folder, settings, run script, logs and README, so they can be handed
+to different teams and deployed apart:
 
-| App | Folder | Port | |
-|---|---|---|---|
-| Backend | `backend/` | 8324 (this computer only) | Spring Boot 3.5, Java 21+: every `/api` route, MySQL, OpenAI |
-| Frontend | `frontend/` | 8323 | Node 22+, no packages: the pages, and forwards `/api/*` to the backend |
+| App | Folder | Team | Port | What it is |
+|---|---|---|---|---|
+| **Backend** | [`voice_ai_backend/`](voice_ai_backend/README.md) | backend | 8324 | Spring Boot 3.5, Java 21+, MySQL 8, OpenAI: every `/api` route |
+| **Web** | [`voice_ai_web/`](voice_ai_web/README.md) | frontend | 8323 (http), 8443 (https) | Node 22+, plain HTML/CSS/JS, no packages: the pages, and forwards `/api/*` to the backend |
+
+| | voice_ai_backend | voice_ai_web |
+|---|---|---|
+| Start | `./run.sh` | `./run.sh` |
+| Settings | `.env` (secrets, MySQL, port, log levels; from `.env.example`) + `config.json` (first-start app settings) | `config.json` (`port`, `httpsPort`, `backendUrl`), optional `.env` |
+| Requirements | JDK 21+, Maven, MySQL 8, OpenAI key (`pom.xml`) | Node 22+, openssl (`package.json`, no dependencies) |
+| Logs | `logs/backend.log`, `logs/error.log` | `logs/web.log`, `logs/error.log` |
+| Runtime files (not in git) | `data/` (recordings), `logs/`, `target/`, `.env` | `certs/` (HTTPS), `logs/`, `.env` |
+| Docs | `README.md`, `Troubleshooting.md` (tables + SQL) | `README.md` (incl. HTTPS + trusting the certificate) |
+
+One request id links both logs: `web.log` ends each line with `[id]`, the same id as in `backend.log`.
 
 ## Run
 
+Both on this computer (development shortcut):
+
 ```bash
-./runScript.sh
+./runScript.sh            # starts voice_ai_backend, then voice_ai_web; opens Chrome. Ctrl+C stops both
+NO_OPEN=1 ./runScript.sh  # without opening the browser
 ```
 
-Needs **MySQL 8** running: put its login in `.env` (`MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`,
-`MYSQL_DATABASE=ai-agent`). The database and all its tables are created on first start (`db/schema.sql`).
+Or each on its own, from its folder: `cd voice_ai_backend && ./run.sh`, `cd voice_ai_web && ./run.sh`.
+First time: `cp voice_ai_backend/.env.example voice_ai_backend/.env` and fill in `OPENAI_API_KEY` and the MySQL login.
 
-It checks Java 21+ and Node 22+, creates `.env` if missing (paste your `OPENAI_API_KEY`), builds the backend with
-Maven when its code changed, starts the backend (logs: `logs/backend.log`, `logs/error.log`) and the frontend on **http://localhost:8323**,
-and opens it in Chrome. Use `NO_OPEN=1 ./runScript.sh` to skip the browser; Ctrl+C stops both.
+Open **http://localhost:8323**. From other computers use the https address the web app prints
+(e.g. `https://192.168.0.100:8443`): browsers allow the microphone only on https or localhost.
 Voice input needs **Chrome or Edge**.
 
-**From other computers** use the https address runScript prints (e.g. `https://192.168.0.100:8443`): browsers allow
-the microphone only on https or localhost. The certificate is made by `scripts/make-cert.sh` (in `certs/`, not in git);
-the first visit shows a warning → Advanced → Proceed. How to trust it for good: guide, *Opening the app from other computers*.
+**Running them on different servers:** in voice_ai_web set `backendUrl` (config.json) to the backend's address; in
+voice_ai_backend's `.env` set `BACKEND_HOST=0.0.0.0` and `TRUSTED_PROXIES=<web server IP>`, and let only the web server
+reach port 8324.
 
 ## Sign in
 
@@ -106,20 +120,16 @@ the next reply uses the new setup.
 
 Shared settings (branding, theme, default models, speech-to-text sensitivity, reply wait time, hang-up delay, history
 page size, recording limit, sign-up and session length) live in the MySQL table `app_config`, one JSON document per
-section. `config.json` only fills that table on first start and sets the page port (`server.port`).
-The admin can change sign-up, session length and agents-per-user in the dashboard. See `CLAUDE.md` for every key.
-
-## Secrets (.env)
-
-`OPENAI_API_KEY` and the MySQL login (`MYSQL_*`). Optional: `BACKEND_PORT` (8324), `PORT`, `OPENAI_MODEL`,
-`OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT`.
-
----
-Powered by Telemune © 2027 · Designed by DJ
+section. `voice_ai_backend/config.json` only fills that table on first start; after that use Admin → App settings.
+Secrets (`OPENAI_API_KEY`, `MYSQL_*`) are only in `voice_ai_backend/.env`. See `CLAUDE.md` for every key.
 
 ## Logs & troubleshooting
 
-Logs are in `logs/`: `backend.log` (everything: every request, sign-in, action, OpenAI call, the caller's words, the
-agent's replies and every SQL statement) and `error.log` (problems only, look here first). Each line carries a request id that is also in the
-`X-Request-Id` header and the `api_logs` / `activity_logs` tables. See [docs/Troubleshooting.md](docs/Troubleshooting.md)
-for the tables and ready SQL queries.
+- Backend: `voice_ai_backend/logs/backend.log` (everything: requests, sign-ins, actions, OpenAI calls, the caller's words,
+  the agent's replies, every SQL statement) and `logs/error.log` (problems only, look here first).
+- Web: `voice_ai_web/logs/web.log` (one line per request) and `logs/error.log`.
+- Each line carries a request id, also in the `X-Request-Id` header and the `api_logs` / `activity_logs` tables.
+  Tables and ready SQL queries: [voice_ai_backend/Troubleshooting.md](voice_ai_backend/Troubleshooting.md).
+
+---
+Powered by Telemune © 2027 · Designed by DJ

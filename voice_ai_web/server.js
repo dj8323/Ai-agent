@@ -1,11 +1,13 @@
-// TelemuneSmartAi frontend app: serves the pages in public/ and forwards every /api/* request to the
-// Spring Boot backend (BACKEND_URL, default http://127.0.0.1:8324). No dependencies, no build step.
+// voice_ai_web — the TelemuneSmartAi web app: serves the pages in public/ and forwards every /api/* request to
+// voice_ai_backend (backendUrl in config.json / BACKEND_URL, default http://127.0.0.1:8324). No dependencies, no build.
+// Settings: config.json (port, httpsPort, backendUrl), overridden by .env or environment variables.
+// Logs: logs/web.log (every request) and logs/error.log (problems).
 // Same origin for the browser, so the sign-in cookie and live call streaming (SSE) just work.
 //
 // Pages: signed-out visits to /, /index.html, /admin.html go to /login.html; /admin.html is for admins only.
 //
 // HTTPS (so the microphone works from other computers; browsers allow it only on https or localhost):
-// when certs/server.crt + certs/server.key exist (made by scripts/make-cert.sh, which runScript.sh runs), the same
+// when certs/server.crt + certs/server.key exist (made by scripts/make-cert.sh, which run.sh runs), the same
 // app is also served on https://<this machine's IP>:HTTPS_PORT (8443). Visits to http://<IP>:8323 are sent there;
 // http://localhost:8323 keeps working as before.
 import http from "node:http";
@@ -15,30 +17,38 @@ import fsSync from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const here = path.dirname(fileURLToPath(import.meta.url));
-const PUBLIC_DIR = path.join(here, "public");
-const ROOT = path.dirname(here); // project folder (config.json lives there)
+const ROOT = path.dirname(fileURLToPath(import.meta.url)); // voice_ai_web folder
+const PUBLIC_DIR = path.join(ROOT, "public");
 
-function configPort() {
-  try {
-    return Number(JSON.parse(fsSync.readFileSync(path.join(ROOT, "config.json"), "utf8")).server?.port) || 0;
-  } catch {
-    return 0;
+// .env (optional) → process.env, without overriding variables that are already set
+const envFile = path.join(ROOT, ".env");
+if (fsSync.existsSync(envFile)) {
+  for (const line of fsSync.readFileSync(envFile, "utf8").split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/);
+    if (m && process.env[m[1]] === undefined) process.env[m[1]] = m[2].replace(/^(['"])(.*)\1$/, "$2");
   }
 }
-const PORT = Number(process.env.PORT) || configPort() || 8323;
-function configHttpsPort() {
-  try {
-    return Number(JSON.parse(fsSync.readFileSync(path.join(ROOT, "config.json"), "utf8")).server?.httpsPort) || 0;
-  } catch {
-    return 0;
-  }
-}
-const HTTPS_PORT = Number(process.env.HTTPS_PORT) || configHttpsPort() || 8443;
-const CERT = process.env.HTTPS_CERT || path.join(ROOT, "certs", "server.crt");
-const KEY = process.env.HTTPS_KEY || path.join(ROOT, "certs", "server.key");
+let CONFIG = {};
+try { CONFIG = JSON.parse(fsSync.readFileSync(path.join(ROOT, "config.json"), "utf8")); } catch {}
+const PORT = Number(process.env.PORT) || Number(CONFIG.port) || 8323;
+const HTTPS_PORT = Number(process.env.HTTPS_PORT) || Number(CONFIG.httpsPort) || 8443;
+const inRoot = (p) => (path.isAbsolute(p) ? p : path.join(ROOT, p));
+const CERT = inRoot(process.env.HTTPS_CERT || "certs/server.crt");
+const KEY = inRoot(process.env.HTTPS_KEY || "certs/server.key");
 const HTTPS_ON = process.env.HTTPS !== "off" && fsSync.existsSync(CERT) && fsSync.existsSync(KEY);
-const BACKEND = new URL(process.env.BACKEND_URL || `http://127.0.0.1:${process.env.BACKEND_PORT || 8324}`);
+const BACKEND = new URL(process.env.BACKEND_URL || CONFIG.backendUrl || "http://127.0.0.1:8324");
+
+// ---------- logs ----------
+const LOG_DIR = inRoot(process.env.LOG_DIR || "logs");
+fsSync.mkdirSync(LOG_DIR, { recursive: true });
+const webLog = fsSync.createWriteStream(path.join(LOG_DIR, "web.log"), { flags: "a" });
+const errLog = fsSync.createWriteStream(path.join(LOG_DIR, "error.log"), { flags: "a" });
+const stamp = () => new Date().toISOString().replace("T", " ").replace("Z", "Z");
+function logLine(level, msg) {
+  const line = `${stamp()} ${level.padEnd(5)} ${msg}\n`;
+  webLog.write(line);
+  if (level !== "INFO") { errLog.write(line); process.stderr.write(line); }
+}
 
 const MIME = {
   ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
@@ -60,12 +70,14 @@ function proxy(req, res) {
     (r) => {
       // Over https the sign-in cookie is marked Secure, so it is never sent over plain http.
       if (secure && r.headers["set-cookie"]) r.headers["set-cookie"] = r.headers["set-cookie"].map((c) => (/;\s*secure/i.test(c) ? c : c + "; Secure"));
+      res.reqId = r.headers["x-request-id"];
       res.writeHead(r.statusCode || 502, r.headers);
       r.pipe(res);
     },
   );
-  up.on("error", () => {
-    if (!res.headersSent) json(res, 502, { error: "The backend isn't running. Start it with ./runScript.sh" });
+  up.on("error", (e) => {
+    logLine("ERROR", `backend unreachable at ${BACKEND.origin}: ${e.code || e.message} (${req.method} ${req.url.split("?")[0]})`);
+    if (!res.headersSent) json(res, 502, { error: "The backend isn't running. Start voice_ai_backend (./run.sh in that folder)." });
     else res.end();
   });
   res.on("close", () => up.destroy()); // caller hung up mid-stream → stop the backend work too
@@ -114,7 +126,20 @@ async function serveFile(res, p) {
 
 const isLocal = (host) => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host || "");
 
+// One line per request in logs/web.log: method, path (no query: it can hold spoken text), status, time, caller IP and
+// the backend's request id (the same id is in voice_ai_backend/logs/backend.log).
+function logRequest(req, res) {
+  const t0 = process.hrtime.bigint();
+  res.on("finish", () => {
+    const ms = Number((process.hrtime.bigint() - t0) / 1000000n);
+    const rid = res.reqId;
+    const msg = `${req.socket.encrypted ? "https" : "http"} ${req.method} ${req.url.split("?")[0]} ${res.statusCode} in ${ms} ms from ${req.socket.remoteAddress || "-"}${rid ? ` [${rid}]` : ""}`;
+    logLine(res.statusCode >= 500 ? "ERROR" : "INFO", msg);
+  });
+}
+
 async function handle(req, res) {
+  logRequest(req, res);
   try {
     const p = new URL(req.url, "http://x").pathname;
     // Opened from another computer over plain http: move to https, where the microphone is allowed.
@@ -130,7 +155,7 @@ async function handle(req, res) {
       if (user === "down") {
         res.writeHead(503, { "Content-Type": "text/html; charset=utf-8" });
         return res.end(`<!doctype html><meta charset="utf-8"><title>Starting…</title><body style="font-family:system-ui;padding:40px">
-          <h2>The backend isn't running yet</h2><p>Start everything with <code>./runScript.sh</code>, then reload this page.</p>`);
+          <h2>The backend isn't running yet</h2><p>Start voice_ai_backend (<code>./run.sh</code> in its folder), then reload this page.</p>`);
       }
       if (p === "/login.html") {
         if (user) return redirect(res, user.role === 1 ? "/admin.html" : "/");
@@ -142,17 +167,19 @@ async function handle(req, res) {
     }
     return serveFile(res, p);
   } catch (err) {
-    console.error(err);
+    logLine("ERROR", `${req.method} ${req.url.split("?")[0]} failed: ${err.stack || err}`);
     if (!res.headersSent) json(res, 500, { error: "Server error" });
     else res.end();
   }
 }
 
 http.createServer(handle).listen(PORT, () => {
-  console.log(`TelemuneSmartAi frontend at http://localhost:${PORT}  (API → ${BACKEND.origin})`);
+  const msg = `voice_ai_web at http://localhost:${PORT}  (API → ${BACKEND.origin})`;
+  logLine("INFO", msg); console.log(msg);
 });
 if (HTTPS_ON) {
   https.createServer({ cert: fsSync.readFileSync(CERT), key: fsSync.readFileSync(KEY) }, handle).listen(HTTPS_PORT, () => {
-    console.log(`TelemuneSmartAi frontend at https://<this machine's IP>:${HTTPS_PORT}  (for other computers; microphone allowed)`);
+    const msg = `voice_ai_web at https://<this machine's IP>:${HTTPS_PORT}  (for other computers; microphone allowed)`;
+    logLine("INFO", msg); console.log(msg);
   });
 }

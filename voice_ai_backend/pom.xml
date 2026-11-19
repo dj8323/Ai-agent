@@ -48,9 +48,9 @@
       <resource>
         <directory>src/main/resources</directory>
       </resource>
-      <!-- One source of truth for the database: ../db/schema.sql and ../db/seed.sql go into the jar -->
+      <!-- One source of truth for the database: db/schema.sql and db/seed.sql go into the jar -->
       <resource>
-        <directory>../db</directory>
+        <directory>db</directory>
         <targetPath>db</targetPath>
         <includes><include>*.sql</include></includes>
       </resource>

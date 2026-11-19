@@ -1,18 +1,6 @@
-node_modules
+# Each app has its own .gitignore (voice_ai_backend/, voice_ai_web/).
 .env
-data/users.json
-data/sessions.json
-data/users/
-data/deleted-users/
-data/calls.json
-data/recordings/
-data/summaries/
-data/calendar.json
 backups/
+node_modules/
 .DS_Store
 *.tmp
-backend/target/
-logs/
-
-# HTTPS certificate (scripts/make-cert.sh)
-certs/

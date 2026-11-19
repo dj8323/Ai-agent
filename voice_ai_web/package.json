@@ -1,0 +1,12 @@
+{
+  "name": "voice_ai_web",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "TelemuneSmartAi web app: the pages + an /api proxy to voice_ai_backend. No dependencies, no build step.",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "start": "./run.sh",
+    "check": "node --check server.js && node --check public/app.js && node --check public/admin.js && node --check public/motion.js"
+  }
+}

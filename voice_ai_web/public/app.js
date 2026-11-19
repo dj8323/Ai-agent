@@ -164,7 +164,7 @@ function showStaleServer() {
   b.className = "stale-banner";
   b.setAttribute("role", "alert");
   b.innerHTML = `<b>⚠ The server is running an older version of the app.</b> Settings can't be saved until it restarts.
-    Stop it (Ctrl+C in its terminal) and run <code>./runScript.sh</code>, then reload this page.`;
+    Restart voice_ai_backend (Ctrl+C in its terminal, then <code>./run.sh</code>), then reload this page.`;
   document.body.prepend(b);
 }
 

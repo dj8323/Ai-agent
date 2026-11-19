@@ -12,7 +12,7 @@
 
   Levels (in .env, then restart): LOG_LEVEL=DEBUG (default) or INFO (no detail lines);
   SQL_LOG=DEBUG (default) or INFO (no SQL lines). Admins can also change them live: PUT /api/admin/log-level.
-  Nothing is printed to the console (runScript.sh sends anything the JVM prints itself to error.log).
+  Nothing is printed to the console (run.sh sends anything the JVM prints itself to error.log).
 -->
 <configuration>
   <springProperty scope="context" name="LOG_DIR" source="LOG_DIR" defaultValue="logs"/>
