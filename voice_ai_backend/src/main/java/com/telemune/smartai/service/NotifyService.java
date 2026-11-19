@@ -29,8 +29,8 @@ import java.util.concurrent.Executors;
  * Email: Spring Mail (spring.mail.* in keys.env). WhatsApp: the Telemune WhatsApp gateway (whatsapp.* in keys.env):
  *   POST {base-url}{template-send-path}  {"to": "+<number>", "template": <name>, "reply": <text>, "params": [<v1>, <v2>, ...]}
  * The query parameter names and the values each template takes are settings (whatsapp.param.*, whatsapp.*-params),
- * so they can match the gateway without code changes. Values: agent, owner, caller, date, duration, summary, label,
- * keyword, number.
+ * so they can match the gateway without code changes. Values: agent, owner, recipient, caller, date, duration, summary,
+ * brief (the summary on one line), label, keyword, number.
  */
 @Service
 public class NotifyService {
@@ -74,7 +74,7 @@ public class NotifyService {
     Map<String, Object> wa = J.obj(n.get("whatsapp")), em = J.obj(n.get("email"));
     if (J.bool(wa.get("on")) && !J.blank(wa.get("to"))) {
       pool.submit(() -> whatsapp(prop("whatsapp.base-url", ""), J.str(wa.get("to")), prop("whatsapp.summary-template", "ai_message_summary"),
-          prop("whatsapp.summary-params", "agent,summary"), v, "summary"));
+          prop("whatsapp.summary-header", "Conversation Summary"), prop("whatsapp.summary-params", "recipient,brief"), v, "summary"));
     }
     if (J.bool(em.get("on")) && !J.blank(em.get("to"))) {
       String subject = "Call summary · " + v.get("agent") + " · " + v.get("date");
@@ -96,7 +96,24 @@ public class NotifyService {
     v.put("date", date);
     v.put("duration", J.str(call.get("duration")));
     v.put("summary", J.str(call.get("summary")));
+    v.put("recipient", J.str(agent.get("owner_name")).isEmpty() ? J.str(agent.get("name")) : J.str(agent.get("owner_name")));
+    v.put("brief", brief(J.str(call.get("summary")), J.str(agent.get("name")), date, J.str(call.get("duration"))));
     return v;
+  }
+
+  /**
+   * The summary as one WhatsApp template value: no line breaks (WhatsApp refuses them in values), sections joined with
+   * " · ", "Summary:" label dropped, at most ~700 characters (the whole template message must stay under 1024).
+   */
+  static String brief(String summary, String agent, String date, String duration) {
+    StringBuilder b = new StringBuilder(agent + " call, " + date + (duration.isEmpty() ? "" : " (" + duration + ")") + ": ");
+    for (String line : summary.split("\\r?\\n")) {
+      String t = line.trim().replaceFirst("^Summary:\\s*", "").replaceFirst("^-\\s*", "");
+      if (t.isEmpty() || t.matches("(?i)^(key details|action items):?$")) continue;
+      b.append(t).append(t.matches(".*[.!?:]$") ? " " : ". ");
+    }
+    String one = b.toString().replaceAll("\\s{2,}", " ").trim();
+    return one.length() > 700 ? one.substring(0, 697) + "…" : one;
   }
 
   // ---------- emergency alerts ----------
@@ -114,7 +131,7 @@ public class NotifyService {
       if (!whatsappReady()) return "whatsapp not set up";
       String base = prop("whatsapp.emergency-base-url", prop("whatsapp.base-url", ""));
       pool.submit(() -> whatsapp(base, to, prop("whatsapp.emergency-template", "emergency_alert_new"),
-          prop("whatsapp.emergency-params", "agent,keyword"), v, "emergency"));
+          prop("whatsapp.emergency-header", ""), prop("whatsapp.emergency-params", "agent,keyword"), v, "emergency"));
       return "whatsapp";
     }
     if ("email".equals(type)) {
@@ -130,31 +147,33 @@ public class NotifyService {
   // ---------- channels ----------
   /** One value for a WhatsApp template parameter: one line, no commas (they separate the parameters), WhatsApp's length limit. */
   static String param(String s) {
-    String one = (s == null ? "" : s).replaceAll("[\\r\\n\\t]+", " · ").replaceAll(" {4,}", "   ").replace(",", ";").trim();
+    String one = (s == null ? "" : s).replaceAll("[\\r\\n\\t]+", " · ").replaceAll(" {4,}", "   ").trim();
     return one.length() > 900 ? one.substring(0, 897) + "…" : one.isEmpty() ? "-" : one;
   }
 
   /**
-   * One template message through the Telemune WhatsApp gateway: POST {base}{template-send-path} with JSON
-   * {"to": "+<number>", "template": <name>, "reply": <reply text>, "params": [v1, v2, …]}; the values are also sent as
-   * ?params=v1,v2 (the form the gateway used before). The gateway answers {"error": …} when something is wrong.
+   * One template message through the Telemune WhatsApp gateway (format confirmed by the gateway team, 2026-11-19):
+   *   POST {base}{template-send-path}  {"to": "91…", "template": "<name>", "headerParam": "<header>", "params": [v1, v2, …], "reply": "Thanks"}
+   * "to" is the number with country code, digits only. headerParam is sent only when the template has a header value.
+   * The gateway answers {"error": …} when WhatsApp refuses the message.
    */
-  private void whatsapp(String base, String to, String template, String paramNames, Map<String, String> v, String what) {
-    String number = "+" + to.replaceAll("[^\\d]", "");
+  private void whatsapp(String base, String to, String template, String header, String paramNames, Map<String, String> v, String what) {
+    String number = to.replaceAll("[^\\d]", "");
     List<String> params = new ArrayList<>();
     for (String name : paramNames.split(",")) if (!name.isBlank()) params.add(param(v.getOrDefault(name.trim(), "-")));
-    String url = base.replaceAll("/+$", "") + prop("whatsapp.template-send-path", "/sendWhatsApp")
-        + (params.isEmpty() ? "" : "?" + prop("whatsapp.param.params", "params") + "=" + enc(String.join(",", params)));
-    Map<String, Object> body = J.map(prop("whatsapp.param.to", "to"), number, prop("whatsapp.param.template", "template"), template,
-        prop("whatsapp.param.reply", "reply"), prop("emergency".equals(what) ? "whatsapp.emergency-reply" : "whatsapp.summary-reply", "Thanks"),
-        prop("whatsapp.param.params", "params"), params);
+    String url = base.replaceAll("/+$", "") + prop("whatsapp.template-send-path", "/sendWhatsApp");
+    Map<String, Object> body = J.map("to", number, "template", template);
+    if (header != null && !header.isBlank()) body.put("headerParam", header);
+    body.put("params", params);
+    body.put("reply", prop("emergency".equals(what) ? "whatsapp.emergency-reply" : "whatsapp.summary-reply", "Thanks"));
     try {
       HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20)).header("Content-Type", "application/json")
           .POST(HttpRequest.BodyPublishers.ofString(J.json(body))).build();
       HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
       boolean error = res.statusCode() / 100 != 2 || res.body().contains("\"error\"");
-      if (!error) log.info("WhatsApp {} sent to {} with template {} (HTTP {}): {}", what, mask(number), template, res.statusCode(), J.str(res.body(), 200));
-      else log.warn("WhatsApp {} to {} failed: HTTP {} {}", what, mask(number), res.statusCode(), J.str(res.body(), 400));
+      String reply = number.isEmpty() ? res.body() : res.body().replace(number, mask(number)); // no full numbers in the log
+      if (!error) log.info("WhatsApp {} sent to {} with template {} (HTTP {}): {}", what, mask(number), template, res.statusCode(), J.str(reply, 200));
+      else log.warn("WhatsApp {} to {} failed: HTTP {} {}", what, mask(number), res.statusCode(), J.str(reply, 400));
     } catch (Exception e) {
       log.warn("WhatsApp {} to {} failed: {}", what, mask(number), e.toString());
     }
