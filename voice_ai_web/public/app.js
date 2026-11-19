@@ -677,16 +677,28 @@ function addDivider(text) {
 
 const fmtS = (ms) => (ms == null ? "—" : (ms / 1000).toFixed(1) + "s");
 
+function setConvSum(icon, text, turns, done) {
+  const box = $("convSum");
+  box.classList.toggle("idle", !text);
+  box.classList.toggle("done", !!done);
+  $("convSumIco").textContent = icon;
+  $("convSumText").textContent = text || "A short summary appears here as you talk.";
+  $("convSumText").title = text || "";
+  $("convSumTurns").textContent = turns ? `${turns} turn${turns === 1 ? "" : "s"}` : "";
+}
+// The AI summary in one short sentence (its "Summary:" line, else the outcome).
+const shortSummary = (s) => {
+  const line = /Summary:\s*(.+)/i.exec(s || "")?.[1] || /Outcome:\s*(.+)/i.exec(s || "")?.[1] || (s || "").split("\n")[0];
+  const first = line.split(/(?<=[.!?])\s/)[0];
+  return first.length > 160 ? first.slice(0, 157) + "…" : first;
+};
+
 function updateInsights() {
   const t = state.turns.filter((x) => !x.hidden);
   const last = t.at(-1);
-  $("stIntent").textContent = last?.intent || "—";
-  $("stIntent").title = last?.intent || "";
-  $("stMood").textContent = last?.mood ? `${EMOJI[last.mood] || ""} ${last.mood}` : "—";
-  $("stLang").textContent = last?.lang || "—";
-  const times = t.map((x) => x.firstVoice ?? x.firstText).filter((x) => x != null);
-  $("stTime").textContent = times.length ? fmtS(times.reduce((a, b) => a + b, 0) / times.length) : "—";
-  $("stTurns").textContent = t.length;
+  // One short line: what the caller wants (latest intent) while it runs; summarizeCall() puts the AI summary here at the end.
+  const intent = [...t].reverse().find((x) => x.intent)?.intent;
+  setConvSum(intent ? "🎯" : "📝", intent ? intent[0].toUpperCase() + intent.slice(1) : t.length ? "Listening to what the caller needs…" : "", t.length);
   const ml = $("metaLine");
   ml.innerHTML = "";
   if (last?.mood) ml.insertAdjacentHTML("beforeend", `<span>Mood <b></b></span>`), (ml.lastChild.querySelector("b").textContent = `${last.mood} ${EMOJI[last.mood] || ""}`);
@@ -1467,6 +1479,7 @@ async function summarizeCall(duration, recording, endedBy) {
     if (!res.ok) throw new Error(data.error || "Summary failed");
     pre.textContent = data.summary;
     summaryText = data.summary;
+    setConvSum("📋", shortSummary(data.summary), state.turns.filter((x) => !x.hidden).length, true);
     if (data.usage) { tokens.input += data.usage.input || 0; tokens.output += data.usage.output || 0; tokens.total += data.usage.total || 0; }
 
     let i = 0;
@@ -1889,7 +1902,7 @@ $("waSend").addEventListener("click", async () => {
     if (!r.ok || !d.ok) throw new Error(d.error || "WhatsApp refused the message."); // {ok:false} = refused (HTTP 200)
     addChip(el, "✓ sent", "sent");
     loadHistory().catch(() => {});
-    $("waHint").textContent = `✓ Sent to …${digits.slice(-4)}. If they haven't messaged your business number in the last 24 hours, WhatsApp won't deliver a typed message.`;
+    $("waHint").textContent = `✓ Sent to …${digits.slice(-4)} · saved in Call summaries.`;
     $("waText").value = "";
   } catch (err) {
     addChip(el, "⚠ not sent", "fail");

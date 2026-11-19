@@ -297,6 +297,9 @@ voice_ai_web/          ── frontend team ──
   browser `detectEmergency()` → banner with tel: or mailto:; the prompt says "call" or "email".
 - Call flow: `startCall` → greeting turn → listen → `sendUserText` (SSE) → `speakNext` → `afterAgentTurn` → `endCall`
   → `summarizeCall` → POST `/api/calls` (+ PUT recording).
+- **Conversation summary line** (`#convSum`, `setConvSum()`): replaces the old intent/mood/lang/avg-reply tiles. `updateInsights()` shows
+  🎯 the latest intent + turns; `summarizeCall()` puts 📋 `shortSummary()` (first sentence of the "Summary:" line) there at the end.
+  WhatsApp pane: row 1 `#waCc` + `#waTo`, row 2 `#waText` + `#waSend` (`.wa-line`).
 - **Call summaries = every channel** (2026-11-19): `calls.channel` = call | chat | voice | whatsapp (`CallService.CHANNELS`; POST
   `/api/calls` takes `channel`, else derived from endedBy; old rows backfilled in `Db.migrate()`). `/api/whatsapp/send` also stores
   a record (`CallService.saveWhatsApp`: stats {to, status, messageId, error}, endedBy sent/not sent). Web: `#histFilter` chips

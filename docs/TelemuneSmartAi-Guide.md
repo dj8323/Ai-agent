@@ -309,7 +309,7 @@ The agent always speaks first, and the loop repeats for every turn; saying goodb
 
 ### What you see on each turn
 
-Each of your messages gets chips for **intent** (what you want, in a few words), **mood**, **language** and **reply time**; each agent message shows the emotions used. The bar above the chat shows the latest intent, mood, language, the average reply time and the turn count. The ring around the avatar moves with your voice (green) and the agent's voice (the colour of its current emotion), with orbiting dots while it thinks.
+Each of your messages gets chips for **intent** (what you want, in a few words), **mood**, **language** and **reply time**; each agent message shows the emotions used. A single line above the chat keeps it short: 🎯 what the caller wants and the turn count while you talk, then 📋 the AI summary in one sentence when the call or chat ends. The ring around the avatar moves with your voice (green) and the agent's voice (the colour of its current emotion), with orbiting dots while it thinks.
 
 The agent has 20 emotions: neutral, happy, excited, cheerful, calm, empathetic, sad, apologetic, encouraging, confident, serious, curious, surprised, thoughtful, concerned, reassuring, grateful, playful, urgent, proud.
 
@@ -332,7 +332,7 @@ is saved with its summary, as if you had pressed End) and **clears the conversat
 | 📞 **Web call** | The live voice call described above |
 | 💬 **Live chat** | Type a message; the agent greets you and answers in text straight away (no microphone needed). **End chat** saves it to Call summaries with an AI summary, and sends the summary by WhatsApp/email if switched on |
 | 🎤 **Voice chat** | **Hold** the mic button, speak, **let go**: the agent hears you (with its speech-to-text provider) and answers out loud and in text. **🎙 Mute / unmute** switches the microphone off and on; the red **End** button (shown once it has started) ends it and saves it like a call |
-| WhatsApp | Pick the **country code** (🇮🇳 +91 India first, then 🇺🇸 +1, 🇦🇪 +971 …; the list is the `country_codes` table) and type the mobile number, then the message, then **Send on WhatsApp**: it goes from your WhatsApp business number through the Telemune gateway. It is sent inside the approved **Conversation Summary** template, so it arrives even if the person has never written to that number (WhatsApp drops plain typed text outside 24 hours of the person's last message) |
+| WhatsApp | Pick the **country code** (🇮🇳 +91 India first, then 🇺🇸 +1, 🇦🇪 +971 …; the list is the `country_codes` table) and type the mobile number on the first row, then the message and **Send on WhatsApp** on the second row: it goes from your WhatsApp business number through the Telemune gateway. It is sent inside the approved **Conversation Summary** template, so it arrives even if the person has never written to that number (WhatsApp drops plain typed text outside 24 hours of the person's last message) |
 
 ## After the call: summaries, recordings and history
 
