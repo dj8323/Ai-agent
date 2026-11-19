@@ -64,6 +64,12 @@ public class Db {
     addColumn("agents", "notify", "JSON NULL AFTER speech_speed");
     widen("agents", "voice", 64, "VARCHAR(64) NOT NULL DEFAULT 'marin'");
     widen("calls", "voice", 64, "VARCHAR(64) NOT NULL DEFAULT ''");
+    // Call summaries cover every channel (2026-11-19): web call, live chat, voice chat, WhatsApp messages.
+    if (addColumnNew("calls", "channel", "VARCHAR(10) NOT NULL DEFAULT 'call' AFTER ended_by")) {
+      jdbc.update("UPDATE calls SET channel = 'chat' WHERE ended_by = 'live chat'");
+      jdbc.update("UPDATE calls SET channel = 'voice' WHERE ended_by = 'voice chat'");
+    }
+    addIndex("calls", "idx_calls_channel", "user_id, channel, started_at");
   }
 
   private void widen(String table, String column, int size, String definition) {
@@ -73,6 +79,16 @@ public class Db {
       jdbc.execute("ALTER TABLE " + table + " MODIFY " + column + " " + definition);
       log.info("Widened {}.{} to {}", table, column, size);
     }
+  }
+
+  /** Like addColumn, but says whether the column was new (to fill it once from older data). */
+  private boolean addColumnNew(String table, String column, String definition) {
+    Long n = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",
+        Long.class, table, column);
+    if (n != null && n > 0) return false;
+    addColumn(table, column, definition);
+    return true;
   }
 
   private void addColumn(String table, String column, String definition) {

@@ -352,9 +352,9 @@ The downloadable summary file adds the header (call ID, agent, start time, playb
 
 ### Call summaries panel
 
-Under the conversation, five tiles show your totals across all your agents: calls, talk time, tokens used, average reply time and recordings. Click any tile, or **Show calls**, to open the list.
+Call summaries keeps **every kind of conversation**: 📞 web calls, 💬 live chats, 🎤 voice chats and the WhatsApp messages you send from the Conversation card. Five tiles show your totals across all your agents: records, talk time, tokens used, average reply time and recordings. Click any tile, or **Show all**, to open the list.
 
-Each row shows the agent's name, the playbook, date, duration, turns, mood path and whether there is a recording. Click a row to see the full summary, statistics, the recording player and the transcript with intent, mood, language and emotion chips; download the summary file or recording; or 🗑 delete the call (its summary and recording go with it). The list is paged, 5 calls per page by default.
+Filter buttons at the top of the list (**All · 📞 Calls · 💬 Live chat · 🎤 Voice chat · WhatsApp**, each with its count) show one kind at a time. Each row has a badge for its kind, the agent's name, the playbook, date, duration, turns, mood path and whether there is a recording; a WhatsApp row shows the number it went to, whether it was sent, and the message. Click a row to see the full summary, statistics, the recording player and the transcript with intent, mood, language and emotion chips; download the summary file or recording; or 🗑 delete the call (its summary and recording go with it). The list is paged, 5 calls per page by default.
 
 ### Recordings
 
@@ -438,7 +438,7 @@ The tables are defined in `db/schema.sql` and the ready-made types and templates
 | `agents` | Each agent's own setup | id, user_id, name, agent_type, template_id, owner_name, organization, owner_availability, availability_plan, meeting_minutes, speech_speed, greeting, description, language, voice, chat_model, tts_model, stt_engine, stt_model, playbook_id, calendar_enabled, emergency_enabled, is_default |
 | `emergency_rules` | Emergency contacts per agent | agent_id, label, contact_type (phone or email), number (or email), keywords (JSON), sort_order |
 | `playbooks` | Users' saved call scripts | id, user_id, agent_type, name, role, goal, steps, rules, summary_focus |
-| `calls` | Every finished call | id, user_id, agent_id, agent_name, started_at, ended_at, duration, turns, tokens, avg_response_ms, stats, transcript, recording file details |
+| `calls` | Every finished call, live chat, voice chat and sent WhatsApp message (`channel`: call, chat, voice, whatsapp) | id, user_id, agent_id, agent_name, channel, started_at, ended_at, duration, turns, tokens, avg_response_ms, stats, transcript, recording file details |
 | `call_summaries` | The AI summary and the full summary file text | call_id, summary, full_text |
 | `calendar_events` | Events agents booked | id, user_id, agent_id, title, start_at, duration_min, notes |
 | `messages` | Messages callers left | id, user_id, agent_id, agent_name, for_name, caller_name, caller_number, urgency, message, status (new, done) |
@@ -517,7 +517,7 @@ The LLM starts every reply with tags the page reads and removes before showing o
 | POST /api/transcribe, /api/tts | Speech to text, text to speech |
 | POST /api/greeting | The agent's first line, ready to speak (translated once when needed) |
 | POST /api/summary | Write the call summary |
-| GET, POST, DELETE /api/calls | Call list, save, details, delete; recording upload and download; summary file |
+| GET, POST, DELETE /api/calls | Call list (`?channel=call|chat|voice|whatsapp`), save, details, delete; recording upload and download; summary file |
 | GET, POST, DELETE /api/playbooks, /api/calendar | Playbooks; calendar events and .ics export |
 | GET /api/templates | Agent types and templates for the New agent dialog |
 | GET, POST, PATCH, DELETE /api/messages | Messages callers left: list, save, mark done, delete |

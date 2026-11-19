@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS calls (
   duration         VARCHAR(12)  NOT NULL DEFAULT '00:00',
   duration_seconds INT          NOT NULL DEFAULT 0,
   ended_by         VARCHAR(40)  NOT NULL DEFAULT 'user',
+  channel          VARCHAR(10)  NOT NULL DEFAULT 'call',   -- call | chat (live chat) | voice (voice chat) | whatsapp (message sent)
   playbook         JSON         NULL,
   language         VARCHAR(40)  NOT NULL DEFAULT '',
   voice            VARCHAR(64)  NOT NULL DEFAULT '',

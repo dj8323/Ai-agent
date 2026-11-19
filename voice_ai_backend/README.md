@@ -94,13 +94,13 @@ All routes are under `/api`, JSON in and out (errors are `{"error": "…"}`). Si
 | POST / GET | `/api/tts`, `/api/tts/stream` | speech (mp3) / streamed speech |
 | POST | `/api/transcribe`, `/api/summary` | speech-to-text {text, provider} (optional provider) / call summary {summary, usage} |
 | GET | `/api/voices?provider&lang` | voices of a TTS provider: openai, aws (Polly), elevenlabs, cartesia |
-| POST | `/api/whatsapp/send` | {to, message}: send a typed WhatsApp message via the gateway's `/sendTextWhatsApp` |
+| POST | `/api/whatsapp/send` | {to, message}: send a typed WhatsApp message via the gateway's `/sendTextWhatsApp`; also saved in `calls` with channel `whatsapp` |
 | POST | `/api/emergency/alert` | {label, keyword}: WhatsApp / email alert to that emergency contact |
 | GET | `/api/models` | OpenAI models {chat, stt, tts} |
 | GET/POST/DELETE | `/api/playbooks[/:id]` | the user's own playbooks |
 | GET/POST/DELETE | `/api/calendar[/:id]`, `/api/calendar/calendar.ics` | meetings the agent booked |
 | GET/POST/PATCH/DELETE | `/api/messages[/:id]` | messages callers left |
-| GET/POST/DELETE, PUT | `/api/calls[/:id]`, `/api/calls/stats`, `/:id/summary`, `/:id/recording` | call history and recordings |
+| GET/POST/DELETE, PUT | `/api/calls[/:id]`, `/api/calls/stats`, `/:id/summary`, `/:id/recording` | call history and recordings (`?channel=call\|chat\|voice\|whatsapp`; stats has `byChannel`) |
 | GET | `/api/admin/overview`, `/api/admin/logs`, `/api/admin/logins` | admin: totals, activity, sign-ins |
 | POST/GET/PATCH/DELETE | `/api/admin/users[/:id]` | admin: users |
 | GET / PUT | `/api/admin/config[/:section]`, `/api/admin/log-level` | admin: app settings, live log level |

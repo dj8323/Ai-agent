@@ -177,7 +177,7 @@ voice_ai_web/          ── frontend team ──
 | GET/POST/DELETE | `/api/playbooks[/:id]` | {types, saved} / add / delete (the user's own playbooks) |
 | GET/POST/DELETE | `/api/calendar[/:id]`, GET `/api/calendar/calendar.ics`, `/:id.ics` | events (POST only when the calendar is on) |
 | GET/POST/PATCH/DELETE | `/api/messages[/:id]` | current agent's messages (`?scope=all`, `?status=new\|done`) / add {callerName, callerNumber, urgency, message} / {status} / delete |
-| GET/POST | `/api/calls`, `/api/calls/stats`, `/api/calls/:id` (GET/DELETE), `/:id/summary`, `/:id/recording` (GET/PUT) | call history |
+| GET/POST | `/api/calls` (`?channel=`), `/api/calls/stats` (+ `byChannel`), `/api/calls/:id` (GET/DELETE), `/:id/summary`, `/:id/recording` (GET/PUT) | history of every channel |
 | GET | `/api/admin/overview`, `/api/admin/logs?page&user`, `/api/admin/logins?page` | admin: totals + users / activity / sign-ins |
 | POST/GET/PATCH/DELETE | `/api/admin/users[/:id]` | admin: users |
 | GET / PUT | `/api/admin/config[/:section]` | admin: app_config |
@@ -296,6 +296,11 @@ voice_ai_web/          ── frontend team ──
   browser `detectEmergency()` → banner with tel: or mailto:; the prompt says "call" or "email".
 - Call flow: `startCall` → greeting turn → listen → `sendUserText` (SSE) → `speakNext` → `afterAgentTurn` → `endCall`
   → `summarizeCall` → POST `/api/calls` (+ PUT recording).
+- **Call summaries = every channel** (2026-11-19): `calls.channel` = call | chat | voice | whatsapp (`CallService.CHANNELS`; POST
+  `/api/calls` takes `channel`, else derived from endedBy; old rows backfilled in `Db.migrate()`). `/api/whatsapp/send` also stores
+  a record (`CallService.saveWhatsApp`: stats {to, status, messageId, error}, endedBy sent/not sent). Web: `#histFilter` chips
+  with counts from `stats.byChannel`, `state.histChannel` → `/api/calls?channel=`, `CHANNEL` map gives each row a `.ch-badge`;
+  `openCall` shows a WhatsApp record as to/sent instead of call stats.
 
 ## Settings reference (MySQL `app_config`; `voice_ai_backend/config.json` only seeds it)
 

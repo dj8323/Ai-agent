@@ -37,7 +37,7 @@ public class CallService {
   private static Map<String, Object> fromRow(Map<String, Object> r, boolean withTranscript) {
     Map<String, Object> c = J.map("id", r.get("id"), "agentId", r.get("agent_id"), "agentName", r.get("agent_name"),
         "startedAt", J.iso(r.get("started_at")), "endedAt", J.iso(r.get("ended_at")), "duration", r.get("duration"),
-        "endedBy", r.get("ended_by"), "playbook", J.parse(r.get("playbook")), "language", r.get("language"), "voice", r.get("voice"),
+        "endedBy", r.get("ended_by"), "channel", r.get("channel") == null ? "call" : r.get("channel"), "playbook", J.parse(r.get("playbook")), "language", r.get("language"), "voice", r.get("voice"),
         "stats", J.obj(r.get("stats")), "summary", r.get("summary") == null ? "" : r.get("summary"));
     if (withTranscript) c.put("transcript", J.list(r.get("transcript")));
     c.put("recording", r.get("recording_file") == null ? null
@@ -45,9 +45,19 @@ public class CallService {
     return c;
   }
 
+  public static final List<String> CHANNELS = List.of("call", "chat", "voice", "whatsapp");
+
   public Map<String, Object> list(int page, int pageSize, String agentId, String userId) {
-    String where = agentId != null ? "c.user_id = ? AND c.agent_id = ?" : "c.user_id = ?";
-    Object[] args = agentId != null ? new Object[]{userId, agentId} : new Object[]{userId};
+    return list(page, pageSize, agentId, null, userId);
+  }
+
+  /** One page of records, newest first; channel = call | chat | voice | whatsapp, or null for all. */
+  public Map<String, Object> list(int page, int pageSize, String agentId, String channel, String userId) {
+    List<Object> a = new ArrayList<>(List.of(userId));
+    String where = "c.user_id = ?";
+    if (agentId != null) { where += " AND c.agent_id = ?"; a.add(agentId); }
+    if (channel != null && CHANNELS.contains(channel)) { where += " AND c.channel = ?"; a.add(channel); }
+    Object[] args = a.toArray();
     long total = db.count("SELECT COUNT(*) FROM calls c WHERE " + where, args);
     int pages = (int) Math.max(1, Math.ceil(total / (double) pageSize));
     int p = Math.min(Math.max(1, page), pages);
@@ -88,20 +98,34 @@ public class CallService {
     Long avg = stats.get("avgResponseMs") != null ? J.numOrNull(stats.get("avgResponseMs"))
         : J.dbl(J.str(stats.get("avgResponse")).replace("s", "")) == null ? null : Math.round(J.dbl(J.str(stats.get("avgResponse")).replace("s", "")) * 1000);
     String endedBy = J.str(in.get("endedBy"), 40);
+    String channel = CHANNELS.contains(J.str(in.get("channel"))) ? J.str(in.get("channel"))
+        : "live chat".equals(endedBy) ? "chat" : "voice chat".equals(endedBy) ? "voice" : "call";
     Map<String, Object> call = J.map("id", id, "agentId", agent == null ? null : agent.get("id"), "agentName", agentName,
-        "startedAt", started.toString(), "endedAt", ended.toString(), "duration", duration, "endedBy", endedBy.isEmpty() ? "user" : endedBy,
+        "startedAt", started.toString(), "endedAt", ended.toString(), "duration", duration, "endedBy", endedBy.isEmpty() ? "user" : endedBy, "channel", channel,
         "playbook", playbook, "language", J.str(in.get("language"), 40), "voice", J.str(in.get("voice"), 64), "stats", stats,
         "summary", J.str(in.get("summary"), 8000), "transcript", transcript, "recording", null);
     final long secs = toSeconds(duration);
     db.tx(() -> {
-      db.exec("INSERT INTO calls (id, user_id, agent_id, agent_name, started_at, ended_at, duration, duration_seconds, ended_by, playbook, language, voice, "
-              + "turns, tokens_input, tokens_output, tokens_total, avg_response_ms, stats, transcript) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      db.exec("INSERT INTO calls (id, user_id, agent_id, agent_name, started_at, ended_at, duration, duration_seconds, ended_by, channel, playbook, language, voice, "
+              + "turns, tokens_input, tokens_output, tokens_total, avg_response_ms, stats, transcript) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
           id, userId, call.get("agentId"), call.get("agentName"), J.utc(Instant.parse((String) call.get("startedAt"))), J.utc(ended),
-          call.get("duration"), secs, call.get("endedBy"), playbook == null ? null : J.json(playbook), call.get("language"), call.get("voice"),
+          call.get("duration"), secs, call.get("endedBy"), channel, playbook == null ? null : J.json(playbook), call.get("language"), call.get("voice"),
           J.num(stats.get("turns")), J.num(tk.get("input")), J.num(tk.get("output")), J.num(tk.get("total")), avg, J.json(stats), J.json(call.get("transcript")));
       db.exec("INSERT INTO call_summaries (call_id, summary, full_text) VALUES (?, ?, ?)", id, call.get("summary"), summaryText(call));
     });
     return call;
+  }
+
+  /** A WhatsApp message sent from the call page, kept in Call summaries (channel whatsapp). */
+  public Map<String, Object> saveWhatsApp(String userId, Map<String, Object> agent, String to, String message, Map<String, Object> result) {
+    boolean ok = J.bool(result.get("ok"));
+    String now = Instant.now().toString();
+    String summary = "WhatsApp message to +" + to + " · " + (ok ? "sent" : "not sent: " + J.str(result.get("error"), 200)) + "\n\n" + message;
+    Map<String, Object> in = J.map("channel", "whatsapp", "endedBy", ok ? "sent" : "not sent", "startedAt", now, "endedAt", now, "duration", "00:00",
+        "agentName", agent == null ? "" : J.str(agent.get("name")), "language", "", "voice", "",
+        "stats", J.map("turns", 0, "to", to, "status", ok ? "sent" : "failed", "messageId", result.get("id"), "error", result.get("error")),
+        "summary", summary, "transcript", List.of(J.map("role", "agent", "text", message)));
+    return save(in, userId, agent);
   }
 
   /** The permanent, human-readable summary for one call (the ⬇ .txt download). */
@@ -166,7 +190,11 @@ public class CallService {
     Map<String, Object> r = db.one("SELECT COUNT(*) AS calls, COALESCE(SUM(duration_seconds),0) AS totalSeconds, COALESCE(SUM(tokens_input),0) AS ti, "
         + "COALESCE(SUM(tokens_output),0) AS tout, COALESCE(SUM(tokens_total),0) AS tt, AVG(avg_response_ms) AS avgMs, "
         + "COALESCE(SUM(recording_file IS NOT NULL),0) AS recordings, COALESCE(SUM(turns),0) AS turns FROM calls WHERE user_id = ?", userId);
-    return J.map("calls", J.num(r.get("calls")), "totalSeconds", J.num(r.get("totalSeconds")),
+    Map<String, Object> byChannel = new java.util.LinkedHashMap<>();
+    for (String ch : CHANNELS) byChannel.put(ch, 0L);
+    for (Map<String, Object> x : db.query("SELECT channel, COUNT(*) AS n FROM calls WHERE user_id = ? GROUP BY channel", userId))
+      byChannel.put(J.str(x.get("channel")), J.num(x.get("n")));
+    return J.map("calls", J.num(r.get("calls")), "byChannel", byChannel, "totalSeconds", J.num(r.get("totalSeconds")),
         "tokens", J.map("input", J.num(r.get("ti")), "output", J.num(r.get("tout")), "total", J.num(r.get("tt"))),
         "avgResponseMs", J.numOrNull(r.get("avgMs")), "recordings", J.num(r.get("recordings")), "turns", J.num(r.get("turns")));
   }

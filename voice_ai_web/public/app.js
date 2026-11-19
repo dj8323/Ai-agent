@@ -1507,6 +1507,7 @@ async function summarizeCall(duration, recording, endedBy) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         startedAt: startedAt?.toISOString(), duration, endedBy,
+        channel: endedBy === "live chat" ? "chat" : endedBy === "voice chat" ? "voice" : "call",
         playbook: pb ? { name: pb.name, icon: t?.icon, type: t?.name } : null,
         language: $("lang").selectedOptions[0]?.text, voice: $("voice").value, agentName: agentName(),
         stats: {
@@ -1887,10 +1888,12 @@ $("waSend").addEventListener("click", async () => {
     const d = await r.json().catch(() => ({}));
     if (!r.ok || !d.ok) throw new Error(d.error || "WhatsApp refused the message."); // {ok:false} = refused (HTTP 200)
     addChip(el, "✓ sent", "sent");
+    loadHistory().catch(() => {});
     $("waHint").textContent = `✓ Sent to …${digits.slice(-4)}. If they haven't messaged your business number in the last 24 hours, WhatsApp won't deliver a typed message.`;
     $("waText").value = "";
   } catch (err) {
     addChip(el, "⚠ not sent", "fail");
+    loadHistory().catch(() => {});
     $("waHint").textContent = "⚠ " + err.message;
   } finally {
     $("waSend").disabled = false;
@@ -1921,6 +1924,9 @@ const fmtTokens = (n) => (n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e4 ? Mat
 async function loadTotals() {
   const t = await fetch("/api/calls/stats").then((r) => r.json());
   $("tCalls").textContent = t.calls;
+  const bc = t.byChannel || {};
+  $("hcAll").textContent = t.calls; $("hcCall").textContent = bc.call || 0; $("hcChat").textContent = bc.chat || 0;
+  $("hcVoice").textContent = bc.voice || 0; $("hcWa").textContent = bc.whatsapp || 0;
   $("tTurns").textContent = `${t.turns} turns`;
   $("tTime").textContent = fmtDuration(t.totalSeconds);
   $("tAvgCall").textContent = t.calls ? `avg ${fmtDuration(t.totalSeconds / t.calls)} / call` : "—";
@@ -1932,7 +1938,7 @@ async function loadTotals() {
 
 function setHistoryOpen(open) {
   $("historyList").hidden = !open;
-  $("toggleHistory").textContent = open ? "Hide calls ▴" : "Show calls ▾";
+  $("toggleHistory").textContent = open ? "Hide ▴" : "Show all ▾";
   $("toggleHistory").setAttribute("aria-expanded", String(open));
   store.set("va-history-open", open ? "1" : "0");
 }
@@ -1948,26 +1954,51 @@ async function deleteCall(c) {
   return true;
 }
 
+// Every channel is kept here: 📞 calls, 💬 live chats, 🎤 voice chats and WhatsApp messages (filter at the top).
+const CHANNEL = {
+  call: { icon: "📞", label: "Call", empty: "calls" }, chat: { icon: "💬", label: "Live chat", empty: "live chats" },
+  voice: { icon: "🎤", label: "Voice chat", empty: "voice chats" }, whatsapp: { icon: "", label: "WhatsApp", empty: "WhatsApp messages" },
+};
+const waMini = () => document.querySelector("#histFilter .wa-mini").outerHTML;
+state.histChannel = "";
+$("histFilter").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-ch]");
+  if (!b) return;
+  state.histChannel = b.dataset.ch;
+  state.historyPage = 1;
+  $("histFilter").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  loadHistory();
+});
+
 async function loadHistory() {
   loadTotals().catch(() => {});
-  const data = await fetch(`/api/calls?page=${state.historyPage}`).then((r) => r.json());
+  const data = await fetch(`/api/calls?page=${state.historyPage}${state.histChannel ? `&channel=${state.histChannel}` : ""}`).then((r) => r.json());
   state.historyPage = data.page;
   const box = $("calls");
   box.innerHTML = "";
   if (!data.items.length && data.page > 1) { state.historyPage = data.page - 1; return loadHistory(); }
   if (!data.items.length) {
-    box.innerHTML = '<div class="empty">No calls yet. Finished calls and their summaries show up here.</div>';
+    box.innerHTML = `<div class="empty">No ${state.histChannel ? CHANNEL[state.histChannel].empty : "records"} yet. Finished calls, chats and WhatsApp messages show up here.</div>`;
   }
   for (const c of data.items) {
     const row = document.createElement("button");
     row.type = "button"; row.className = "call-row";
     row.innerHTML = `<div class="c-icon"></div><div><div class="c-title"></div><div class="c-sub"></div></div><div class="c-outcome"></div><div class="c-meta"></div>`;
+    const ch = CHANNEL[c.channel] ? c.channel : "call";
     row.querySelector(".c-icon").textContent = c.playbook?.icon || "💬";
+    if (ch === "whatsapp") row.querySelector(".c-icon").innerHTML = waMini().replace("wa-mini", "wa-mini wa-row");
     const title = row.querySelector(".c-title");
+    const badge = document.createElement("span");
+    badge.className = "ch-badge";
+    badge.innerHTML = ch === "whatsapp" ? waMini() : "";
+    badge.append(`${CHANNEL[ch].icon} ${CHANNEL[ch].label}`.trim());
+    title.appendChild(badge);
     if (c.agentName) { const a = document.createElement("span"); a.className = "call-agent"; a.textContent = c.agentName; title.appendChild(a); }
-    title.append(c.playbook?.name || "Default agent");
-    row.querySelector(".c-sub").textContent = `${fmtDate(c.startedAt)} · ${c.duration} · ${c.stats?.turns ?? 0} turns`;
-    row.querySelector(".c-outcome").textContent = outcomeOf(c.summary);
+    title.append(ch === "whatsapp" ? "Message" : c.playbook?.name || "Default agent");
+    row.querySelector(".c-sub").textContent = ch === "whatsapp"
+      ? `${fmtDate(c.startedAt)} · to +${c.stats?.to || "?"} · ${c.stats?.status === "sent" ? "✓ sent" : "⚠ not sent"}`
+      : `${fmtDate(c.startedAt)} · ${c.duration} · ${c.stats?.turns ?? 0} turns`;
+    row.querySelector(".c-outcome").textContent = ch === "whatsapp" ? (c.summary || "").split("\n\n").slice(1).join(" ").slice(0, 140) : outcomeOf(c.summary);
     const meta = row.querySelector(".c-meta");
     const chip = (t) => { const s = document.createElement("span"); s.className = "chip"; s.textContent = t; meta.appendChild(s); };
     if (c.stats?.moodPath && c.stats.moodPath !== "—") chip(`💬 ${c.stats.moodPath}`);
@@ -1978,7 +2009,7 @@ async function loadHistory() {
     wrap.className = "call-row-wrap";
     const del = document.createElement("button");
     del.type = "button"; del.className = "row-del"; del.textContent = "🗑";
-    del.title = "Delete this call"; del.setAttribute("aria-label", "Delete this call");
+    del.title = "Delete"; del.setAttribute("aria-label", "Delete");
     del.addEventListener("click", () => deleteCall(c));
     wrap.append(row, del);
     box.appendChild(wrap);
@@ -1997,11 +2028,14 @@ async function loadHistory() {
 
 async function openCall(id) {
   const c = await fetch(`/api/calls/${id}`).then((r) => r.json());
-  $("callTitle").textContent = `${c.playbook?.icon || "💬"} ${c.agentName ? c.agentName + " · " : ""}${c.playbook?.name || "Default agent"} · ${fmtDate(c.startedAt)}`;
+  const chn = CHANNEL[c.channel] || CHANNEL.call;
+  $("callTitle").textContent = `${chn.icon ? chn.icon + " " : ""}${chn.label} · ${c.agentName ? c.agentName + " · " : ""}${c.channel === "whatsapp" ? "Message" : c.playbook?.name || "Default agent"} · ${fmtDate(c.startedAt)}`;
   const body = $("callBody");
   body.innerHTML = `<div class="stats"></div><pre></pre><div class="rec"></div><h4>Transcript</h4><div class="lines"></div><div class="actions"></div>`;
   const st = c.stats || {};
-  body.querySelector(".stats").textContent = [
+  body.querySelector(".stats").textContent = c.channel === "whatsapp"
+    ? [`📱 to +${st.to || "?"}`, st.status === "sent" ? "✓ sent" : `⚠ not sent${st.error ? ": " + st.error : ""}`, st.messageId ? `id ${st.messageId}` : ""].filter(Boolean).join(" · ")
+    : [
     `⏱ ${c.duration}`, `${st.turns ?? 0} turns`, `avg reply ${st.avgResponse || "—"}`, `🌐 ${st.languages || c.language || "—"}`,
     `💬 ${st.moodPath || "—"}`, `🔢 ${(st.tokens?.total ?? 0).toLocaleString()} tokens`, `📴 ${c.endedBy}`,
   ].join(" · ");
@@ -2033,7 +2067,7 @@ async function openCall(id) {
   actions.appendChild(downloadLink(`/api/calls/${c.id}/summary`, `call-summary-${c.id}.txt`, "⬇ Summary file"));
   if (c.recording) actions.appendChild(downloadLink(`/api/calls/${c.id}/recording`, `call-recording-${c.id}.${c.recording.file.split(".").pop()}`, "⬇ Recording"));
   const del = document.createElement("button");
-  del.className = "danger"; del.textContent = "🗑 Delete call";
+  del.className = "danger"; del.textContent = `🗑 Delete ${c.channel === "whatsapp" ? "record" : (CHANNEL[c.channel] || CHANNEL.call).label.toLowerCase()}`;
   del.onclick = async () => { if (await deleteCall(c)) closeCall(); };
   actions.appendChild(del);
   $("callDialog").classList.add("open");

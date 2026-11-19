@@ -78,9 +78,10 @@ public class DataController {
   // ---------- calls ----------
   @GetMapping("/api/calls")
   Map<String, Object> calls(@RequestParam(defaultValue = "1") int page, @RequestParam(required = false) Integer pageSize,
-                            @RequestParam(required = false) String agent, @RequestAttribute("ctx") Ctx ctx) {
+                            @RequestParam(required = false) String agent, @RequestParam(required = false) String channel,
+                            @RequestAttribute("ctx") Ctx ctx) {
     int size = pageSize != null && pageSize > 0 ? pageSize : (int) Math.max(1, J.num(J.get(config.forAgent(ctx.agent), "history.pageSize")));
-    return calls.list(page, Math.min(size, 100), J.blank(agent) ? null : agent, ctx.dataUserId);
+    return calls.list(page, Math.min(size, 100), J.blank(agent) ? null : agent, J.blank(channel) ? null : channel, ctx.dataUserId);
   }
 
   @GetMapping("/api/calls/stats")
@@ -101,6 +102,9 @@ public class DataController {
   @PostMapping("/api/whatsapp/send")
   ResponseEntity<Map<String, Object>> whatsappSend(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
     Map<String, Object> r = notify.sendText(J.str(body.get("to"), 30), J.str(body.get("message"), 4000));
+    String number = J.str(body.get("to"), 30).replaceAll("[^\\d]", "");
+    if (!number.isEmpty() && !J.blank(body.get("message")))
+      r.put("recordId", calls.saveWhatsApp(ctx.dataUserId, ctx.agent, number, J.str(body.get("message"), 4000), r).get("id")); // shown in Call summaries
     logs.activity(ctx, "whatsapp.send", ctx.agent == null ? "" : J.str(ctx.agent.get("name")),
         J.map("to", J.str(r.get("to")), "ok", r.get("ok"), "chars", J.str(body.get("message")).length()));
     return ResponseEntity.ok(r); // {ok:false, error} when WhatsApp refused it: a normal answer, shown on the page

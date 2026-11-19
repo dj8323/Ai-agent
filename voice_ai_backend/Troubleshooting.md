@@ -111,7 +111,7 @@ All times are UTC. Ids are 8-character hex strings unless noted.
 | `agents` | Each user's agents | id, user_id, name, agent_type, template_id, owner_name, organization, owner_availability, availability_plan (JSON), greeting, language, voice, chat_model, tts_model, stt_model, speech_speed, playbook_id, calendar_enabled, emergency_enabled, meeting_minutes, is_default |
 | `emergency_rules` | Emergency contacts per agent | agent_id, label, contact_type (phone/email), number, keywords (JSON) |
 | `playbooks` | Users' own scripts | id, user_id, agent_type, name, role, goal, steps, rules |
-| `calls` | Call history | id, user_id, agent_id, agent_name, started_at, ended_at, duration_seconds, ended_by, language, voice, turns, tokens_*, avg_response_ms, stats (JSON), transcript (JSON), recording_file, recording_bytes |
+| `calls` | Call history: calls, live chats, voice chats and sent WhatsApp messages | id, user_id, agent_id, agent_name, channel (call/chat/voice/whatsapp), started_at, ended_at, duration_seconds, ended_by, language, voice, turns, tokens_*, avg_response_ms, stats (JSON), transcript (JSON), recording_file, recording_bytes |
 | `call_summaries` | AI summary of a call | call_id, summary, full_text |
 | `calendar_events` | Meetings booked by agents | id, user_id, agent_id, title, start_at, duration_min, notes, source |
 | `messages` | Messages callers left | id, user_id, agent_id, caller_name, caller_number, urgency, message, status (new/done) |
