@@ -44,7 +44,7 @@ The app is two applications: a **Spring Boot backend** (Java) that holds all the
 | Emergency | Keyword detection with a red banner and the right helpline number (112, 108, 100, 101, 1091, 14416 …) |
 | Admin | Dashboard with totals, user management, every agent and call, agent types & templates editor, app settings, sign-in list, activity log |
 | Storage | MySQL tables for users, roles, sessions, sign-in attempts, settings, agent types, templates, agents, playbooks, calls, summaries, calendar, messages and logs |
-| Look | Telemune branding, light and dark theme, floating clouds behind every page, cards that rise in, a pulsing Start call button, live voice visualizer (all motion turns off when the computer's "reduce motion" setting is on) |
+| Look | Telemune branding, light and dark theme, a moving "network" background on every page (dots joined by lines that move away from the mouse), glass cards that rise in and lift on hover, a pill-shaped menu bar, chat bubbles that pop in with typing dots while the agent thinks, a ringing Start call button, live voice visualizer (all motion turns off when the computer's "reduce motion" setting is on) |
 
 ## Getting started
 

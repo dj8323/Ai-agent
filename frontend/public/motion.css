@@ -1,58 +1,66 @@
 /*
   TelemuneSmartAi motion theme, shared by every page (index, login, admin).
-  - Floating clouds behind the page (the layer is added by motion.js).
-  - Cards rise in on load and lift a little on hover; dialogs and chat bubbles pop in.
-  - The title shimmers; the Start call button pulses while idle.
+  - "Network" background: drifting dots joined by lines that move away from the mouse (canvas added by motion.js).
+  - Glass cards that rise in on load and lift on hover; dialogs pop in.
+  - Pill menu bar with a gradient on the active item (top menu and the My agents tabs).
+  - Conversation: bubbles pop in, typing dots while the agent thinks (shown by app.js).
+  - Title shimmer; ringing pulse around the Start call button.
   Colours come from the page's theme variables (--c1/--c2/--c3), so light and dark both work.
   People with "reduce motion" turned on get no animation.
 */
-:root { --cloud: #ffffff; --cloud-op: .9; --sky-1: color-mix(in srgb, var(--c3) 26%, transparent); --sky-2: color-mix(in srgb, var(--c1) 12%, transparent); }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --cloud: #2a1f4d; --cloud-op: .6;
-  --sky-1: color-mix(in srgb, var(--c3) 14%, transparent); --sky-2: color-mix(in srgb, var(--c1) 16%, transparent); } }
-:root[data-theme="dark"] { --cloud: #2a1f4d; --cloud-op: .6;
-  --sky-1: color-mix(in srgb, var(--c3) 14%, transparent); --sky-2: color-mix(in srgb, var(--c1) 16%, transparent); }
+:root { --net-dot: var(--c1); --net-alpha: .55; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --net-dot: #c4b5fd; --net-alpha: .7; } }
+:root[data-theme="dark"] { --net-dot: #c4b5fd; --net-alpha: .7; }
 
-/* ---------- Clouds ---------- */
-.sky { position: fixed; inset: 0; z-index: -1; pointer-events: none; overflow: hidden;
-  background: linear-gradient(180deg, var(--sky-1), var(--sky-2) 55%, transparent 90%); }
-.sky .cloud { position: absolute; left: -340px; width: 260px; height: 80px; border-radius: 80px;
-  background: var(--cloud); opacity: var(--cloud-op);
-  filter: drop-shadow(0 10px 22px color-mix(in srgb, var(--c1) 26%, transparent));
-  animation: tsa-float linear infinite; will-change: transform; }
-.sky .cloud::before, .sky .cloud::after { content: ""; position: absolute; background: inherit; border-radius: 50%; }
-.sky .cloud::before { width: 120px; height: 120px; top: -60px; left: 40px; }
-.sky .cloud::after { width: 90px; height: 90px; top: -40px; right: 40px; }
-@keyframes tsa-float { to { transform: translateX(calc(100vw + 680px)); } }
+/* ---------- Network background ---------- */
+.net-bg { position: fixed; inset: 0; z-index: -1; pointer-events: none; width: 100vw; height: 100vh; }
 
-/* ---------- Cards, dialogs, bubbles ---------- */
-.card { animation: tsa-rise .6s ease-out both; transition: box-shadow .25s, transform .25s; }
-.wrap > .card:nth-child(2), .wrap > * > .card:nth-child(2) { animation-delay: .08s; }
-.wrap > .card:nth-child(3), .wrap > * > .card:nth-child(3) { animation-delay: .16s; }
-.wrap > .card:nth-child(4), .wrap > * > .card:nth-child(4) { animation-delay: .24s; }
-.wrap > .card:nth-child(n+5), .wrap > * > .card:nth-child(n+5) { animation-delay: .3s; }
-.card:hover { box-shadow: 0 18px 50px color-mix(in srgb, var(--c1) 22%, transparent); }
-@keyframes tsa-rise { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: none; } }
+/* ---------- Cards & dialogs ---------- */
+.card { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+  animation: tsa-rise .7s ease-out both; transition: transform .25s, box-shadow .25s; }
+.card:hover { transform: translateY(-3px); box-shadow: 0 18px 50px color-mix(in srgb, var(--c1) 24%, transparent); }
+.wrap > .card:nth-child(2), .wrap > * > .card:nth-child(2) { animation-delay: .12s; }
+.wrap > .card:nth-child(3), .wrap > * > .card:nth-child(3) { animation-delay: .24s; }
+.wrap > .card:nth-child(4), .wrap > * > .card:nth-child(4) { animation-delay: .36s; }
+.wrap > .card:nth-child(n+5), .wrap > * > .card:nth-child(n+5) { animation-delay: .44s; }
+@keyframes tsa-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
+.shell { animation: tsa-rise .7s ease-out both; }               /* login box */
+.dialog { animation: tsa-pop .3s ease-out both; }
 
-.shell { animation: tsa-rise .7s ease-out both; }              /* login box */
-.dialog { animation: tsa-pop .25s ease-out both; }
-.msg { animation: tsa-pop .35s ease-out both; }
-@keyframes tsa-pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+/* ---------- Menu bar (pill, gradient on the active item) ---------- */
+.topnav { border-radius: 999px; padding: 5px; gap: 6px; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.topnav button { border-radius: 999px; padding: 7px 14px; transition: background .2s, color .2s, transform .15s; }
+.topnav button[aria-current="page"] { background: var(--grad); color: #fff; box-shadow: 0 4px 14px color-mix(in srgb, var(--c2) 30%, transparent); }
+.tabs { gap: 6px; padding: 8px 12px; }
+.tabs button { border-radius: 999px; border-bottom: 0; padding: 7px 13px; transition: background .2s, color .2s; }
+.tabs button:hover { background: var(--panel-2); }
+.tabs button[aria-selected="true"] { background: var(--grad); color: #fff; }
+
+/* ---------- Conversation ---------- */
+.msg { animation: tsa-pop .45s ease-out both; }
+.msg.user { background: linear-gradient(135deg, var(--c1), var(--c2)); }
+@keyframes tsa-pop { from { opacity: 0; transform: translateY(10px) scale(.97); } to { opacity: 1; transform: none; } }
+.typing { align-self: flex-start; display: inline-flex; gap: 4px; padding: 12px 14px; border-radius: 16px; border-bottom-left-radius: 4px;
+  background: var(--agent-bubble, var(--panel-2)); width: fit-content; animation: tsa-pop .3s ease-out both; }
+.typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: tsa-dot 1.2s infinite; }
+.typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
+@keyframes tsa-dot { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-4px); } }
 
 /* ---------- Title shimmer ---------- */
-header h1 { background-size: 200% 200%; animation: tsa-shine 7s ease-in-out infinite; }
+header h1 { background-size: 200% 200%; animation: tsa-shine 6s ease-in-out infinite; }
 @keyframes tsa-shine { 50% { background-position: 100% 50%; } }
 
-/* ---------- Start call button: gentle pulse while idle ---------- */
-.btn-call { animation: tsa-pulse 2.4s ease-out infinite; }
-@keyframes tsa-pulse {
-  0%   { box-shadow: 0 8px 24px color-mix(in srgb, #10b981 40%, transparent), 0 0 0 0 color-mix(in srgb, #10b981 45%, transparent); }
-  70%  { box-shadow: 0 8px 24px color-mix(in srgb, #10b981 40%, transparent), 0 0 0 14px transparent; }
-  100% { box-shadow: 0 8px 24px color-mix(in srgb, #10b981 40%, transparent), 0 0 0 0 transparent; }
-}
+/* ---------- Start call button: ringing pulse ---------- */
+.btn-call { position: relative; }
+.btn-call::before, .btn-call::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  border: 2px solid var(--c1); animation: tsa-ring 2.4s ease-out infinite; }
+.btn-call::after { border-color: var(--c2); animation-delay: 1.2s; }
+@keyframes tsa-ring { from { transform: scale(1); opacity: .7; } to { transform: scale(1.35, 1.7); opacity: 0; } }
 
 /* ---------- Buttons: small press feedback ---------- */
 button:not(:disabled):active { transform: scale(.97); }
 
 @media (prefers-reduced-motion: reduce) {
-  .sky .cloud, .card, .shell, .dialog, .msg, header h1, .btn-call { animation: none !important; }
+  .card, .shell, .dialog, .msg, .typing, .typing i, header h1, .btn-call::before, .btn-call::after { animation: none !important; }
+  .card:hover { transform: none; }
 }

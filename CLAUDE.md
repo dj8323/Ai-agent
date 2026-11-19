@@ -114,9 +114,10 @@ frontend/public/index.html   Layout + CSS (light/dark tokens): top menu, Call vi
                              conversation, call summaries), My agents view (list + tabbed editor), dialogs.
 frontend/public/app.js       Menu/tab routing, agent picker + summary, persona/availability/emergency editors, call flow,
                              speech in/out, tag parsing, messages, calendar, playbooks, call summaries.
-frontend/public/motion.css + motion.js   Shared motion theme on all three pages: floating clouds layer (`.sky`, z-index -1,
-                             added by motion.js), cards/dialogs/bubbles rise or pop in, title shimmer, idle pulse on
-                             `.btn-call`; uses the theme variables; off with prefers-reduced-motion.
+frontend/public/motion.css + motion.js   Shared motion theme on all three pages: "Network" canvas background (`.net-bg`,
+                             z-index -1, drawn by motion.js, colour --net-dot), glass cards rise in + lift on hover,
+                             pill menu bar (.topnav, .tabs), bubbles pop in, typing dots (`showTyping()` in app.js while
+                             phase = thinking), title shimmer, rings on `.btn-call`; off with prefers-reduced-motion.
 frontend/public/telemune-mark.png / telemune-logo.svg   Logo (CSS mask, theme gradient) / favicon.
 runScript.sh           One-command start of both apps.
 docs/Troubleshooting.md  Log files, tracing a request, common problems, every table, ready SQL queries.

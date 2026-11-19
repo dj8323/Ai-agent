@@ -574,6 +574,19 @@ function setPhase(phase, text) {
   const labels = { idle: "Ready to call", listening: "Listening…", thinking: "Thinking…", speaking: "Speaking…" };
   $("status").textContent = text || (state.muted && phase === "listening" ? "Muted" : labels[phase]);
   if (phase !== "speaking") setEmotion(null);
+  showTyping(phase === "thinking" && state.inCall);
+}
+
+// Typing dots in the conversation while the agent is thinking (styles in motion.css).
+function showTyping(on) {
+  const t = $("typing");
+  if (!on) { t?.remove(); return; }
+  if (t) { $("msgs").appendChild(t); scrollDown(); return; }
+  const el = document.createElement("div");
+  el.id = "typing"; el.className = "typing"; el.setAttribute("aria-label", "Agent is typing");
+  el.innerHTML = "<i></i><i></i><i></i>";
+  $("msgs").appendChild(el);
+  scrollDown();
 }
 
 function setEmotion(emotion) {
@@ -592,7 +605,10 @@ function addMsg(role, text) {
     el.insertAdjacentHTML("beforeend", `<div class="chips"></div><div class="timing"></div><div class="meta"></div>`);
     el.querySelector(".meta").textContent = (role === "user" ? "You" : agentName()) + " · " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   }
-  $("msgs").appendChild(el);
+  const typing = $("typing");
+  if (role === "assistant") typing?.remove();
+  if (typing && role !== "assistant") $("msgs").insertBefore(el, typing); // keep the dots last
+  else $("msgs").appendChild(el);
   scrollDown();
   return el;
 }
