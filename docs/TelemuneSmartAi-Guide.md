@@ -309,7 +309,7 @@ The agent always speaks first, and the loop repeats for every turn; saying goodb
 
 ### What you see on each turn
 
-Each of your messages gets chips for **intent** (what you want, in a few words), **mood**, **language** and **reply time**; each agent message shows the emotions used. A single line above the chat keeps it short: 🎯 what the caller wants and the turn count while you talk, then 📋 the AI summary in one sentence when the call or chat ends. The ring around the avatar moves with your voice (green) and the agent's voice (the colour of its current emotion), with orbiting dots while it thinks.
+Each of your messages gets chips for **intent** (what you want, in a few words), **mood**, **language** and **reply time**; each agent message shows the emotions used. A box above the chat keeps it short: 🎯 what the caller wants and the turn count while you talk, then 📋 the AI summary in up to three lines when the call or chat ends. **More ▾** opens the full summary, its statistics and the download buttons (summary + transcript, recording); the summary is not repeated inside the chat. The **− 100% +** buttons next to Clear zoom the conversation out (smaller, so you see more older messages at once) or in (bigger text); your choice is remembered in this browser. The ring around the avatar moves with your voice (green) and the agent's voice (the colour of its current emotion), with orbiting dots while it thinks.
 
 The agent has 20 emotions: neutral, happy, excited, cheerful, calm, empathetic, sad, apologetic, encouraging, confident, serious, curious, surprised, thoughtful, concerned, reassuring, grateful, playful, urgent, proud.
 

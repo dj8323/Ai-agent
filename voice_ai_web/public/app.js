@@ -677,20 +677,52 @@ function addDivider(text) {
 
 const fmtS = (ms) => (ms == null ? "—" : (ms / 1000).toFixed(1) + "s");
 
-function setConvSum(icon, text, turns, done) {
+// The summary box at the top of the Conversation card. Live: 🎯 latest intent (one line). Ended: 📋 the AI summary in up
+// to 3 lines, and "More ▾" opens the full summary, its stats and the downloads (opts = {full, stats, links}).
+function setConvSum(icon, text, turns, done, opts = {}) {
   const box = $("convSum");
   box.classList.toggle("idle", !text);
   box.classList.toggle("done", !!done);
+  if (!done || opts.full != null) {
+    $("convSumPre").textContent = opts.full || "";
+    $("convSumStats").textContent = opts.stats || "";
+    $("convSumActions").replaceChildren(...(opts.links || []));
+    $("convSumMore").hidden = !opts.full;
+    toggleConvSum(false);
+  }
   $("convSumIco").textContent = icon;
   $("convSumText").textContent = text || "A short summary appears here as you talk.";
   $("convSumText").title = text || "";
   $("convSumTurns").textContent = turns ? `${turns} turn${turns === 1 ? "" : "s"}` : "";
 }
-// The AI summary in one short sentence (its "Summary:" line, else the outcome).
+function toggleConvSum(open) {
+  $("convSum").classList.toggle("open", open);
+  $("convSumFull").hidden = !open;
+  $("convSumMore").textContent = open ? "Less ▴" : "More ▾";
+  $("convSumMore").setAttribute("aria-expanded", String(open));
+}
+$("convSumMore").addEventListener("click", () => toggleConvSum(!$("convSum").classList.contains("open")));
+
+// Conversation zoom: − / 100% / + scale the messages (zoom out = see more older messages at once). Kept per browser.
+const ZOOM = { min: 0.6, max: 1.6, step: 0.1 };
+function setChatZoom(z) {
+  z = Math.round(Math.min(ZOOM.max, Math.max(ZOOM.min, z)) * 10) / 10;
+  $("msgs").style.setProperty("--chat-zoom", z);
+  $("zoomReset").textContent = Math.round(z * 100) + "%";
+  $("zoomOut").disabled = z <= ZOOM.min;
+  $("zoomIn").disabled = z >= ZOOM.max;
+  try { localStorage.setItem("tsa-chat-zoom", String(z)); } catch {}
+  state.chatZoom = z;
+}
+$("zoomOut").addEventListener("click", () => setChatZoom(state.chatZoom - ZOOM.step));
+$("zoomIn").addEventListener("click", () => setChatZoom(state.chatZoom + ZOOM.step));
+$("zoomReset").addEventListener("click", () => setChatZoom(1));
+setChatZoom((() => { try { return parseFloat(localStorage.getItem("tsa-chat-zoom")) || 1; } catch { return 1; } })());
+
+// The AI summary in a few lines (its "Summary:" line, else the outcome).
 const shortSummary = (s) => {
   const line = /Summary:\s*(.+)/i.exec(s || "")?.[1] || /Outcome:\s*(.+)/i.exec(s || "")?.[1] || (s || "").split("\n")[0];
-  const first = line.split(/(?<=[.!?])\s/)[0];
-  return first.length > 160 ? first.slice(0, 157) + "…" : first;
+  return line.length > 400 ? line.slice(0, 397) + "…" : line;
 };
 
 function updateInsights() {
@@ -1458,16 +1490,14 @@ async function summarizeCall(duration, recording, endedBy) {
   const moodPath = moods.length ? [...new Set([moods[0], moods.at(-1)])].join(" → ") : "—";
   const statsLine = `${pb ? pb.name : "Default agent"} · ${duration} · ${callerTurns.length} turns · avg response ${avg} · ${langs} · mood ${moodPath}`;
 
-  const card = document.createElement("div");
-  card.className = "summary";
-  card.innerHTML = `<h3>📋 Call summary</h3><div class="stats"></div><pre>Writing summary…</pre><div class="actions"></div>`;
-  card.querySelector(".stats").textContent = statsLine;
-  $("msgs").appendChild(card);
-  scrollDown();
-  const pre = card.querySelector("pre"), actions = card.querySelector(".actions");
-  if (recording) actions.appendChild(downloadLink(recording.url, recording.name, "⬇ Recording"));
-
-  if (!callerTurns.length) { pre.textContent = "The call ended before the caller said anything."; return; }
+  // The summary goes in the box at the top of the Conversation card (not as a card in the chat).
+  const links = recording ? [downloadLink(recording.url, recording.name, "⬇ Recording")] : [];
+  if (!callerTurns.length) {
+    setConvSum("📋", "Ended before the caller said anything.", 0, true, { full: "", stats: statsLine, links });
+    $("convSumMore").hidden = !links.length;
+    return;
+  }
+  setConvSum("⏳", "Writing the summary…", callerTurns.length, true, { full: "", stats: statsLine, links });
   let summaryText = "";
   try {
     const res = await fetch("/api/summary", {
@@ -1477,9 +1507,7 @@ async function summarizeCall(duration, recording, endedBy) {
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || "Summary failed");
-    pre.textContent = data.summary;
     summaryText = data.summary;
-    setConvSum("📋", shortSummary(data.summary), state.turns.filter((x) => !x.hidden).length, true);
     if (data.usage) { tokens.input += data.usage.input || 0; tokens.output += data.usage.output || 0; tokens.total += data.usage.total || 0; }
 
     let i = 0;
@@ -1492,11 +1520,11 @@ async function summarizeCall(duration, recording, endedBy) {
     }).join("\n");
     const file = `CALL SUMMARY\n${statsLine}\n${startedAt?.toLocaleString() || ""}\n\n${data.summary}\n\n--- Transcript ---\n${transcript}\n`;
     const url = URL.createObjectURL(new Blob([file], { type: "text/plain" }));
-    actions.appendChild(downloadLink(url, `call-summary-${localStamp()}.txt`, "⬇ Summary + transcript"));
+    links.push(downloadLink(url, `call-summary-${localStamp()}.txt`, "⬇ Summary + transcript"));
+    setConvSum("📋", shortSummary(data.summary), callerTurns.length, true, { full: data.summary, stats: statsLine, links });
   } catch (e) {
-    pre.textContent = "Couldn't write the summary: " + e.message;
+    setConvSum("⚠️", "Couldn't write the summary: " + e.message, callerTurns.length, true, { full: "", stats: statsLine, links });
   }
-  scrollDown();
 
   // Save to call history (summary, annotated transcript, stats, recording).
   try {

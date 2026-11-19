@@ -131,9 +131,25 @@
   .transcript-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .transcript-head h2 { font-size: 16px; margin: 0; }
   .link { background: none; border: none; color: var(--accent); cursor: pointer; font-size: 13px; }
-  .conv-sum { display: flex; align-items: center; gap: 8px; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px;
+  .conv-sum { display: block; background: var(--panel-2); border: 1px solid var(--border); border-radius: 12px;
     padding: 8px 12px; margin-bottom: 12px; font-size: 13.5px; min-height: 38px; }
-  .conv-sum .cs-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .conv-sum .cs-top { display: flex; align-items: flex-start; gap: 8px; }
+  .conv-sum .cs-text { flex: 1; min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; line-height: 1.45; }
+  .conv-sum.done .cs-text { -webkit-line-clamp: 3; }
+  .conv-sum.open .cs-text { display: none; }
+  .conv-sum .cs-more { white-space: nowrap; font-size: 12.5px; }
+  .conv-sum .cs-full { margin-top: 6px; max-height: 40vh; overflow-y: auto; }
+  .conv-sum .cs-stats { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .conv-sum pre { white-space: pre-wrap; font-family: inherit; margin: 0; line-height: 1.5; font-size: 13.5px; }
+  .conv-sum .cs-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px; }
+  .conv-sum .cs-actions a { font-size: 12.5px; padding: 6px 11px; border-radius: 8px; background: var(--panel); border: 1px solid var(--border); color: var(--text); text-decoration: none; }
+  .head-tools { display: flex; align-items: center; gap: 10px; }
+  .zoom { display: inline-flex; border: 1px solid var(--border); border-radius: 999px; overflow: hidden; background: var(--panel-2); }
+  .zoom button { border: 0; background: none; color: var(--text); font: inherit; font-size: 13px; padding: 3px 10px; cursor: pointer; min-width: 30px; }
+  .zoom button:hover { background: color-mix(in srgb, var(--c1) 14%, transparent); }
+  .zoom button:disabled { opacity: .4; cursor: default; }
+  #zoomReset { font-size: 11.5px; color: var(--muted); border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+  .msgs > * { zoom: var(--chat-zoom, 1); }
   .conv-sum.idle .cs-text { color: var(--muted); }
   .conv-sum.done { border-color: color-mix(in srgb, var(--c1) 40%, var(--border)); }
   .conv-sum .cs-turns { font-size: 11.5px; color: var(--muted); white-space: nowrap; }
@@ -781,10 +797,22 @@
   <section class="card transcript">
     <div class="transcript-head">
       <h2>Conversation</h2>
-      <button class="link" id="clearBtn">Clear</button>
+      <div class="head-tools">
+        <div class="zoom" role="group" aria-label="Conversation zoom">
+          <button type="button" id="zoomOut" title="Zoom out: smaller text, more messages" aria-label="Zoom out">−</button>
+          <button type="button" id="zoomReset" title="Back to 100%">100%</button>
+          <button type="button" id="zoomIn" title="Zoom in: bigger text" aria-label="Zoom in">+</button>
+        </div>
+        <button class="link" id="clearBtn">Clear</button>
+      </div>
     </div>
     <!-- One short line about the conversation: what the caller wants while it runs, the AI summary when it ends. -->
-    <div class="conv-sum" id="convSum"><span class="cs-ico" id="convSumIco">📝</span><span class="cs-text" id="convSumText">A short summary appears here as you talk.</span><span class="cs-turns" id="convSumTurns"></span></div>
+    <div class="conv-sum idle" id="convSum">
+      <div class="cs-top"><span class="cs-ico" id="convSumIco">📝</span><span class="cs-text" id="convSumText">A short summary appears here as you talk.</span>
+        <span class="cs-turns" id="convSumTurns"></span>
+        <button class="link cs-more" id="convSumMore" type="button" aria-expanded="false" hidden>More ▾</button></div>
+      <div class="cs-full" id="convSumFull" hidden><div class="cs-stats" id="convSumStats"></div><pre id="convSumPre"></pre><div class="cs-actions" id="convSumActions"></div></div>
+    </div>
     <div class="msgs" id="msgs"><div class="empty" id="empty">Your conversation will appear here.</div></div>
     <!-- Talk by: Web call (default) · Live chat · Voice chat · WhatsApp, at the bottom of the conversation.
          Choosing another one ends what's running (a call or a chat is saved first). -->
