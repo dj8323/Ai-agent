@@ -243,7 +243,9 @@ voice_ai_web/          ── frontend team ──
   organization, availability, language · voice, AI models, playbook picker `#pbPick` + ✕ `#pbClear` (removes it from the agent), feature chips). ✎ Edit agent →
   `#agents/profile`. Keep it simple: anything that edits an agent belongs in My agents.
 - **New agent wizard** (`#agentDialog`, `openAgentDialog()`): steps `NA_STEPS` profile → voice (▶ `#naListen`: `fetchSpeech(text, emotion, {voice, language})`, works before
-  the agent exists) → playbook (`#naPbs`, `na.playbookId`) → availability → calendar → emergency → review (`naGo(n)`, `naCheck(step)`, step list `#naSteps` + bar `#naFill`, review `#naReview` with Edit links).
+  the agent exists) → availability → calendar → emergency → playbook (`#naPbs`, `na.playbookId`; hides playbooks
+  another agent already uses, from `state.agents[].playbookId`) → review. Profile's agent type is a dropdown `#naType`
+  (+ `#naTypeDesc`) (`naGo(n)`, `naCheck(step)`, step list `#naSteps` + bar `#naFill`, review `#naReview` with Edit links).
   Create: POST `/api/agents` (profile; `na.created` stops a duplicate on retry) → `switchAgent()` → copy the wizard's
   voice/speed/availability/calendar/emergency into the My agents controls → `autoSave()` → `prepareGreeting()`, with the
   progress bar `#naProgress`; then `#call`. Tour "first-agent" walks every step. Keep it in step with the My agents tabs.

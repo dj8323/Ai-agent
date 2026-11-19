@@ -194,12 +194,12 @@ Safety rules travel with the types: the hospital agent never diagnoses and sends
 
 1. On the main page, the **Agent for this call** dropdown switches agents. **🤖 My agents** in the menu lists them all; ★ marks the one that opens first.
 2. **＋ New agent** (on the main page or in My agents) opens a step-by-step window. The numbered steps and a bar at the top show where you are; **Next →** / **← Back** move between steps, and you can click an earlier step to go back to it:
-    1. **Profile**: the **type** (for example Call Assistant) and **template** (the type's usual one is pre-selected, or "No template: free conversation"), a **name** (for example "Brown"), **Works for** (required for the Call Assistant), **Organization** and what it's for. A preview shows the first line the agent will say.
+    1. **Profile**: the **Agent type** dropdown (for example Call Assistant; its description shows underneath) and **template** (the type's usual one is pre-selected, or "No template: free conversation"), a **name** (for example "Brown"), **Works for** (required for the Call Assistant), **Organization** and what it's for. A preview shows the first line the agent will say.
     2. **Voice**: language, voice (**▶** plays a short hello in that voice) and speaking speed.
-    3. **Playbook** (optional): one of your saved playbooks, or none to follow the agent's template.
-    4. **Availability** (optional): days, hours and time zone when the person can take meetings.
-    5. **Calendar**: switch on booking into the calendar (on by default for types that need it) and the meeting length.
-    6. **Emergency** (optional): contacts (phone or email) and the words that trigger them.
+    3. **Availability** (optional): days, hours and time zone when the person can take meetings.
+    4. **Calendar**: switch on booking into the calendar (on by default for types that need it) and the meeting length.
+    5. **Emergency** (optional): contacts (phone or email) and the words that trigger them.
+    6. **Playbook** (optional): one of your saved playbooks, or none to follow the agent's template. Playbooks already used by your other agents aren't listed.
     7. **Review**: everything in one list, each with **Edit**. **✨ Create agent** then makes the agent with a progress bar (creating → opening → saving the settings → preparing its greeting → ready) and takes you to the call page with it selected.
    📚 Tutorials → **Create your first agent** walks through all seven steps.
 3. Switching loads that agent's settings everywhere. Switching is locked during a call.

@@ -274,6 +274,8 @@
   .na-step { animation: tsa-pop .3s ease-out both; }
   .na-actions { align-items: center; }
   .na-spacer { flex: 1; }
+  .na-type-desc { font-size: 12.5px; color: var(--muted); margin-top: -4px; line-height: 1.4; }
+  .na-type-desc:empty { display: none; }
   .pb-pick-row { display: flex; gap: 6px; align-items: center; }
   .pb-pick-row select { flex: 1; min-width: 0; }
   .pb-pick-row .icon-mini { align-self: stretch; width: 40px; font-size: 14px; }
@@ -974,21 +976,22 @@
       <h3 id="naTitle">＋ New agent</h3>
       <button class="icon-btn" id="naClose" type="button" title="Close" aria-label="Close">✕</button>
     </div>
-    <!-- Step by step: Profile → Voice → Playbook → Availability → Calendar → Emergency → Review & create -->
+    <!-- Step by step: Profile → Voice → Availability → Calendar → Emergency → Playbook → Review & create -->
     <ol class="na-steps" id="naSteps">
       <li data-step="profile"><span>1</span>Profile</li><li data-step="voice"><span>2</span>Voice</li>
-      <li data-step="playbook"><span>3</span>Playbook</li><li data-step="availability"><span>4</span>Availability</li>
-      <li data-step="calendar"><span>5</span>Calendar</li><li data-step="emergency"><span>6</span>Emergency</li>
+      <li data-step="availability"><span>3</span>Availability</li><li data-step="calendar"><span>4</span>Calendar</li>
+      <li data-step="emergency"><span>5</span>Emergency</li><li data-step="playbook"><span>6</span>Playbook</li>
       <li data-step="review"><span>7</span>Review</li>
     </ol>
     <div class="na-track" aria-hidden="true"><div class="na-fill" id="naFill"></div></div>
     <form id="naForm" novalidate>
       <section class="na-step" data-step="profile">
         <p class="lead">What will this agent do, and for whom? The type and template set its persona, greeting and script.</p>
-        <div class="grid na-grid" id="naTypes"></div>
         <div class="na-fields">
-          <div><label for="naName">Agent name <span class="req">*</span></label><input type="text" id="naName" maxlength="24" placeholder="e.g. Brown" autocomplete="off" /></div>
+          <div><label for="naType">Agent type</label><select id="naType"></select></div>
           <div><label for="naTemplate">Template</label><select id="naTemplate"></select></div>
+          <div class="span2 na-type-desc" id="naTypeDesc"></div>
+          <div><label for="naName">Agent name <span class="req">*</span></label><input type="text" id="naName" maxlength="24" placeholder="e.g. Brown" autocomplete="off" /></div>
           <div><label for="naOwner" id="naOwnerLabel">Works for</label><input type="text" id="naOwner" maxlength="60" placeholder="e.g. DJ" autocomplete="off" /></div>
           <div><label for="naOrg">Organization (optional)</label><input type="text" id="naOrg" maxlength="80" placeholder="e.g. Telemune" autocomplete="off" /></div>
           <div class="span2"><label for="naDesc">What it's for (optional)</label><input type="text" id="naDesc" maxlength="300" placeholder="e.g. Answers DJ's calls during meetings" autocomplete="off" /></div>
@@ -1011,7 +1014,7 @@
       </section>
 
       <section class="na-step" data-step="playbook" hidden>
-        <p class="lead">A playbook is a ready script for one job (goal, steps, rules). Pick one, or keep the agent's own template. You can change or remove it later on the call page or in My agents → Playbooks.</p>
+        <p class="lead">A playbook is a ready script for one job (goal, steps, rules). Pick one, or keep the agent's own template. Playbooks another agent already uses aren't shown. You can change or remove it later on the call page or in My agents → Playbooks.</p>
         <div class="pb-list na-pbs" id="naPbs"></div>
         <p class="hint-line" id="naPbHint"></p>
       </section>

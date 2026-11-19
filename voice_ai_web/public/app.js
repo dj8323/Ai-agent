@@ -2234,30 +2234,30 @@ const goCall = () => { if (!/^#?(call)?$/.test(location.hash)) location.hash = "
 const isOpen = (id) => $(id).classList.contains("open");
 
 const TOURS = [
-  { id: "first-agent", icon: "＋", title: "Create your first agent", desc: "Step by step: profile, voice, playbook, availability, calendar, emergency, then create.",
+  { id: "first-agent", icon: "＋", title: "Create your first agent", desc: "Step by step: profile, voice, availability, calendar, emergency, playbook, then create.",
     steps: [
       { target: () => (state.agents.length ? "#sumNew" : "#firstAgentBtn"), before: goCall, title: "Open the new agent form",
         text: () => (state.agents.length ? "👉 Click **＋** next to \"Agent for this call\"." : "👉 Click **＋ Create my first agent**."), done: () => isOpen("agentDialog") },
-      { target: "#naSteps", title: "Seven short steps", text: "Creating an agent goes step by step: **Profile → Voice → Playbook → Availability → Calendar → Emergency → Review**. The bar shows how far you are.", next: true },
-      { target: "#naTypes", title: "1 · What is it for?", text: "👉 Pick a type. To answer calls for someone who is busy, choose **Call Assistant (for a person)**. Hospital, Real Estate, Banking, HR and more are here too.",
-        clickIn: "#naTypes .tile", next: true },
+      { target: "#naSteps", title: "Seven short steps", text: "Creating an agent goes step by step: **Profile → Voice → Availability → Calendar → Emergency → Playbook → Review**. The bar shows how far you are.", next: true },
+      { target: "#naType", title: "1 · What is it for?", text: "👉 Pick the **Agent type**. To answer calls for someone who is busy, choose **Call Assistant (for a person)**. Hospital, Real Estate, Banking, HR and more are in the list too.",
+        next: true },
       { target: "#naTemplate", title: "Its script", text: "The template the agent follows: what it asks and in which order. Keep the suggested one or pick another.", next: true },
       { target: "#naName", title: "Give it a name", text: "👉 Type a name for your agent, for example **Brown**.", ready: () => !!$("naName").value.trim() },
       { target: "#naOwner", title: "Who does it work for?", text: "Type the person it answers for, for example **DJ**. A Call Assistant needs this; for other types it's optional.",
         ready: () => !typeOf(na.type).needsOwner || !!$("naOwner").value.trim() },
-      { target: ["#naPreview:not(:empty)", "#naTypes"], title: "Its first line", text: "This is what the agent will say at the start of every call.", next: true },
+      { target: ["#naPreview:not(:empty)", "#naType"], title: "Its first line", text: "This is what the agent will say at the start of every call.", next: true },
       { target: "#naNext", title: "Next step", text: "👉 Click **Next →**.", done: () => NA_STEPS[na.step] === "voice", warn: () => $("naErr").textContent },
       { target: "#naVoice", title: "2 · Voice", text: "Pick the language it speaks and its voice. 10 voices, male and female.", next: true },
       { target: "#naListen", title: "Listen to it", text: "👉 Click **▶** to hear the voice before you choose.", clickIn: "#naListen", next: true, nextLabel: "Skip" },
-      { target: "#naSpeedPicks", title: "Speaking speed", text: "How fast it talks: 🐢 Slow, Normal, Fast or 🚀 Faster. 👉 Then click **Next →**.", done: () => NA_STEPS[na.step] === "playbook" },
-      { target: "#naPbs", title: "3 · Playbook (optional)", text: "Pick a saved playbook (a ready script for one job), or keep **No playbook** to use the agent's template. 👉 **Next →**",
-        done: () => NA_STEPS[na.step] === "availability" },
-      { target: "#naDays", title: "4 · Availability (optional)", text: "When the person can take meetings: pick days and hours. The agent only offers times inside them. Skip it if you like. 👉 **Next →**",
+      { target: "#naSpeedPicks", title: "Speaking speed", text: "How fast it talks: 🐢 Slow, Normal, Fast or 🚀 Faster. 👉 Then click **Next →**.", done: () => NA_STEPS[na.step] === "availability" },
+      { target: "#naDays", title: "3 · Availability (optional)", text: "When the person can take meetings: pick days and hours. The agent only offers times inside them. Skip it if you like. 👉 **Next →**",
         done: () => NA_STEPS[na.step] === "calendar", warn: () => $("naErr").textContent },
-      { target: "label[for=naCal]", title: "5 · Calendar", text: "Switch it on and the agent books confirmed meetings into its calendar. Pick the meeting length. 👉 **Next →**",
+      { target: "label[for=naCal]", title: "4 · Calendar", text: "Switch it on and the agent books confirmed meetings into its calendar. Pick the meeting length. 👉 **Next →**",
         done: () => NA_STEPS[na.step] === "emergency" },
-      { target: "label[for=naEmg]", title: "6 · Emergency (optional)", text: "Add a number or email to show when a caller mentions an emergency word. 👉 **Next →**",
-        done: () => NA_STEPS[na.step] === "review", warn: () => $("naErr").textContent },
+      { target: "label[for=naEmg]", title: "5 · Emergency (optional)", text: "Add a number or email to show when a caller mentions an emergency word. 👉 **Next →**",
+        done: () => NA_STEPS[na.step] === "playbook", warn: () => $("naErr").textContent },
+      { target: "#naPbs", title: "6 · Playbook (optional)", text: "Pick a saved playbook (a ready script for one job), or keep **No playbook** to use the agent's template. Playbooks your other agents already use aren't listed. 👉 **Next →**",
+        done: () => NA_STEPS[na.step] === "review" },
       { target: "#naReview", title: "7 · Review", text: "Everything in one place. **Edit** jumps back to that step.", next: true },
       { target: "#naCreate", title: "Create it", text: "👉 Click **✨ Create agent** and watch the progress bar.", done: () => !isOpen("agentDialog") && state.agents.length > tourCtx.agents,
         warn: () => $("naErr").textContent },
@@ -2594,10 +2594,10 @@ $("agentDelete").addEventListener("click", async () => {
 });
 
 // ---------- New agent: a step-by-step wizard ----------
-// Profile → Voice → Playbook → Availability → Calendar → Emergency → Review. "Create agent" then makes the agent (POST /api/agents
+// Profile → Voice → Availability → Calendar → Emergency → Playbook → Review. "Create agent" then makes the agent (POST /api/agents
 // with the profile), opens it, applies the other steps through the normal auto-save (POST /api/settings) and prepares
 // its greeting, with a progress bar. The type and template list come from the DB (agent_types / agent_templates).
-const NA_STEPS = ["profile", "voice", "playbook", "availability", "calendar", "emergency", "review"];
+const NA_STEPS = ["profile", "voice", "availability", "calendar", "emergency", "playbook", "review"];
 const na = { type: "personal", step: 0, days: [], rules: [], busy: false, playbookId: "" };
 
 function openAgentDialog() {
@@ -2626,16 +2626,22 @@ function openAgentDialog() {
 }
 function closeAgentDialog() { if (!na.busy) $("agentDialog").classList.remove("open"); }
 
+// agent type: a dropdown (with its description underneath) to keep the first step short
 function renderAgentTypes() {
-  const grid = $("naTypes");
-  grid.innerHTML = "";
-  for (const [id, t] of Object.entries(state.agentTypes)) {
-    const b = tile(t.icon, t.name, t.description, () => { na.type = id; renderAgentTypes(); renderNaTemplates(); (t.needsOwner && !$("naOwner").value ? $("naOwner") : $("naName")).focus(); });
-    b.classList.toggle("picked", id === na.type);
-    b.setAttribute("aria-pressed", String(id === na.type));
-    grid.appendChild(b);
+  const sel = $("naType");
+  if (sel.options.length !== Object.keys(state.agentTypes).length) {
+    sel.innerHTML = "";
+    for (const [id, t] of Object.entries(state.agentTypes)) sel.add(new Option(`${t.icon || ""} ${t.name}`.trim(), id));
   }
+  sel.value = na.type;
+  $("naTypeDesc").textContent = typeOf(na.type).description || "";
 }
+$("naType").addEventListener("change", () => {
+  na.type = $("naType").value;
+  renderAgentTypes(); renderNaTemplates();
+  const t = typeOf(na.type);
+  if (t.needsOwner && !$("naOwner").value) $("naOwner").focus();
+});
 function renderNaTemplates() {
   const t = typeOf(na.type);
   const sel = $("naTemplate");
@@ -2689,7 +2695,10 @@ $("naListen").addEventListener("click", async () => {
 function renderNaPlaybooks() {
   const list = $("naPbs");
   list.innerHTML = "";
-  const items = [{ id: "", name: "No playbook: use the agent's template", type: null }, ...state.saved];
+  const inUse = new Set(state.agents.map((a) => a.playbookId).filter(Boolean)); // already used by one of your agents
+  const free = state.saved.filter((pb) => !inUse.has(pb.id));
+  if (na.playbookId && !free.some((pb) => pb.id === na.playbookId)) na.playbookId = "";
+  const items = [{ id: "", name: "No playbook: use the agent's template", type: null }, ...free];
   for (const pb of items) {
     const t = pb.type ? state.types[pb.type] : null;
     const row = document.createElement("div");
@@ -2705,7 +2714,9 @@ function renderNaPlaybooks() {
     row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
     list.appendChild(row);
   }
-  $("naPbHint").textContent = state.saved.length ? "" : "You have no saved playbooks yet. Add them later in My agents → Playbooks.";
+  $("naPbHint").textContent = !state.saved.length ? "You have no saved playbooks yet. Add them later in My agents → Playbooks."
+    : !free.length ? "All your playbooks are already used by your other agents. Add a new one later in My agents → Playbooks."
+    : inUse.size ? `${state.saved.length - free.length} playbook(s) already used by your other agents are hidden.` : "";
 }
 
 // availability (same plan format as My agents → Availability)
@@ -2806,6 +2817,7 @@ function naGo(n) {
   $("naErr").textContent = "";
   if (step === "availability") renderNaDays();
   if (step === "emergency") $("naEmgBox").hidden = !$("naEmg").checked;
+  if (step === "playbook") renderNaPlaybooks();
   if (step === "review") renderNaReview();
 }
 $("naNext").addEventListener("click", () => { if (naCheck(NA_STEPS[na.step])) naGo(na.step + 1); });
@@ -2835,10 +2847,10 @@ function renderNaReview() {
     ["What it's for", $("naDesc").value.trim() || "—", 0],
     ["Language · voice", `${$("naLang").selectedOptions[0]?.text} · ${voiceText.split(" — ")[0]}`, 1],
     ["Speaking speed", `${naSpeed().toFixed(2)}×`, 1],
-    ["Playbook", state.saved.find((p) => p.id === na.playbookId)?.name || "None (the agent's template)", 2],
-    ["Availability", naPlanText() || "Not set (asks the caller)", 3],
-    ["Calendar", $("naCal").checked ? `On · ${$("naCalLen").selectedOptions[0]?.text} meetings` : "Off", 4],
-    ["Emergency", $("naEmg").checked && na.rules.length ? na.rules.map((r) => `${r.label} (${r.number})`).join(", ") : "Off", 5],
+    ["Availability", naPlanText() || "Not set (asks the caller)", 2],
+    ["Calendar", $("naCal").checked ? `On · ${$("naCalLen").selectedOptions[0]?.text} meetings` : "Off", 3],
+    ["Emergency", $("naEmg").checked && na.rules.length ? na.rules.map((r) => `${r.label} (${r.number})`).join(", ") : "Off", 4],
+    ["Playbook", state.saved.find((p) => p.id === na.playbookId)?.name || "None (the agent's template)", 5],
   ];
   const dl = $("naReview");
   dl.innerHTML = "";

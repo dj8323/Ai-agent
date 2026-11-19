@@ -58,8 +58,8 @@ New people can **Create account** on the login page (self sign-up; the admin can
 
 Each user can make several agents (**🤖 My agents → ＋ New agent**): pick the type (Call Assistant for a person,
 Hospital & Healthcare, Banking & Finance, HR & Recruiting, Telecom, Customer Support, Personal …) and a template,
-say who it **works for** and the organization, and give it a name. It goes step by step (Profile → Voice (with ▶ listen) → Playbook →
-Availability → Calendar → Emergency → Review), then **✨ Create agent** with a progress bar; the Create-your-first-agent tutorial follows the same steps. Types and templates (persona, greeting, goal,
+say who it **works for** and the organization, and give it a name. It goes step by step (Profile with an agent-type dropdown → Voice (with ▶ listen) →
+Availability → Calendar → Emergency → Playbook (only ones no other agent uses) → Review), then **✨ Create agent** with a progress bar; the Create-your-first-agent tutorial follows the same steps. Types and templates (persona, greeting, goal,
 steps, rules) come from MySQL and the admin can edit them; agents use them live.
 
 Example, a Call Assistant named Brown working for DJ:
