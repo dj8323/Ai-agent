@@ -242,6 +242,11 @@ voice_ai_web/          ── frontend team ──
 - Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,
   organization, availability, language · voice, AI models, playbook picker `#pbPick`, feature chips). ✎ Edit agent →
   `#agents/profile`. Keep it simple: anything that edits an agent belongs in My agents.
+- **New agent wizard** (`#agentDialog`, `openAgentDialog()`): steps `NA_STEPS` profile → voice → availability → calendar →
+  emergency → review (`naGo(n)`, `naCheck(step)`, step list `#naSteps` + bar `#naFill`, review `#naReview` with Edit links).
+  Create: POST `/api/agents` (profile; `na.created` stops a duplicate on retry) → `switchAgent()` → copy the wizard's
+  voice/speed/availability/calendar/emergency into the My agents controls → `autoSave()` → `prepareGreeting()`, with the
+  progress bar `#naProgress`; then `#call`. Tour "first-agent" walks every step. Keep it in step with the My agents tabs.
 - My agents = agent list (`#agentChips`, ＋ New agent) + the setup card with tabs: Profile (agent type `#pType` →
   approval dialog `#typeDialog` → PATCH `/api/agents/:id {type}`, which resets template, greeting, description,
   playbook, works for, organization, availability, calendar and emergency to defaults in one transaction (keeps name,

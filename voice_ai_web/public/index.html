@@ -257,6 +257,39 @@
   .tile.picked { border-color: var(--c1); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c1) 22%, transparent); }
   .na-grid { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
   .na-grid .tile { padding: 11px; } .na-grid .tile .t-icon { font-size: 20px; } .na-grid .tile .t-desc { font-size: 11px; }
+  /* New agent wizard */
+  .na-dialog { width: min(820px, 100%); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); }
+  @media (max-width: 760px) { /* small screens: numbers only, the current step keeps its name */
+    .na-steps li:not(.current) { flex: none; min-width: 0; font-size: 0; gap: 0; padding: 6px 4px; }
+    .na-steps li:not(.current) span { font-size: 12px; } .na-steps li.done:not(.current) span { font-size: 0; } }
+  .na-steps { list-style: none; display: flex; gap: 4px; padding: 0; margin: 4px 0 8px; overflow-x: auto; }
+  .na-steps li { flex: 1; min-width: 88px; display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 650; color: var(--muted); padding: 6px 8px; border-radius: 999px; white-space: nowrap; }
+  .na-steps li span { width: 22px; height: 22px; flex: none; border-radius: 50%; display: grid; place-items: center; font-size: 12px; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+  .na-steps li.done span { background: color-mix(in srgb, var(--c1) 18%, var(--panel-2)); color: var(--c1); border-color: transparent; }
+  .na-steps li.done span::before { content: "✓"; } .na-steps li.done span { font-size: 0; } .na-steps li.done span::before { font-size: 12px; }
+  .na-steps li.current { color: var(--text); background: var(--panel-2); }
+  .na-steps li.current span { background: var(--grad); color: #fff; border-color: transparent; }
+  .na-track { height: 5px; border-radius: 999px; background: var(--panel-2); overflow: hidden; margin-bottom: 12px; }
+  .na-fill { height: 100%; width: 0; background: var(--grad); border-radius: inherit; transition: width .35s ease; }
+  .na-step { animation: tsa-pop .3s ease-out both; }
+  .na-actions { align-items: center; }
+  .na-spacer { flex: 1; }
+  .na-add { margin-top: 10px; font-size: 13px; padding: 8px 14px; }
+  .na-list { display: grid; gap: 6px; margin-top: 10px; }
+  .na-list .na-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--border); font-size: 13px; }
+  .na-list .na-item span { flex: 1; min-width: 0; }
+  .na-review { display: grid; grid-template-columns: 150px 1fr; gap: 8px 14px; margin: 6px 0 0; font-size: 14px; }
+  .na-review dt { color: var(--muted); font-weight: 650; }
+  .na-review dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+  .na-review .na-edit { margin-left: 6px; }
+  @media (max-width: 560px) { .na-review { grid-template-columns: 1fr; gap: 2px; } .na-review dd { margin-bottom: 8px; } }
+  .na-progress { margin-top: 16px; }
+  .na-bar { height: 12px; border-radius: 999px; background: var(--panel-2); overflow: hidden; border: 1px solid var(--border); }
+  .na-bar-fill { height: 100%; width: 0; background: var(--grad); background-size: 200% 100%; border-radius: inherit; transition: width .4s ease; animation: na-stripe 1.2s linear infinite; }
+  @keyframes na-stripe { to { background-position: -200% 0; } }
+  .na-bar-text { margin-top: 6px; font-size: 13px; color: var(--muted); }
+  .na-progress.ok .na-bar-text { color: var(--green); font-weight: 650; }
+  .na-progress.err .na-bar-text { color: var(--red); }
   .na-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
   .na-fields .span2 { grid-column: 1 / -1; }
   .na-fields label { display: block; }
@@ -932,27 +965,102 @@
 </div>
 
 <div class="overlay" id="agentDialog" role="dialog" aria-modal="true" aria-labelledby="naTitle">
-  <div class="dialog">
+  <div class="dialog na-dialog">
     <div class="dialog-head">
       <h3 id="naTitle">＋ New agent</h3>
       <button class="icon-btn" id="naClose" type="button" title="Close" aria-label="Close">✕</button>
     </div>
-    <p class="lead">What will this agent do, and for whom? The type and template set its persona, greeting and script. Each agent also has its own voice, language, models, calendar and emergency numbers.</p>
-    <form id="naForm">
-      <div class="grid na-grid" id="naTypes"></div>
-      <div class="na-fields">
-        <div><label for="naName">Agent name</label><input type="text" id="naName" maxlength="24" placeholder="e.g. Brown" required /></div>
-        <div><label for="naTemplate">Template</label><select id="naTemplate"></select></div>
-        <div><label for="naOwner" id="naOwnerLabel">Works for</label><input type="text" id="naOwner" maxlength="60" placeholder="e.g. DJ" autocomplete="off" /></div>
-        <div><label for="naOrg">Organization (optional)</label><input type="text" id="naOrg" maxlength="80" placeholder="e.g. Telemune" autocomplete="off" /></div>
-        <div class="span2" id="naAvailWrap"><label for="naAvail">Availability for meetings (optional)</label><input type="text" id="naAvail" maxlength="300" placeholder="e.g. Weekdays 3 to 6 pm IST" autocomplete="off" /></div>
-        <div class="span2"><label for="naDesc">What it's for (optional)</label><input type="text" id="naDesc" maxlength="300" placeholder="e.g. Answers DJ's calls during meetings" /></div>
-      </div>
-      <div class="greet-preview" id="naPreview" aria-live="polite"></div>
+    <!-- Step by step: Profile → Voice → Availability → Calendar → Emergency → Review & create -->
+    <ol class="na-steps" id="naSteps">
+      <li data-step="profile"><span>1</span>Profile</li><li data-step="voice"><span>2</span>Voice</li>
+      <li data-step="availability"><span>3</span>Availability</li><li data-step="calendar"><span>4</span>Calendar</li>
+      <li data-step="emergency"><span>5</span>Emergency</li><li data-step="review"><span>6</span>Review</li>
+    </ol>
+    <div class="na-track" aria-hidden="true"><div class="na-fill" id="naFill"></div></div>
+    <form id="naForm" novalidate>
+      <section class="na-step" data-step="profile">
+        <p class="lead">What will this agent do, and for whom? The type and template set its persona, greeting and script.</p>
+        <div class="grid na-grid" id="naTypes"></div>
+        <div class="na-fields">
+          <div><label for="naName">Agent name <span class="req">*</span></label><input type="text" id="naName" maxlength="24" placeholder="e.g. Brown" autocomplete="off" /></div>
+          <div><label for="naTemplate">Template</label><select id="naTemplate"></select></div>
+          <div><label for="naOwner" id="naOwnerLabel">Works for</label><input type="text" id="naOwner" maxlength="60" placeholder="e.g. DJ" autocomplete="off" /></div>
+          <div><label for="naOrg">Organization (optional)</label><input type="text" id="naOrg" maxlength="80" placeholder="e.g. Telemune" autocomplete="off" /></div>
+          <div class="span2"><label for="naDesc">What it's for (optional)</label><input type="text" id="naDesc" maxlength="300" placeholder="e.g. Answers DJ's calls during meetings" autocomplete="off" /></div>
+        </div>
+        <div class="greet-preview" id="naPreview" aria-live="polite"></div>
+      </section>
+
+      <section class="na-step" data-step="voice" hidden>
+        <p class="lead">How the agent sounds. You can change this any time in My agents → Voice &amp; AI.</p>
+        <div class="na-fields">
+          <div><label for="naLang">Language</label><select id="naLang"></select></div>
+          <div><label for="naVoice">Voice</label><select id="naVoice"></select></div>
+        </div>
+        <div class="block-title" style="margin-top:14px">⏩ Speaking speed <span class="sec-note on" id="naSpeedVal">1.00×</span></div>
+        <div class="speed-picks" id="naSpeedPicks" role="group" aria-label="Speaking speed">
+          <button type="button" data-speed="0.8">🐢 Slow</button><button type="button" data-speed="1">Normal</button><button type="button" data-speed="1.2">Fast</button><button type="button" data-speed="1.4">🚀 Faster</button>
+        </div>
+        <input type="range" id="naSpeed" min="0.5" max="2" step="0.05" value="1" aria-label="Speaking speed (fine tune)" />
+      </section>
+
+      <section class="na-step" data-step="availability" hidden>
+        <p class="lead">When <b id="naAvWho">the owner</b> can take meetings. The agent only offers times inside these hours. Optional: skip it and the agent asks the caller for a time.</p>
+        <div class="mini"><span>Days</span><div class="day-picks" id="naDays" role="group" aria-label="Available days"></div>
+          <div class="day-quick"><button class="link" type="button" data-na-days="1,2,3,4,5">Weekdays</button><button class="link" type="button" data-na-days="1,2,3,4,5,6,7">Every day</button><button class="link" type="button" data-na-days="">None</button></div></div>
+        <div class="av-row">
+          <label class="mini"><span>From</span><input type="time" id="naFrom" value="09:00" /></label>
+          <label class="mini"><span>To</span><input type="time" id="naTo" value="18:00" /></label>
+          <label class="mini"><span>Time zone</span><select id="naTz"></select></label>
+        </div>
+        <label class="mini"><span>Note <em class="sub">(optional, e.g. "Not on public holidays")</em></span><input type="text" id="naAvNote" maxlength="200" autocomplete="off" /></label>
+        <div class="greet-preview" id="naAvPreview"></div>
+      </section>
+
+      <section class="na-step" data-step="calendar" hidden>
+        <p class="lead">Let the agent book confirmed meetings, bookings and reminders into its calendar.</p>
+        <label class="switch-row" for="naCal">
+          <span><b>Book into the calendar</b><br /><span class="sub">You'll see the events in My agents → Calendar and can export them (.ics).</span></span>
+          <input type="checkbox" id="naCal" class="switch" />
+        </label>
+        <label class="mini" style="max-width:220px"><span>Meeting length</span>
+          <select id="naCalLen"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1½ hours</option><option value="120">2 hours</option></select></label>
+      </section>
+
+      <section class="na-step" data-step="emergency" hidden>
+        <p class="lead">If a caller mentions an emergency word, the page shows a banner to call or email this contact, and the agent points them there. Optional.</p>
+        <label class="switch-row" for="naEmg">
+          <span><b>Emergency contacts</b><br /><span class="sub">For example an ambulance number, a manager or a support email.</span></span>
+          <input type="checkbox" id="naEmg" class="switch" />
+        </label>
+        <div id="naEmgBox" hidden>
+          <div class="na-fields">
+            <div><label for="naEmgLabel">Name</label><input type="text" id="naEmgLabel" maxlength="40" placeholder="e.g. Ambulance" autocomplete="off" /></div>
+            <div><label for="naEmgType">Contact by</label><select id="naEmgType"><option value="phone">📞 Phone</option><option value="email">✉ Email</option></select></div>
+            <div><label for="naEmgNumber" id="naEmgNumberLabel">Number</label><input type="text" id="naEmgNumber" maxlength="80" placeholder="e.g. 108" autocomplete="off" /></div>
+            <div><label for="naEmgWords">Words that trigger it</label><input type="text" id="naEmgWords" maxlength="200" placeholder="e.g. accident, chest pain" autocomplete="off" /></div>
+          </div>
+          <button type="button" class="btn btn-ghost na-add" id="naEmgAdd">＋ Add contact</button>
+          <div class="na-list" id="naEmgList"></div>
+        </div>
+      </section>
+
+      <section class="na-step" data-step="review" hidden>
+        <p class="lead">Check everything, then create your agent. You can change any of it later in My agents.</p>
+        <dl class="na-review" id="naReview"></dl>
+        <div class="na-progress" id="naProgress" hidden>
+          <div class="na-bar"><div class="na-bar-fill" id="naBar"></div></div>
+          <div class="na-bar-text" id="naBarText">Starting…</div>
+        </div>
+      </section>
+
       <div class="form-error" id="naErr"></div>
-      <div class="form-actions">
+      <div class="form-actions na-actions">
         <button type="button" class="btn btn-ghost" id="naCancel">Cancel</button>
-        <button type="submit" class="btn btn-primary" id="naCreate">Create agent</button>
+        <span class="na-spacer"></span>
+        <button type="button" class="btn btn-ghost" id="naBack">← Back</button>
+        <button type="button" class="btn btn-primary" id="naNext">Next →</button>
+        <button type="submit" class="btn btn-primary" id="naCreate" hidden>✨ Create agent</button>
       </div>
     </form>
   </div>

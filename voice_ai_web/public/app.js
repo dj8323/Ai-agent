@@ -2230,21 +2230,31 @@ const goCall = () => { if (!/^#?(call)?$/.test(location.hash)) location.hash = "
 const isOpen = (id) => $(id).classList.contains("open");
 
 const TOURS = [
-  { id: "first-agent", icon: "＋", title: "Create your first agent", desc: "Choose what the agent is for, name it, and say who it works for.",
+  { id: "first-agent", icon: "＋", title: "Create your first agent", desc: "Step by step: profile, voice, availability, calendar, emergency, then create.",
     steps: [
       { target: () => (state.agents.length ? "#sumNew" : "#firstAgentBtn"), before: goCall, title: "Open the new agent form",
         text: () => (state.agents.length ? "👉 Click **＋** next to \"Agent for this call\"." : "👉 Click **＋ Create my first agent**."), done: () => isOpen("agentDialog") },
-      { target: "#naTypes", title: "What is it for?", text: "👉 Pick a type. To answer calls for someone who is busy, choose **Call Assistant (for a person)**. Hospital, Real Estate, Banking, HR and more are here too.",
-        clickIn: "#naTypes .tile" },
-      { target: "#naTemplate", title: "Its script", text: "This is the template the agent follows: what it asks and in which order. Keep the suggested one or pick another.", next: true },
+      { target: "#naSteps", title: "Six short steps", text: "Creating an agent goes step by step: **Profile → Voice → Availability → Calendar → Emergency → Review**. The bar shows how far you are.", next: true },
+      { target: "#naTypes", title: "1 · What is it for?", text: "👉 Pick a type. To answer calls for someone who is busy, choose **Call Assistant (for a person)**. Hospital, Real Estate, Banking, HR and more are here too.",
+        clickIn: "#naTypes .tile", next: true },
+      { target: "#naTemplate", title: "Its script", text: "The template the agent follows: what it asks and in which order. Keep the suggested one or pick another.", next: true },
       { target: "#naName", title: "Give it a name", text: "👉 Type a name for your agent, for example **Brown**.", ready: () => !!$("naName").value.trim() },
       { target: "#naOwner", title: "Who does it work for?", text: "Type the person it answers for, for example **DJ**. A Call Assistant needs this; for other types it's optional.",
         ready: () => !typeOf(na.type).needsOwner || !!$("naOwner").value.trim() },
-      { target: "#naOrg", title: "Organization", text: "Optional: the company or place, for example **Telemune** or **City Hospital**.", next: true },
-      { target: ["#naPreview:not(:empty)", "#naForm"], title: "Its first line", text: "This is what the agent will say at the start of every call.", next: true },
-      { target: "#naCreate", title: "Create it", text: "👉 Click **Create agent**.", done: () => !isOpen("agentDialog") && state.agents.length > tourCtx.agents,
+      { target: ["#naPreview:not(:empty)", "#naTypes"], title: "Its first line", text: "This is what the agent will say at the start of every call.", next: true },
+      { target: "#naNext", title: "Next step", text: "👉 Click **Next →**.", done: () => NA_STEPS[na.step] === "voice", warn: () => $("naErr").textContent },
+      { target: "#naVoice", title: "2 · Voice", text: "Pick the language it speaks and its voice. 10 voices, male and female.", next: true },
+      { target: "#naSpeedPicks", title: "Speaking speed", text: "How fast it talks: 🐢 Slow, Normal, Fast or 🚀 Faster. 👉 Then click **Next →**.", done: () => NA_STEPS[na.step] === "availability" },
+      { target: "#naDays", title: "3 · Availability (optional)", text: "When the person can take meetings: pick days and hours. The agent only offers times inside them. Skip it if you like. 👉 **Next →**",
+        done: () => NA_STEPS[na.step] === "calendar", warn: () => $("naErr").textContent },
+      { target: "label[for=naCal]", title: "4 · Calendar", text: "Switch it on and the agent books confirmed meetings into its calendar. Pick the meeting length. 👉 **Next →**",
+        done: () => NA_STEPS[na.step] === "emergency" },
+      { target: "label[for=naEmg]", title: "5 · Emergency (optional)", text: "Add a number or email to show when a caller mentions an emergency word. 👉 **Next →**",
+        done: () => NA_STEPS[na.step] === "review", warn: () => $("naErr").textContent },
+      { target: "#naReview", title: "6 · Review", text: "Everything in one place. **Edit** jumps back to that step.", next: true },
+      { target: "#naCreate", title: "Create it", text: "👉 Click **✨ Create agent** and watch the progress bar.", done: () => !isOpen("agentDialog") && state.agents.length > tourCtx.agents,
         warn: () => $("naErr").textContent },
-      { target: "#setupCard .agent-hero", title: "🎉 Your agent is ready", text: "This window is where you fine-tune it: profile, voice, availability, calendar and emergency contacts. Next, try a call!", next: true },
+      { target: ".phone .stage", before: goCall, title: "🎉 Your agent is ready", text: "It's set up and selected for calls. Fine-tune it any time in **🤖 My agents**. Next, try a call!", next: true },
     ], then: "call" },
   { id: "call", icon: "🎙", title: "Make a call", needsAgent: true, desc: "Start a call, talk to your agent, and end it.",
     steps: [
@@ -2575,20 +2585,39 @@ $("agentDelete").addEventListener("click", async () => {
   } catch (e) { setSaveStatus("⚠ " + e.message, "err"); }
 });
 
-// New agent dialog: pick a type (call assistant, hospital, banking, HR …) and a template (both from the DB),
-// say who it works for, give it a name.
-const na = { type: "personal" };
+// ---------- New agent: a step-by-step wizard ----------
+// Profile → Voice → Availability → Calendar → Emergency → Review. "Create agent" then makes the agent (POST /api/agents
+// with the profile), opens it, applies the other steps through the normal auto-save (POST /api/settings) and prepares
+// its greeting, with a progress bar. The type and template list come from the DB (agent_types / agent_templates).
+const NA_STEPS = ["profile", "voice", "availability", "calendar", "emergency", "review"];
+const na = { type: "personal", step: 0, days: [], rules: [], busy: false };
+
 function openAgentDialog() {
   if (state.inCall) return;
-  na.type = "personal";
+  Object.assign(na, { type: "personal", step: 0, days: [], rules: [], busy: false, calTouched: false, created: null });
   $("naForm").reset();
   $("naErr").textContent = "";
+  // Voice step starts from the app's defaults (or the agent in use)
+  if (!$("naLang").options.length) for (const o of $("lang").options) $("naLang").add(new Option(o.text, o.value));
+  $("naVoice").innerHTML = $("voice").innerHTML;
+  $("naLang").value = $("lang").value;
+  $("naVoice").value = $("voice").value;
+  $("naSpeed").value = "1";
+  // Availability step
+  if (!$("naTz").options.length) for (const o of $("avTz").options) $("naTz").add(new Option(o.text, o.value));
+  $("naTz").value = localTz;
+  $("naCalLen").value = String(SETTINGS.calendar?.defaultDurationMin || 30);
+  $("naProgress").hidden = true;
+  $("naProgress").className = "na-progress";
   renderAgentTypes();
   renderNaTemplates();
+  renderNaSpeed(); renderNaDays(); renderNaRules();
+  naGo(0);
   $("agentDialog").classList.add("open");
   setTimeout(() => $("naName").focus(), 30);
 }
-function closeAgentDialog() { $("agentDialog").classList.remove("open"); }
+function closeAgentDialog() { if (!na.busy) $("agentDialog").classList.remove("open"); }
+
 function renderAgentTypes() {
   const grid = $("naTypes");
   grid.innerHTML = "";
@@ -2607,8 +2636,7 @@ function renderNaTemplates() {
   for (const tp of t.templates || []) sel.add(new Option(tp.name, tp.id));
   sel.value = (t.templates || []).find((x) => x.isDefault)?.id || "";
   $("naOwnerLabel").innerHTML = t.needsOwner ? 'Works for <span class="req">*</span>' : "Works for (optional)";
-  $("naOwner").required = !!t.needsOwner;
-  $("naAvailWrap").hidden = !(t.needsOwner || t.defaultCalendar);
+  if (!na.calTouched) $("naCal").checked = !!t.defaultCalendar; // the type decides until the user flips it
   renderNaPreview();
 }
 function renderNaPreview() {
@@ -2618,33 +2646,224 @@ function renderNaPreview() {
   showPreview($("naPreview"), "It will answer:", renderTpl(tp?.greeting || t.greeting || "", v));
 }
 $("naTemplate").addEventListener("change", renderNaPreview);
-["naName", "naOwner", "naOrg"].forEach((id) => $(id).addEventListener("input", renderNaPreview));
+["naName", "naOwner", "naOrg"].forEach((id) => $(id).addEventListener("input", () => { renderNaPreview(); $("naErr").textContent = ""; }));
+
+// speed
+const naSpeed = () => Math.min(2, Math.max(0.5, Number($("naSpeed").value) || 1));
+function renderNaSpeed() {
+  $("naSpeedVal").textContent = `${naSpeed().toFixed(2)}×`;
+  $("naSpeedPicks").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(Math.abs(Number(b.dataset.speed) - naSpeed()) < 0.001)));
+}
+$("naSpeedPicks").querySelectorAll("button").forEach((b) => (b.onclick = () => { $("naSpeed").value = b.dataset.speed; renderNaSpeed(); }));
+$("naSpeed").addEventListener("input", renderNaSpeed);
+
+// availability (same plan format as My agents → Availability)
+DAY_NAMES.forEach((d, i) => {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = d; b.dataset.day = String(i + 1);
+  b.onclick = () => { const n = i + 1; na.days = na.days.includes(n) ? na.days.filter((x) => x !== n) : [...na.days, n].sort(); renderNaDays(); };
+  $("naDays").appendChild(b);
+});
+document.querySelectorAll("[data-na-days]").forEach((b) => (b.onclick = () => { na.days = b.dataset.naDays ? b.dataset.naDays.split(",").map(Number) : []; renderNaDays(); }));
+["naFrom", "naTo", "naTz"].forEach((id) => $(id).addEventListener("change", renderNaDays));
+$("naAvNote").addEventListener("input", renderNaDays);
+function naPlan() {
+  const note = $("naAvNote").value.trim();
+  if (!na.days.length && !note) return null;
+  return { days: na.days, from: $("naFrom").value || "09:00", to: $("naTo").value || "18:00", tz: $("naTz").value, note };
+}
+function naPlanText() {
+  const p = naPlan();
+  if (!p) return "";
+  const when = p.days.length ? `${dayRanges(p.days)}, ${fmtClock(p.from)}–${fmtClock(p.to)} (${p.tz.replace(/_/g, " ")})` : "";
+  return [when, p.note].filter(Boolean).join(". ");
+}
+function renderNaDays() {
+  $("naDays").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(na.days.includes(Number(b.dataset.day)))));
+  const owner = $("naOwner").value.trim();
+  $("naAvWho").textContent = owner || "the owner";
+  const text = naPlanText();
+  if (text) showPreview($("naAvPreview"), `${owner || "Available"}:`, text);
+  else $("naAvPreview").textContent = "No availability set: the agent asks the caller for a time and takes it as a request.";
+}
+
+// calendar
+$("naCal").addEventListener("change", () => { na.calTouched = true; });
+
+// emergency contacts
+$("naEmg").addEventListener("change", () => { $("naEmgBox").hidden = !$("naEmg").checked; if ($("naEmg").checked) $("naEmgLabel").focus(); });
+$("naEmgType").addEventListener("change", () => {
+  const mail = $("naEmgType").value === "email";
+  $("naEmgNumberLabel").textContent = mail ? "Email" : "Number";
+  $("naEmgNumber").placeholder = mail ? "e.g. help@company.com" : "e.g. 108";
+});
+function naAddRule() {
+  const label = $("naEmgLabel").value.trim(), number = $("naEmgNumber").value.trim();
+  const keywords = $("naEmgWords").value.split(",").map((w) => w.trim()).filter(Boolean);
+  if (!label && !number && !keywords.length) return true; // nothing typed
+  if (!label || !number || !keywords.length) { $("naErr").textContent = "Fill in the name, the number (or email) and at least one word for this contact."; return false; }
+  na.rules.push({ label, type: $("naEmgType").value, number, keywords });
+  ["naEmgLabel", "naEmgNumber", "naEmgWords"].forEach((id) => ($(id).value = ""));
+  $("naErr").textContent = "";
+  renderNaRules();
+  return true;
+}
+$("naEmgAdd").addEventListener("click", () => { if (naAddRule()) $("naEmgLabel").focus(); });
+function renderNaRules() {
+  const list = $("naEmgList");
+  list.innerHTML = "";
+  na.rules.forEach((r, i) => {
+    const row = document.createElement("div");
+    row.className = "na-item";
+    const t = document.createElement("span");
+    t.textContent = `${r.type === "email" ? "✉" : "📞"} ${r.label} · ${r.number} — when the caller says: ${r.keywords.join(", ")}`;
+    const del = document.createElement("button");
+    del.type = "button"; del.className = "link"; del.textContent = "Remove";
+    del.onclick = () => { na.rules.splice(i, 1); renderNaRules(); };
+    row.append(t, del);
+    list.appendChild(row);
+  });
+}
+
+// stepping
+function naCheck(step) {
+  const t = typeOf(na.type);
+  if (step === "profile") {
+    if (!$("naName").value.trim()) { $("naErr").textContent = "Give your agent a name."; $("naName").focus(); return false; }
+    if (t.needsOwner && !$("naOwner").value.trim()) { $("naErr").textContent = "Who does this agent work for? Add their name."; $("naOwner").focus(); return false; }
+  }
+  if (step === "availability" && na.days.length && $("naFrom").value >= $("naTo").value) {
+    $("naErr").textContent = "The end time must be after the start time."; $("naTo").focus(); return false;
+  }
+  if (step === "emergency" && $("naEmg").checked) {
+    if (!naAddRule()) return false; // a contact still being typed is added (or explained) first
+  }
+  return true;
+}
+function naGo(n) {
+  na.step = Math.max(0, Math.min(NA_STEPS.length - 1, n));
+  const step = NA_STEPS[na.step];
+  document.querySelectorAll("#naForm .na-step").forEach((sec) => (sec.hidden = sec.dataset.step !== step));
+  $("naSteps").querySelectorAll("li").forEach((li, i) => {
+    li.classList.toggle("done", i < na.step);
+    li.classList.toggle("current", i === na.step);
+  });
+  $("naFill").style.width = `${(na.step / (NA_STEPS.length - 1)) * 100}%`;
+  $("naBack").style.visibility = na.step ? "visible" : "hidden";
+  $("naNext").hidden = step === "review";
+  $("naCreate").hidden = step !== "review";
+  $("naErr").textContent = "";
+  if (step === "availability") renderNaDays();
+  if (step === "emergency") $("naEmgBox").hidden = !$("naEmg").checked;
+  if (step === "review") renderNaReview();
+}
+$("naNext").addEventListener("click", () => { if (naCheck(NA_STEPS[na.step])) naGo(na.step + 1); });
+$("naBack").addEventListener("click", () => { if (!na.busy) naGo(na.step - 1); });
+// the step list at the top: jump back to any earlier step, or forward when the steps in between are fine
+$("naSteps").addEventListener("click", (e) => {
+  const li = e.target.closest("li");
+  if (!li || na.busy) return;
+  const to = NA_STEPS.indexOf(li.dataset.step);
+  for (let k = na.step; k < to; k++) if (!naCheck(NA_STEPS[k])) return naGo(k);
+  naGo(to);
+});
+// Enter in a field = Next (not submit) until the last step
+$("naForm").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" && e.target.matches("input") && NA_STEPS[na.step] !== "review") { e.preventDefault(); $("naNext").click(); }
+});
+
+function renderNaReview() {
+  const t = typeOf(na.type);
+  const tp = (t.templates || []).find((x) => x.id === $("naTemplate").value);
+  const voiceText = $("naVoice").selectedOptions[0]?.text || $("naVoice").value;
+  const rows = [
+    ["Name", $("naName").value.trim(), 0],
+    ["Type", `${t.icon || ""} ${t.name}`, 0],
+    ["Template", tp ? tp.name : "Free conversation", 0],
+    ["Works for", [$("naOwner").value.trim(), $("naOrg").value.trim()].filter(Boolean).join(" · ") || "—", 0],
+    ["What it's for", $("naDesc").value.trim() || "—", 0],
+    ["Language · voice", `${$("naLang").selectedOptions[0]?.text} · ${voiceText.split(" — ")[0]}`, 1],
+    ["Speaking speed", `${naSpeed().toFixed(2)}×`, 1],
+    ["Availability", naPlanText() || "Not set (asks the caller)", 2],
+    ["Calendar", $("naCal").checked ? `On · ${$("naCalLen").selectedOptions[0]?.text} meetings` : "Off", 3],
+    ["Emergency", $("naEmg").checked && na.rules.length ? na.rules.map((r) => `${r.label} (${r.number})`).join(", ") : "Off", 4],
+  ];
+  const dl = $("naReview");
+  dl.innerHTML = "";
+  for (const [k, v, step] of rows) {
+    const dt = document.createElement("dt"); dt.textContent = k;
+    const dd = document.createElement("dd"); dd.textContent = v;
+    const edit = document.createElement("button");
+    edit.type = "button"; edit.className = "link na-edit"; edit.textContent = "Edit";
+    edit.onclick = () => naGo(step);
+    dd.appendChild(edit);
+    dl.append(dt, dd);
+  }
+  const greet = document.createElement("dd");
+  dl.append(Object.assign(document.createElement("dt"), { textContent: "First line" }), greet);
+  showPreview(greet, "", renderTpl(tp?.greeting || t.greeting || "", { agent: $("naName").value.trim(), owner: $("naOwner").value.trim(), org: $("naOrg").value.trim() }));
+}
+
+function naProgress(pct, text, cls = "") {
+  $("naProgress").hidden = false;
+  $("naProgress").className = "na-progress" + (cls ? " " + cls : "");
+  $("naBar").style.width = pct + "%";
+  $("naBarText").textContent = text;
+}
+
+$("naForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (na.busy || NA_STEPS[na.step] !== "review") return;
+  for (const st of NA_STEPS.slice(0, -1)) if (!naCheck(st)) return naGo(NA_STEPS.indexOf(st));
+  na.busy = true;
+  ["naCreate", "naBack", "naCancel"].forEach((id) => ($(id).disabled = true));
+  try {
+    naProgress(15, "Creating the agent…");
+    // made already on an earlier try that failed later on: don't make a second one
+    const a = na.created || (na.created = await agentRequest("/api/agents", "POST", {
+      name: $("naName").value.trim(), type: na.type, description: $("naDesc").value.trim(), templateId: $("naTemplate").value,
+      ownerName: $("naOwner").value.trim(), organization: $("naOrg").value.trim(), availability: naPlanText(),
+    }));
+    if (!state.agents.some((x) => x.id === a.id)) state.agents.push(a);
+
+    naProgress(40, "Opening it…");
+    await switchAgent(a.id);
+
+    naProgress(65, "Saving voice, availability, calendar and emergency contacts…");
+    $("lang").value = $("naLang").value;
+    $("voice").value = $("naVoice").value;
+    $("speedRange").value = String(naSpeed()); renderSpeed();
+    av.days = [...na.days]; $("avFrom").value = $("naFrom").value; $("avTo").value = $("naTo").value;
+    if (![...$("avTz").options].some((o) => o.value === $("naTz").value)) $("avTz").add(new Option($("naTz").value, $("naTz").value));
+    $("avTz").value = $("naTz").value; $("avNote").value = $("naAvNote").value.trim(); renderAvailability();
+    $("calToggle").checked = $("naCal").checked; $("calLen").value = $("naCalLen").value;
+    $("emgToggle").checked = $("naEmg").checked && na.rules.length > 0;
+    state.rules = $("naEmg").checked ? structuredClone(na.rules) : [];
+    renderRules(); renderNotes();
+    clearTimeout(state.saveTimer);
+    await autoSave();
+    if (formSnapshot() !== state.savedSnapshot) throw new Error("Couldn't save the agent's settings. Open My agents to check them.");
+
+    naProgress(90, "Preparing its greeting…");
+    await Promise.race([Promise.resolve(prepareGreeting()), new Promise((r) => setTimeout(r, 4000))]);
+
+    naProgress(100, `✓ ${a.name} is ready!`, "ok");
+    await new Promise((r) => setTimeout(r, 900));
+    na.busy = false;
+    closeAgentDialog();
+    location.hash = "call";
+  } catch (err) {
+    naProgress(100, "⚠ " + err.message, "err");
+    $("naErr").textContent = err.message;
+  } finally {
+    na.busy = false;
+    ["naCreate", "naBack", "naCancel"].forEach((id) => ($(id).disabled = false));
+  }
+});
 $("naClose").addEventListener("click", closeAgentDialog);
 $("naCancel").addEventListener("click", closeAgentDialog);
 $("agentDialog").addEventListener("click", (e) => { if (e.target === $("agentDialog")) closeAgentDialog(); });
 document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAgentDialog(); });
-$("naForm").addEventListener("submit", async (e) => {
-  e.preventDefault();
-  const name = $("naName").value.trim();
-  if (!name) { $("naErr").textContent = "Give your agent a name."; return; }
-  const t = typeOf(na.type);
-  if (t.needsOwner && !$("naOwner").value.trim()) { $("naErr").textContent = "Who does this agent work for? Add their name."; $("naOwner").focus(); return; }
-  $("naCreate").disabled = true;
-  try {
-    const a = await agentRequest("/api/agents", "POST", {
-      name, type: na.type, description: $("naDesc").value.trim(), templateId: $("naTemplate").value,
-      ownerName: $("naOwner").value.trim(), organization: $("naOrg").value.trim(), availability: $("naAvail").value.trim(),
-    });
-    state.agents.push(a);
-    closeAgentDialog();
-    await switchAgent(a.id);
-    location.hash = "agents/profile";
-  } catch (err) {
-    $("naErr").textContent = err.message;
-  } finally {
-    $("naCreate").disabled = false;
-  }
-});
 
 // ---------- start-up ----------
 (async () => {

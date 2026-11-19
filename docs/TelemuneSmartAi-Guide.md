@@ -193,12 +193,14 @@ Safety rules travel with the types: the hospital agent never diagnoses and sends
 ### Creating and switching agents
 
 1. On the main page, the **Agent for this call** dropdown switches agents. **🤖 My agents** in the menu lists them all; ★ marks the one that opens first.
-2. **＋ New agent** (on the main page or in My agents) opens a dialog:
-    - pick the **type** (for example Call Assistant) and a **template** (the type's usual one is pre-selected, or "No template: free conversation");
-    - type a **name** (for example "Brown");
-    - **Works for**: the person it answers for (for example "DJ"). Required for the Call Assistant, optional for others;
-    - **Organization** (for example "Telemune" or "City Hospital"), **Availability for meetings** ("Weekdays 3 to 6 pm IST") and, optionally, what it's for.
-    - A preview shows the first line the agent will say. **Create agent** saves it and opens it in My agents, where you set its availability, calendar, emergency contacts and voice.
+2. **＋ New agent** (on the main page or in My agents) opens a step-by-step window. The numbered steps and a bar at the top show where you are; **Next →** / **← Back** move between steps, and you can click an earlier step to go back to it:
+    1. **Profile**: the **type** (for example Call Assistant) and **template** (the type's usual one is pre-selected, or "No template: free conversation"), a **name** (for example "Brown"), **Works for** (required for the Call Assistant), **Organization** and what it's for. A preview shows the first line the agent will say.
+    2. **Voice**: language, voice and speaking speed.
+    3. **Availability** (optional): days, hours and time zone when the person can take meetings.
+    4. **Calendar**: switch on booking into the calendar (on by default for types that need it) and the meeting length.
+    5. **Emergency** (optional): contacts (phone or email) and the words that trigger them.
+    6. **Review**: everything in one list, each with **Edit**. **✨ Create agent** then makes the agent with a progress bar (creating → opening → saving the settings → preparing its greeting → ready) and takes you to the call page with it selected.
+   📚 Tutorials → **Create your first agent** walks through all six steps.
 3. Switching loads that agent's settings everywhere. Switching is locked during a call.
 4. In My agents, **☆ Default** makes the agent open first next time and **🗑** deletes it (its past calls stay in Call summaries).
 5. To change what an agent is, pick a new **Agent type** in **My agents → 👤 Profile**. A new type is a new job, so a dialog first shows what will be reset and asks for approval; **Cancel** changes nothing. After **Change type and reset**, the database is updated in one step: template, greeting and description go to the new type's defaults; works for, organization and availability are cleared; the playbook is removed; the calendar and emergency settings go back to the defaults. Name, language, voice, AI models and past calls are kept. If the new type works for a person, fill in **Works for**.
