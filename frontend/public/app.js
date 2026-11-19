@@ -400,7 +400,7 @@ function fillForm() {
 
 const warnings = [];
 if (!SR && !window.MediaRecorder) warnings.push("This browser can't capture speech. Use Chrome or Edge for voice, or type messages below.");
-if (!window.isSecureContext) warnings.push("The microphone needs https or localhost. Open this page at http://localhost.");
+if (!window.isSecureContext) warnings.push("The microphone needs https or localhost. Open the https address shown when the app starts (e.g. https://<server IP>:8443).");
 if (warnings.length) { $("warn").style.display = "block"; $("warn").textContent = warnings.join(" "); }
 
 function applyBranding(b) {

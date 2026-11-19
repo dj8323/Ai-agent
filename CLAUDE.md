@@ -73,6 +73,10 @@ NO_OPEN=1 ./runScript.sh  # same, without opening a browser
 ```
 
 - URL: http://localhost:8323. Ctrl+C stops both.
+- **HTTPS for other computers** (mic needs https off localhost): `frontend/server.js` also serves https on
+  `server.httpsPort` (8443) when `certs/server.crt` + `.key` exist (made by `scripts/make-cert.sh`, run by runScript; it
+  remakes them when the machine's IP changes). http://<IP>:8323 page GETs redirect there; localhost stays http. Over https
+  the proxy adds `x-forwarded-proto: https` and marks Set-Cookie `Secure`. `HTTPS=off` / `HTTPS_PORT` in .env. `certs/` is gitignored.
 - **Logs** (`backend/src/main/resources/logback-spring.xml`, times UTC): only two files: `logs/backend.log`
   (everything: every request `← METHOD path status in N ms`, sign-ins, activity, OpenAI calls with timings/tokens, at
   DEBUG the caller words, replies and every SQL statement via logger `SQL`, hashes masked) and `logs/error.log` (WARN+,
@@ -119,7 +123,7 @@ frontend/public/motion.css + motion.js   Shared motion theme on all three pages:
                              pill menu bar (.topnav, .tabs), bubbles pop in, typing dots (`showTyping()` in app.js while
                              phase = thinking), title shimmer, rings on `.btn-call`; off with prefers-reduced-motion.
 frontend/public/telemune-mark.png / telemune-logo.svg   Logo (CSS mask, theme gradient) / favicon.
-runScript.sh           One-command start of both apps.
+runScript.sh           One-command start of both apps.  scripts/make-cert.sh  self-signed HTTPS cert (certs/).
 docs/Troubleshooting.md  Log files, tracing a request, common problems, every table, ready SQL queries.
 docs/                  TelemuneSmartAi-Guide.md (+ PDF, images/). Keep it in step when features change. PDF rebuild:
                        node docs/md2html.mjs docs/TelemuneSmartAi-Guide.md /tmp/guide.html, then Chrome headless

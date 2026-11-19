@@ -3,7 +3,13 @@
 // Same origin for the browser, so the sign-in cookie and live call streaming (SSE) just work.
 //
 // Pages: signed-out visits to /, /index.html, /admin.html go to /login.html; /admin.html is for admins only.
+//
+// HTTPS (so the microphone works from other computers; browsers allow it only on https or localhost):
+// when certs/server.crt + certs/server.key exist (made by scripts/make-cert.sh, which runScript.sh runs), the same
+// app is also served on https://<this machine's IP>:HTTPS_PORT (8443). Visits to http://<IP>:8323 are sent there;
+// http://localhost:8323 keeps working as before.
 import http from "node:http";
+import https from "node:https";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
 import path from "node:path";
@@ -21,6 +27,17 @@ function configPort() {
   }
 }
 const PORT = Number(process.env.PORT) || configPort() || 8323;
+function configHttpsPort() {
+  try {
+    return Number(JSON.parse(fsSync.readFileSync(path.join(ROOT, "config.json"), "utf8")).server?.httpsPort) || 0;
+  } catch {
+    return 0;
+  }
+}
+const HTTPS_PORT = Number(process.env.HTTPS_PORT) || configHttpsPort() || 8443;
+const CERT = process.env.HTTPS_CERT || path.join(ROOT, "certs", "server.crt");
+const KEY = process.env.HTTPS_KEY || path.join(ROOT, "certs", "server.key");
+const HTTPS_ON = process.env.HTTPS !== "off" && fsSync.existsSync(CERT) && fsSync.existsSync(KEY);
 const BACKEND = new URL(process.env.BACKEND_URL || `http://127.0.0.1:${process.env.BACKEND_PORT || 8324}`);
 
 const MIME = {
@@ -36,10 +53,13 @@ const json = (res, status, body) => {
 
 /** Forward one request to the backend, streaming both ways (uploads, recordings, SSE replies). */
 function proxy(req, res) {
-  const headers = { ...req.headers, "x-forwarded-for": req.socket.remoteAddress || "" };
+  const secure = !!req.socket.encrypted;
+  const headers = { ...req.headers, "x-forwarded-for": req.socket.remoteAddress || "", "x-forwarded-proto": secure ? "https" : "http" };
   const up = http.request(
     { protocol: BACKEND.protocol, hostname: BACKEND.hostname, port: BACKEND.port, method: req.method, path: req.url, headers },
     (r) => {
+      // Over https the sign-in cookie is marked Secure, so it is never sent over plain http.
+      if (secure && r.headers["set-cookie"]) r.headers["set-cookie"] = r.headers["set-cookie"].map((c) => (/;\s*secure/i.test(c) ? c : c + "; Secure"));
       res.writeHead(r.statusCode || 502, r.headers);
       r.pipe(res);
     },
@@ -92,9 +112,16 @@ async function serveFile(res, p) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+const isLocal = (host) => /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(host || "");
+
+async function handle(req, res) {
   try {
     const p = new URL(req.url, "http://x").pathname;
+    // Opened from another computer over plain http: move to https, where the microphone is allowed.
+    if (HTTPS_ON && !req.socket.encrypted && !isLocal(req.headers.host) && !p.startsWith("/api/") && (req.method === "GET" || req.method === "HEAD")) {
+      const hostname = (req.headers.host || "").replace(/:\d+$/, "");
+      return redirect(res, `https://${hostname}:${HTTPS_PORT}${req.url}`);
+    }
     if (p.startsWith("/api/")) return proxy(req, res);
     if (req.method !== "GET" && req.method !== "HEAD") return res.writeHead(405).end();
 
@@ -119,8 +146,13 @@ const server = http.createServer(async (req, res) => {
     if (!res.headersSent) json(res, 500, { error: "Server error" });
     else res.end();
   }
-});
+}
 
-server.listen(PORT, () => {
+http.createServer(handle).listen(PORT, () => {
   console.log(`TelemuneSmartAi frontend at http://localhost:${PORT}  (API → ${BACKEND.origin})`);
 });
+if (HTTPS_ON) {
+  https.createServer({ cert: fsSync.readFileSync(CERT), key: fsSync.readFileSync(KEY) }, handle).listen(HTTPS_PORT, () => {
+    console.log(`TelemuneSmartAi frontend at https://<this machine's IP>:${HTTPS_PORT}  (for other computers; microphone allowed)`);
+  });
+}

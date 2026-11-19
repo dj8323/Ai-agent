@@ -26,6 +26,10 @@ Maven when its code changed, starts the backend (logs: `logs/backend.log`, `logs
 and opens it in Chrome. Use `NO_OPEN=1 ./runScript.sh` to skip the browser; Ctrl+C stops both.
 Voice input needs **Chrome or Edge**.
 
+**From other computers** use the https address runScript prints (e.g. `https://192.168.0.100:8443`): browsers allow
+the microphone only on https or localhost. The certificate is made by `scripts/make-cert.sh` (in `certs/`, not in git);
+the first visit shows a warning → Advanced → Proceed. How to trust it for good: guide, *Opening the app from other computers*.
+
 ## Sign in
 
 Open http://localhost:8323 and sign in. First start creates **admin / admin@123** — change it right away

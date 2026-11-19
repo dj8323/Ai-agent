@@ -35,9 +35,10 @@ grep -Eq '^MYSQL_USER=.+' .env || warn "MYSQL_* settings are missing in .env (se
 BACKEND_PORT="$(sed -n 's/^BACKEND_PORT=//p' .env | tail -1)"
 BACKEND_PORT="${BACKEND_PORT:-8324}"
 PORT="${PORT:-$(node -p 'try { require("./config.json").server.port } catch { 8323 }')}"
+HTTPS_PORT="${HTTPS_PORT:-$(node -p 'try { require("./config.json").server.httpsPort || 8443 } catch { 8443 }')}"
 URL="http://localhost:${PORT}"
 JAR="backend/target/smartai-backend.jar"
-export BACKEND_PORT PORT
+export BACKEND_PORT PORT HTTPS_PORT
 
 # 3. Build the backend when it's missing or its code / SQL changed
 if [ ! -f "$JAR" ] || [ -n "$(find backend/src backend/pom.xml db -newer "$JAR" -type f 2>/dev/null | head -1)" ]; then
@@ -64,6 +65,19 @@ free_port() { # port, what-it-should-be (pattern in the command line)
 }
 free_port "$BACKEND_PORT" "smartai-backend.jar"
 free_port "$PORT" "server.js"
+free_port "$HTTPS_PORT" "server.js"
+
+# 4b. HTTPS for other computers (the browser allows the microphone only on https or localhost).
+#     Makes certs/server.crt once, and again when this machine's IP address changed. HTTPS=off skips it.
+LAN_URL=""
+if [ "${HTTPS:-on}" != "off" ]; then
+  if ./scripts/make-cert.sh >/dev/null 2>&1; then
+    LAN_IP="$( (ipconfig getifaddr en0 || ipconfig getifaddr en1 || hostname -I | awk '{print $1}') 2>/dev/null | head -1 || true)"
+    LAN_URL="https://${LAN_IP:-your-IP}:${HTTPS_PORT}"
+  else
+    warn "Couldn't make the HTTPS certificate (is openssl installed?). Other computers can open the page, but not use the microphone."
+  fi
+fi
 
 # 5. Backend in the background, stopped again when this script ends.
 #    It writes logs/backend.log (everything) and logs/error.log (problems) itself; anything the JVM
@@ -102,5 +116,6 @@ if [ -z "${NO_OPEN:-}" ]; then
 fi
 
 say "TelemuneSmartAi is running at $URL  (logs: logs/backend.log, logs/error.log · Ctrl+C stops both)"
+[ -n "$LAN_URL" ] && say "From other computers: $LAN_URL  (first visit: Advanced → Proceed; see docs for trusting the certificate)"
 cd frontend
 node server.js

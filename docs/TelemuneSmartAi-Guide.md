@@ -84,6 +84,37 @@ Copy `.env.example` to `.env` and fill it in. It is never committed to git.
 
 The page port (8323) is set in `config.json` under `server.port`; the backend port in `.env` as `BACKEND_PORT`. After changing backend code, run `./runScript.sh` again: it rebuilds and restarts. The backend only listens on this computer; the browser always goes through the frontend.
 
+### Opening the app from other computers (HTTPS)
+
+Browsers only allow the **microphone** on `https://` pages or on `localhost`. So on this computer you use
+`http://localhost:8323`, but other computers on the network must use **https**:
+
+1. `./runScript.sh` makes an HTTPS certificate for this computer once (`certs/server.crt` + `certs/server.key`, made by
+   `scripts/make-cert.sh`; it covers localhost, the computer's name and its current IP addresses) and prints the
+   address to share, e.g. `From other computers: https://192.168.0.100:8443`.
+2. On the other computer, open that address. Someone who opens `http://192.168.0.100:8323` is sent there automatically.
+3. The first time, the browser warns "Your connection is not private" because the certificate is made by this computer,
+   not by a public authority. Click **Advanced → Proceed to 192.168.0.100 (unsafe)**. The page opens and the microphone works.
+
+**To remove the warning for good**, copy `certs/server.crt` to the other computer and trust it once:
+
+| Computer | How |
+| --- | --- |
+| Windows | Double-click `server.crt` → Install Certificate → Local Machine → "Place all certificates in the following store" → **Trusted Root Certification Authorities** → Finish. Restart Chrome/Edge |
+| Mac | Double-click `server.crt` (opens Keychain Access, add to **System**) → double-click the certificate → Trust → "When using this certificate": **Always Trust**. Restart the browser |
+| Android | Settings → Security → Encryption & credentials → Install a certificate → CA certificate → pick `server.crt` |
+| iPhone / iPad | Send yourself `server.crt` (AirDrop or mail), install the profile in Settings, then Settings → General → About → Certificate Trust Settings → turn it on |
+
+Good to know:
+
+- **IP address changed** (e.g. a new Wi-Fi)? `./runScript.sh` notices and makes a new certificate; computers that trusted
+  the old one need the new `server.crt`. `./scripts/make-cert.sh --force` makes a new one by hand.
+- HTTPS port: `server.httpsPort` in `config.json` (8443) or `HTTPS_PORT` in `.env`. `HTTPS=off` in `.env` turns it off.
+  Allow ports 8323 and 8443 in the computer's firewall if other computers can't connect.
+- Over https the sign-in cookie is marked **Secure** (never sent over plain http).
+- For a real server with a domain name, use a trusted certificate instead (e.g. Caddy or nginx with Let's Encrypt in
+  front of port 8323); then no warnings and nothing to install anywhere.
+
 ## Accounts, roles and sign-up
 
 Everyone must sign in, and each person sees only their own agents and calls; only an admin sees everyone.
@@ -517,6 +548,7 @@ ready-made SQL queries for sign-in, error, speed, call and agent problems.
 
 | Symptom | Fix |
 | --- | --- |
+| "The microphone needs https or localhost" | You opened the page by IP over http. Use the https address `./runScript.sh` prints (e.g. `https://192.168.0.100:8443`); see *Opening the app from other computers* |
 | "The backend stopped while starting" | Start MySQL and check the `MYSQL_*` values in `.env`; details in `logs/error.log` |
 | "The backend isn't running" page or error | Start everything with `./runScript.sh` |
 | "Backend build failed" | Install a JDK 21+ and Maven, then run `./runScript.sh` again |

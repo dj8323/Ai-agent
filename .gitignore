@@ -13,3 +13,6 @@ backups/
 *.tmp
 backend/target/
 logs/
+
+# HTTPS certificate (scripts/make-cert.sh)
+certs/
