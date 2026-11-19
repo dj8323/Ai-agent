@@ -332,7 +332,7 @@ is saved with its summary, as if you had pressed End) and **clears the conversat
 | 📞 **Web call** | The live voice call described above |
 | 💬 **Live chat** | Type a message; the agent greets you and answers in text straight away (no microphone needed). **End chat** saves it to Call summaries with an AI summary, and sends the summary by WhatsApp/email if switched on |
 | 🎤 **Voice chat** | **Hold** the mic button, speak, **let go**: the agent hears you (with its speech-to-text provider) and answers out loud and in text. **🎙 Mute / unmute** switches the microphone off and on; the red **End** button (shown once it has started) ends it and saves it like a call |
-| WhatsApp | Pick the **country code** (🇮🇳 +91 India first, then 🇺🇸 +1, 🇦🇪 +971 …; the list is the `country_codes` table) and type the mobile number, then the message, then **Send on WhatsApp**: it goes from your WhatsApp business number through the Telemune gateway. WhatsApp only delivers a typed message to someone who messaged that number in the last 24 hours |
+| WhatsApp | Pick the **country code** (🇮🇳 +91 India first, then 🇺🇸 +1, 🇦🇪 +971 …; the list is the `country_codes` table) and type the mobile number, then the message, then **Send on WhatsApp**: it goes from your WhatsApp business number through the Telemune gateway. It is sent inside the approved **Conversation Summary** template, so it arrives even if the person has never written to that number (WhatsApp drops plain typed text outside 24 hours of the person's last message) |
 
 ## After the call: summaries, recordings and history
 

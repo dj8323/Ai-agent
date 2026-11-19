@@ -171,7 +171,7 @@ voice_ai_web/          ── frontend team ──
 | POST | `/api/chat` | SSE: `delta` {text}, `usage`, `error`, `done` |
 | POST | `/api/tts`, `/api/transcribe`, `/api/summary` | mp3 / {text, provider} / {summary, usage} (tts/transcribe take optional provider, model) |
 | GET | `/api/voices?provider&lang` | the TTS provider's voices [{id, label}] (labels end in (male)/(female)) |
-| POST | `/api/whatsapp/send` | {to, message}: typed WhatsApp message (free text, 24-hour window) → {ok, id} or {ok:false, error} |
+| POST | `/api/whatsapp/send` | {to, message}: typed WhatsApp message (sent through the approved `ai_message_summary` template, `whatsapp.text-mode`) → {ok, id} or {ok:false, error} |
 | POST | `/api/emergency/alert` | {label, keyword}: alert that WhatsApp/email emergency contact |
 | GET | `/api/models` | OpenAI models grouped {chat, stt, tts} (cached 10 min) |
 | GET/POST/DELETE | `/api/playbooks[/:id]` | {types, saved} / add / delete (the user's own playbooks) |
@@ -224,7 +224,8 @@ voice_ai_web/          ── frontend team ──
   💬 Live chat (`#chatForm` → `startSession("chat")` + `sendUserText`, text only) · 🎤 Voice chat (`#holdBtn` hold-to-record →
   `transcribe()` → `sendUserText`; `voiceMode()` lets `enqueueSpeech/speakNext` speak outside a call; drawViz fakes the
   lip-sync level without the call's analyser) · WhatsApp (`#waSend` → POST `/api/whatsapp/send {to, message}` →
-  `NotifyService.sendText` → gateway `/sendTextWhatsApp {to, message}`; answers {ok, id} / {ok:false, error}). Chat sessions
+  `NotifyService.sendText` → by default the approved template (gateway `/sendWhatsApp`, `whatsapp.text-template/-header/-params`, values
+  recipient = `whatsapp.text-recipient`, message), because WhatsApp drops free text outside the 24-hour window; `whatsapp.text-mode=text` uses `/sendTextWhatsApp {to, message}`; answers {ok, id} / {ok:false, error}). Chat sessions
   greet first (text from /api/greeting; voice chat speaks it) and End & save → `summarizeCall()` (endedBy "live chat" / "voice chat").
   `setTalkMode(m)` ends what's running first (call → `endCall`, chat → `endSession`), then `clearChat()`; Start call switches back
   to Web call. Voice chat: `#vcMute` (`state.vcMuted`: mic tracks off, hold disabled) + red `#voiceEnd`; `summarizeCall()`

@@ -101,7 +101,7 @@ public class DataController {
   /** 🟢 WhatsApp on the call page: send a typed message to a number. Body {to, message}. */
   @PostMapping("/api/whatsapp/send")
   ResponseEntity<Map<String, Object>> whatsappSend(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
-    Map<String, Object> r = notify.sendText(J.str(body.get("to"), 30), J.str(body.get("message"), 4000));
+    Map<String, Object> r = notify.sendText(J.str(body.get("to"), 30), J.str(body.get("message"), 4000), ctx.agent);
     String number = J.str(body.get("to"), 30).replaceAll("[^\\d]", "");
     if (!number.isEmpty() && !J.blank(body.get("message")))
       r.put("recordId", calls.saveWhatsApp(ctx.dataUserId, ctx.agent, number, J.str(body.get("message"), 4000), r).get("id")); // shown in Call summaries

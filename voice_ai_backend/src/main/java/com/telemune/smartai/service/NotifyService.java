@@ -17,6 +17,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -161,7 +162,7 @@ public class NotifyService {
    * "to" is the number with country code, digits only. headerParam is sent only when the template has a header value.
    * The gateway answers {"error": …} when WhatsApp refuses the message.
    */
-  private void whatsapp(String base, String to, String template, String header, String paramNames, Map<String, String> v, String what) {
+  private Map<String, Object> whatsapp(String base, String to, String template, String header, String paramNames, Map<String, String> v, String what) {
     String number = to.replaceAll("[^\\d]", "");
     List<String> params = new ArrayList<>();
     for (String name : paramNames.split(",")) if (!name.isBlank()) params.add(param(v.getOrDefault(name.trim(), "-")));
@@ -174,28 +175,60 @@ public class NotifyService {
       HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20)).header("Content-Type", "application/json")
           .POST(HttpRequest.BodyPublishers.ofString(J.json(body))).build();
       HttpResponse<String> res = http.send(req, HttpResponse.BodyHandlers.ofString());
-      boolean error = res.statusCode() / 100 != 2 || res.body().contains("\"error\"");
       String reply = number.isEmpty() ? res.body() : res.body().replace(number, mask(number)); // no full numbers in the log
-      if (!error) log.info("WhatsApp {} sent to {} with template {} (HTTP {}): {}", what, mask(number), template, res.statusCode(), J.str(reply, 200));
+      Map<String, Object> r = gatewayResult(res, reply);
+      if (Boolean.TRUE.equals(r.get("ok"))) log.info("WhatsApp {} sent to {} with template {} (HTTP {}): {}", what, mask(number), template, res.statusCode(), J.str(reply, 200));
       else log.warn("WhatsApp {} to {} failed: HTTP {} {}", what, mask(number), res.statusCode(), J.str(reply, 400));
+      return r;
     } catch (Exception e) {
       log.warn("WhatsApp {} to {} failed: {}", what, mask(number), e.toString());
+      return J.map("ok", false, "error", "The WhatsApp gateway couldn't be reached.");
     }
   }
 
+  /** The gateway's answer as {ok, id} or {ok:false, error} (it wraps WhatsApp's reply in "result"; errors come as HTTP 200 too). */
+  private static Map<String, Object> gatewayResult(HttpResponse<String> res, String maskedReply) {
+    Object parsed = J.parse(res.body());
+    Map<String, Object> body = parsed instanceof Map<?, ?> ? J.obj(parsed) : J.map();
+    Map<String, Object> result = body.get("result") instanceof Map<?, ?> ? J.obj(body.get("result")) : body;
+    Object err = result.get("error") != null ? result.get("error") : body.get("error");
+    if (res.statusCode() / 100 != 2 || err != null) {
+      String why = err instanceof Map<?, ?> ? J.str(J.obj(err).get("error_data") instanceof Map<?, ?> ? J.get(J.obj(err), "error_data.details") : J.obj(err).get("message"))
+          : err != null ? J.str(err) : "HTTP " + res.statusCode();
+      return J.map("ok", false, "error", why.isEmpty() ? "WhatsApp refused the message." : why);
+    }
+    Object id = J.list(result.get("messages")).stream().findFirst().map(m -> J.obj(m).get("id")).orElse(null);
+    return J.map("ok", true, "id", id);
+  }
+
   /**
-   * A typed WhatsApp message from the call page (the 🟢 WhatsApp option): POST {base}{send-path} {"to": "91…", "message": text}.
-   * Sent straight away (not in the background) so the page can show the result. WhatsApp only delivers free text to
-   * someone who messaged the business number in the last 24 hours; outside that window it is dropped later, without
-   * an error here. Returns {ok, id} or {ok:false, error}.
+   * A typed WhatsApp message from the call page (the WhatsApp talk option). Sent straight away (not in the background)
+   * so the page can show the result. Returns {ok, id, to} or {ok:false, error}.
+   * whatsapp.text-mode = template (default): through the approved summary template (whatsapp.text-template, header
+   *   whatsapp.text-header with {agent}, values whatsapp.text-params from recipient = whatsapp.text-recipient, message), so it
+   *   always arrives. WhatsApp drops free text to anyone who hasn't messaged the business number in the last 24 hours.
+   * whatsapp.text-mode = text: free text, POST {base}{send-path} {"to": "91…", "message": text}.
    */
-  public Map<String, Object> sendText(String to, String message) {
+  public Map<String, Object> sendText(String to, String message, Map<String, Object> agent) {
     if (!whatsappReady()) return J.map("ok", false, "error", "WhatsApp is not set up on the server (whatsapp.* in keys.env).");
     String number = to.replaceAll("[^\\d]", "");
     if (number.length() < 10 || number.length() > 15) return J.map("ok", false, "error", "Enter the number with its country code, e.g. 91 98765 43210.");
     String text = message == null ? "" : message.trim();
     if (text.isEmpty()) return J.map("ok", false, "error", "Write a message first.");
     if (text.length() > 4000) text = text.substring(0, 4000);
+    if (!"text".equalsIgnoreCase(prop("whatsapp.text-mode", "template"))) {
+      String agentName = agent == null ? "" : J.str(agent.get("name"));
+      Map<String, String> v = new HashMap<>();
+      v.put("recipient", prop("whatsapp.text-recipient", "there"));
+      v.put("message", text);
+      v.put("brief", text);
+      v.put("agent", agentName.isEmpty() ? "TelemuneSmartAi" : agentName);
+      String header = prop("whatsapp.text-header", prop("whatsapp.summary-header", "Conversation Summary")).replace("{agent}", v.get("agent"));
+      Map<String, Object> r = whatsapp(prop("whatsapp.base-url", ""), number, prop("whatsapp.text-template", prop("whatsapp.summary-template", "ai_message_summary")),
+          header, prop("whatsapp.text-params", "recipient,message"), v, "message");
+      if (Boolean.TRUE.equals(r.get("ok"))) r.put("to", "…" + number.substring(number.length() - 4));
+      return r;
+    }
     String url = prop("whatsapp.base-url", "").replaceAll("/+$", "") + prop("whatsapp.send-path", "/sendTextWhatsApp");
     try {
       HttpRequest req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(20)).header("Content-Type", "application/json")
