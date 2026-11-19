@@ -98,6 +98,12 @@ All routes are under `/api`, JSON in and out (errors are `{"error": "…"}`). Si
 | GET / PUT | `/api/admin/config[/:section]`, `/api/admin/log-level` | admin: app settings, live log level |
 | GET, POST/PUT/DELETE | `/api/admin/templates`, `/api/admin/types[/:key]`, `/api/admin/templates[/:id]` | admin: agent types and templates |
 
+## Voices
+
+The voice list is `Prompts.VOICES` (id → label). End each label with `(male)` or `(female)`: the web app reads it to show
+a male or female cartoon agent on the call page (anything not marked male gets the female one). Adding or removing a
+voice needs no change in voice_ai_web.
+
 ## Folder
 
 ```

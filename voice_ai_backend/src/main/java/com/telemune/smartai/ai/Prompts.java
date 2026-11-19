@@ -14,7 +14,10 @@ import java.util.Map;
 public final class Prompts {
   private Prompts() {}
 
-  /** The 10 most-used OpenAI assistant voices (all support emotional delivery via instructions). */
+  /**
+   * The 10 most-used OpenAI assistant voices (all support emotional delivery via instructions).
+   * Keep "(male)" / "(female)" at the end of each label: the web app shows a male or female cartoon agent from it.
+   */
   public static final Map<String, String> VOICES = ordered(
       "marin", "Marin — natural, warm (female)", "cedar", "Cedar — natural, grounded (male)", "alloy", "Alloy — neutral, balanced",
       "coral", "Coral — bright, friendly (female)", "shimmer", "Shimmer — soft, gentle (female)", "sage", "Sage — calm, wise (female)",

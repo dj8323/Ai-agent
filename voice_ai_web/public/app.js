@@ -1570,7 +1570,8 @@ function drawViz(ts) {
   smoothLevel += (level - smoothLevel) * 0.25;
   const lv = Math.min(1, smoothLevel * 2.2);
   $("avatar").style.setProperty("--level", lv.toFixed(3));
-  AgentFace.setCharacter($("voice").value); // female or male character, from the agent's voice (no-op when unchanged)
+  // female or male character from the voice's label in the backend's voice list, e.g. "… (male)" (no-op when unchanged)
+  AgentFace.setCharacter($("voice").selectedOptions[0]?.text);
   AgentFace.frame(ts, { phase: state.phase, emotion: state.emotion, level: lv, muted: state.muted });
   requestAnimationFrame(drawViz);
 }

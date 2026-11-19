@@ -1,11 +1,11 @@
 // The cartoon agent on the call card: a person with a headset (plain SVG, theme colours).
-// Two characters (CAST below): a woman for female voices (and Alloy) and a man for male voices.
+// Two characters (CAST below): a man for voices labelled "(male)" in the backend's voice list, a woman for all others.
 // They share one face rig, so every state and emotion works the same for both.
 //
-//   AgentFace.mount(el, voice)                 draw the character for this voice inside el (the #avatar element)
+//   AgentFace.mount(el, voiceLabel)            draw the character for this voice inside el (the #avatar element)
 //   AgentFace.frame(ts, { phase, emotion, level, muted })   call every animation frame (app.js drawViz)
-//   AgentFace.setCharacter(voice)              switch character when the agent's voice changes (no-op if the same)
-//   AgentFace.create(el, voice)                another, independent face (returns { frame, setCharacter })
+//   AgentFace.setCharacter(voiceLabel)         switch character when the agent's voice changes (no-op if the same)
+//   AgentFace.create(el, voiceLabel)           another, independent face (returns { frame, setCharacter })
 //
 // phase:   idle (breathes, blinks, glances around) · listening (leans in, brows up, sound waves at the ear;
 //          eyes down when muted) · thinking (tilts, looks up, thought bubbles) · speaking (mouth follows the voice)
@@ -59,9 +59,10 @@
       front: H("M68 100 Q62 64 92 52 Q96 36 112 44 Q122 30 136 42 Q150 34 154 52 Q178 62 172 100 Q166 84 154 80 Q146 70 128 74 Q112 64 96 76 Q80 78 72 92 Z")
         + `    <rect x="66" y="96" width="7" height="20" rx="3" fill="var(--af-hair)"/><rect x="167" y="96" width="7" height="20" rx="3" fill="var(--af-hair)"/>\n` },
   };
-  // Which character each voice gets (voices: Prompts.VOICES in voice_ai_backend). Alloy (neutral) and unknown → female.
-  const MALE_VOICES = new Set(["cedar", "ballad", "ash", "echo", "verse", "onyx", "fable"]);
-  const characterFor = (voice) => (MALE_VOICES.has(String(voice || "").toLowerCase()) ? "male" : "female");
+  // Which character a voice gets is not fixed here: it is read from the voice's label in the backend's voice list
+  // (Prompts.VOICES, e.g. "Cedar — natural, grounded (male)"). A label marked "(male)" → male; anything else
+  // (female, neutral, unmarked, a voice added later) → female, the common default.
+  const characterFor = (label) => (/\(\s*male\s*\)/i.test(String(label || "")) ? "male" : "female");
   const castOf = (key) => CAST[key] || CAST[characterFor(key)];
   const CHARACTERS = Object.keys(CAST);
 

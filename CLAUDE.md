@@ -215,8 +215,9 @@ voice_ai_web/          ── frontend team ──
   `vadTick()` → `silencePrompt()` sends a hidden `[no response]` turn; after the re-asks `[no response, end call]` and
   `state.silenceEnding` hangs up after that goodbye even without `<hangup:yes>`. Markers are filtered out of summaries.
 - **Call card agent** = a cartoon person with a headset (`voice_ai_web/public/agent-face.js`, SVG in `#avatar`), **female**
-  (long hair, lashes, blouse) for female voices and Alloy, **male** (short spiky hair, wider jaw, shirt + tie) for Cedar, Ballad,
-  Ash, Echo, Verse (`MALE_VOICES`, `characterFor(voice)`). `drawViz()` calls `AgentFace.setCharacter($("voice").value)`
+  (long hair, lashes, blouse) for every voice not labelled male, **male** (short spiky hair, wider jaw, shirt + tie) when the voice's label in
+  `Prompts.VOICES` says "(male)" (`characterFor(label)`; no voice list in the web app, so new voices just need the label).
+  `drawViz()` calls `AgentFace.setCharacter(<selected voice option text>)`
   (switches at once when the voice changes) and `AgentFace.frame(ts, {phase, emotion, level, muted})` every frame. idle: breathes/blinks/glances ·
   listening: leans in, brows up, sound waves at the ear (eyes down when muted) · thinking: tilt, looks up, thought bubbles ·
   speaking: mouth opens with the analyser level (lip-sync), head bobs. `FACE` maps all 20 agent emotions (smile, brows,
