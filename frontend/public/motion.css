@@ -3,7 +3,8 @@
   - "Network" background: drifting dots joined by lines that move away from the mouse (canvas added by motion.js).
   - Glass cards that rise in on load and lift on hover; dialogs pop in.
   - Pill menu bar with a gradient on the active item (top menu and the My agents tabs).
-  - Conversation: bubbles pop in, typing dots while the agent thinks (shown by app.js).
+  - Conversation: bubbles pop in, typing dots while the agent thinks (shown by app.js); the caller's live bubble
+    (🎙 ripples + "Listening…", words write in, changed words flash when the accurate text replaces them).
   - Title shimmer; ringing pulse around the Start call button.
   Colours come from the page's theme variables (--c1/--c2/--c3), so light and dark both work.
   People with "reduce motion" turned on get no animation.
@@ -46,6 +47,24 @@
 .typing i:nth-child(2) { animation-delay: .2s; } .typing i:nth-child(3) { animation-delay: .4s; }
 @keyframes tsa-dot { 0%, 60%, 100% { opacity: .3; transform: none; } 30% { opacity: 1; transform: translateY(-4px); } }
 
+/* ---------- The caller's live bubble (app.js liveBubble / finalizeBubble) ---------- */
+.msg.user.live { opacity: 1; font-style: normal; min-width: 120px; }
+.msg.user.live::after { content: none; }
+.live-head { display: flex; align-items: center; gap: 9px; font-size: 12px; font-weight: 650; opacity: .92; margin-bottom: 4px; }
+.live-mic { position: relative; flex: none; width: 22px; height: 22px; border-radius: 50%; background: #ffffff33;
+  display: grid; place-items: center; font-size: 12px; transform: scale(calc(1 + var(--lv, 0) * .45)); transition: transform .08s; }
+.live-mic::before, .live-mic::after { content: ""; position: absolute; inset: 0; border-radius: 50%; border: 2px solid #fff;
+  animation: tsa-ripple 1.6s ease-out infinite; }
+.live-mic::after { animation-delay: .8s; }
+@keyframes tsa-ripple { from { transform: scale(1); opacity: .8; } to { transform: scale(2.2); opacity: 0; } }
+.msg.user.live .txt { opacity: .88; }
+.msg.user .txt .w { animation: tsa-word .25s ease-out both; }
+@keyframes tsa-word { from { opacity: 0; filter: blur(3px); } to { opacity: 1; filter: none; } }
+.msg.user .fix { border-radius: 4px; animation: tsa-fix 1.2s ease-out; }
+@keyframes tsa-fix { 0% { background: #ffffffa0; color: var(--c1); } 100% { background: transparent; } }
+.msg.user.settle { animation: tsa-settle .45s ease-out; }
+@keyframes tsa-settle { 40% { transform: scale(1.03); } }
+
 /* ---------- Title shimmer ---------- */
 header h1 { background-size: 200% 200%; animation: tsa-shine 6s ease-in-out infinite; }
 @keyframes tsa-shine { 50% { background-position: 100% 50%; } }
@@ -61,6 +80,7 @@ header h1 { background-size: 200% 200%; animation: tsa-shine 6s ease-in-out infi
 button:not(:disabled):active { transform: scale(.97); }
 
 @media (prefers-reduced-motion: reduce) {
-  .card, .shell, .dialog, .msg, .typing, .typing i, header h1, .btn-call::before, .btn-call::after { animation: none !important; }
+  .card, .shell, .dialog, .msg, .typing, .typing i, header h1, .btn-call::before, .btn-call::after,
+  .live-mic::before, .live-mic::after, .msg.user .txt .w, .msg.user .fix { animation: none !important; }
   .card:hover { transform: none; }
 }

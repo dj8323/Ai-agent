@@ -71,8 +71,8 @@ emergency numbers, so changing one never changes another, or anyone else's.
   summary + annotated transcript (.txt) and the recording.
 - Replies are short and human: one or two sentences, one question at a time.
 - **Accurate listening:** your speech is recorded from the first word and transcribed by OpenAI (`gpt-4o-transcribe`)
-  once you pause for 2 s. Live captions show under the avatar while you talk; the chat shows only the accurate
-  text, once it's ready. Say "I meant Saturday" and the agent updates the earlier detail.
+  once you pause for 2 s. While you talk your bubble shows 🎙 ripples + "Listening…" and your words write in live; when
+  you stop, the accurate text replaces them in place (changed words flash briefly). Say "I meant Saturday" and the agent updates the earlier detail.
 - **Hang-up intent:** say bye / "that's all" / "disconnect" (any language) and the agent says goodbye and ends the call itself.
 - **New call = fresh chat.** Every finished call is saved to **Call history** (bottom of the page, paginated).
   Click a call to see its full summary, stats, recording player and annotated transcript, download it, or delete it.

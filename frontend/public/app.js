@@ -784,9 +784,9 @@ $("previewBtn").addEventListener("click", async () => {
 // ---------- speech input ----------
 // How listening works (fixes missed words and lets the transcript correct itself):
 // 1. While listening, the mic is recorded (MediaRecorder) from the very first moment, and its loudness is
-//    watched (voice activity detection). Browser speech recognition runs alongside only to show live captions under the avatar.
+//    watched (voice activity detection). Browser speech recognition runs alongside only to write live captions.
 // 2. When the caller has been quiet for responseDelayMs after speaking, the whole recording goes to OpenAI
-//    speech-to-text, which hears far more accurately. Only then is the caller's bubble added to the chat.
+//    speech-to-text, which hears far more accurately; it replaces the live words in the caller's bubble.
 // 3. If OpenAI STT is switched off in config.json or fails, the browser's own text is used.
 const sttOn = () => (SETTINGS.speechToText?.engine || "openai") === "openai" && !!window.MediaRecorder && !!state.micStream;
 const now = () => performance.now();
@@ -838,8 +838,57 @@ function safeStart() {
 function showLive(text) {
   const u = state.utter;
   if (!u || !text) return;
-  // Live captions only under the avatar; the chat shows the caller's words once the accurate transcript is back.
   $("interim").textContent = text;
+  liveBubble(u);
+  setLiveWords(u.bubble, text);
+}
+
+// ---------- the caller's live bubble (styles in motion.css) ----------
+// It appears as soon as the caller starts talking: 🎙 with ripples (they grow with the voice) + "Listening…",
+// the live captions write in word by word, and when the caller stops the accurate transcript replaces them
+// in place (finalizeBubble): words that changed flash softly. No "corrected" chip.
+function liveBubble(u) {
+  if (u.bubble) return u.bubble;
+  const el = addMsg("user", "");
+  el.firstChild.remove();
+  el.classList.add("live");
+  el.insertAdjacentHTML("afterbegin", `<div class="live-head"><span class="live-mic" aria-hidden="true">🎙</span>Listening…</div><div class="txt"></div>`);
+  u.bubble = el;
+  scrollDown();
+  return el;
+}
+
+function setLiveWords(el, text) {
+  const txt = el?.querySelector(".txt");
+  if (!txt) return;
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  const have = [...txt.children].map((s) => s.textContent.trim());
+  if (!have.every((w, i) => w === words[i])) { txt.textContent = ""; have.length = 0; } // the captions changed earlier words
+  for (const w of words.slice(have.length)) {
+    const s = document.createElement("span");
+    s.className = "w"; s.textContent = w + " ";
+    txt.appendChild(s);
+  }
+  scrollDown();
+}
+
+function finalizeBubble(el, draft, text) {
+  const norm = (w) => w.toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
+  const before = new Set((draft || "").split(/\s+/).map(norm));
+  el.querySelector(".live-head")?.remove();
+  const txt = el.querySelector(".txt");
+  txt.textContent = "";
+  text.split(/\s+/).forEach((w, i) => {
+    if (i) txt.appendChild(document.createTextNode(" "));
+    const s = document.createElement("span");
+    s.textContent = w;
+    if (draft && !before.has(norm(w))) s.className = "fix";
+    txt.appendChild(s);
+  });
+  el.classList.remove("live");
+  el.classList.add("settle");
+  el.style.removeProperty("--lv");
+  scrollDown();
 }
 
 function micLevel() {
@@ -879,8 +928,10 @@ function vadTick() {
   if (!u || u.committing || state.phase !== "listening" || state.muted) return;
   const t = now();
   const stt = SETTINGS.speechToText || {};
-  if (micLevel() > (stt.vadThreshold ?? 0.015)) { u.speechMs += 50; u.lastVoiceAt = t; }
+  const lvl = micLevel();
+  if (lvl > (stt.vadThreshold ?? 0.015)) { u.speechMs += 50; u.lastVoiceAt = t; }
   const spoke = u.speechMs >= (stt.minSpeechMs ?? 250) || !!u.srText;
+  if (spoke) liveBubble(u).style.setProperty("--lv", Math.min(1, lvl * 12).toFixed(2)); // 🎙 grows with the voice
   // After a short pause, start transcribing what was said so far; if the caller stays quiet, the text is ready when
   // the reply wait ends. Speaking again throws it away.
   if (u.spec && u.spec.voiceAt !== u.lastVoiceAt) u.spec = null;
@@ -1013,7 +1064,7 @@ async function transcribe(blob) {
   return data.text;
 }
 
-// The caller finished speaking: get the accurate text, add the caller's bubble, and reply.
+// The caller finished speaking: get the accurate text, put it in the caller's bubble, and reply.
 async function commitUtterance() {
   const u = state.utter;
   if (!u || u.committing) return;
@@ -1038,9 +1089,10 @@ async function commitUtterance() {
     }
   }
   text = (text || "").trim();
-  if (!state.inCall) return;
-  if (!text || !/[\p{L}\p{N}]/u.test(text)) { startListening(); return; } // just noise
-  u.bubble = addMsg("user", text);
+  if (!state.inCall) { u.bubble?.remove(); return; }
+  if (!text || !/[\p{L}\p{N}]/u.test(text)) { u.bubble?.remove(); startListening(); return; } // just noise
+  if (u.bubble) finalizeBubble(u.bubble, u.srText, text);
+  else u.bubble = addMsg("user", text);
   if (sttMs != null) u.bubble.querySelector(".timing").textContent = `🎙 transcribed in ${fmtS(sttMs)}`;
   sendUserText(text, { bubble: u.bubble, t0 });
 }

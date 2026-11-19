@@ -199,8 +199,9 @@ data/                  Call recordings only. Never wipe it.     logs/   backend.
   `audio.playbackRate` (pitch kept) to every sentence and the preview.
 
 - Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions
-  (`#interim` under the avatar, `showLive()`) / fallback. The caller's chat bubble is added only in `commitUtterance()`
-  with the final text (no draft bubble, no "corrected" chip). The agent replies after `conversation.responseDelayMs` of silence.
+  (`showLive()`) / fallback. Caller's live bubble: `liveBubble()` (made when speech starts: 🎙 `.live-mic` ripples scaled
+  by `--lv` from `vadTick`, "Listening…"), `setLiveWords()` writes captions word by word, `finalizeBubble()` in
+  `commitUtterance()` puts the accurate text in place, `.fix` flashes changed words. No "corrected" chip. The agent replies after `conversation.responseDelayMs` of silence.
 - **📚 Tutorials = guided tours** (`#learn` opens the launcher pop-up `#learnModal` / `#tourGrid`): the `TOURS` array in
   app.js; each step has `target` (selector/array/fn), `title`, `text`, and `done()` (auto-advance when the user did it) or
   Next; also `ready`, `clickIn`, `before` (goTab/goCall), `warn`. Engine: `startTour` → `tourGo` → `tourTick` (200 ms:
