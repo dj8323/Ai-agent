@@ -366,6 +366,20 @@ The ● button records both sides of the call (your microphone and the agent's v
 
 Token totals count the chat replies and the summary. Text-to-speech audio is not included because OpenAI doesn't report it as tokens.
 
+## 📊 Dashboard
+
+The **📊 Dashboard** is the first page after you sign in (users with at least one agent). Pick **7, 30 or 90 days** and **all agents or one**; everything on the page follows that choice.
+
+- **Totals:** conversations, talk time, average reply, meetings booked, messages taken and AI tokens, each with the change against the period before and a small trend line.
+- **Conversations per day**, coloured by channel (web call, live chat, voice chat, WhatsApp). Hover a day for the numbers, or press **Show as table**.
+- **How people reach you:** the share of each channel. **Reply speed:** the average reply per day against a 3.5-second goal.
+- **Busiest times:** a weekday × hour grid in your own time zone; darker squares are busier.
+- **What callers want:** the most common caller intents. **How conversations ended:** caller said goodbye, ended from the page, chat closed, and so on.
+- **Your agents:** conversations, trend, average reply, meetings and the last conversation for each agent.
+- **Upcoming meetings**, **messages for you** (urgent ones marked) and **recent conversations** (click one to open its summary).
+
+An admin can switch the Dashboard off for a user in ✏️ Edit → access (📊 Dashboard); the user then starts on 🎙 Call. The tutorial "Your dashboard" walks through the page.
+
 ## Site theme
 
 An admin with **⚙️ Settings** picks one look for the whole site in **Settings → 🎨 Theme**. It applies to the login page, the call page and the admin dashboard, for every user, straight away. Each theme has its own colours for light and dark mode, its own moving background and its own way cards come in:

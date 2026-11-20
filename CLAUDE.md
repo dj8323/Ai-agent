@@ -161,6 +161,7 @@ voice_ai_web/          ── frontend team ──
                        (#editDialog), all-agents table, usage per user, 🧩 types & templates, ⚙️ settings, 🔐 sign-ins, 📜 log.
   public/index.html    Layout + CSS (light/dark tokens): top menu, Call view (call card + summary card,
                        conversation, call summaries), My agents view (list + tabbed editor), dialogs.
+  public/dashboard.js  📊 Dashboard page (tiles, charts, agents table, lists) from GET /api/dashboard.
   public/app.js        Menu/tab routing, agent picker + summary, persona/availability/emergency editors, call flow,
                        speech in/out, tag parsing, messages, calendar, playbooks, call summaries.
   public/agent-face.js The cartoon agent on the call card: female or male by voice; states, 20 emotions, lip-sync.
@@ -186,6 +187,7 @@ voice_ai_web/          ── frontend team ──
 | POST | `/api/login`, `/api/logout` | sign in (username, password, remember) / out |
 | POST | `/api/signup` | self sign-up {name, username, email?, password, confirm, remember} |
 | GET | `/api/auth-options`, `/api/health` | public: {allowSignup, appName, tagline} / {ok} |
+| GET | `/api/dashboard?days&agent&tz` | the user's dashboard: totals, previous period, daily by channel, heat, intents, endings, agents, upcoming, messages, recent |
 | GET / POST | `/api/me`, `/api/me/password` | who is signed in / change own password {current, next} |
 | GET / POST / PATCH / DELETE | `/api/agents[/:id]` | list {agents, currentId, types (with templates)} / create {name, type, templateId, ownerName, organization, availability, description} / update (same + isDefault) / delete |
 | GET | `/api/templates` | active agent types with their active templates |
@@ -312,7 +314,15 @@ voice_ai_web/          ── frontend team ──
   ring `.tour-ring` + card `.tour-card` placement, "Show me again") → `finishTour` (done ids in localStorage
   `tsa-tours-<userId>`, offers the next tour). Users with no agents get `startTour("first-agent")` on load. Keep the
   tours in step when element ids or flows change.
-- Top menu buttons (`.topnav`): **🎙 Call** (`#call`, the main page), **🤖 My agents** (`#agents/<tab>`, hash routing,
+- **📊 Dashboard** (2026-11-20, `#dashboard`, `voice_ai_web/public/dashboard.js`, `#dashView` / `.db-*` CSS in index.html): the
+  start page after sign-in (no hash → `startView()`: dashboard if `allowed("dashboard")` and the user has agents, else call).
+  One request: GET `/api/dashboard?days=7|30|90&agent=all|<id>&tz=<min>` (`api/DashboardController`): totals + previous
+  period, daily per channel (+ seconds, tokens, avg reply), weekday×hour heat (browser time zone), top intents (from
+  `calls.stats.intents`), how conversations ended, agents (spark, avg reply, meetings, last), upcoming events, messages,
+  recent calls. Charts are plain SVG with hover tooltips; channel colours `--ch-call/-chat/-voice/-wa`. Feature
+  `dashboard` in APP_FEATURES (admins can switch it off → `body.no-dashboard`). ✕ on My agents / Tutorials returns to
+  `backPage()` (the last of dashboard/call). Tour "dashboard".
+- Top menu buttons (`.topnav`): **🎙 Call** (`#call`), **🤖 My agents** (`#agents/<tab>`, hash routing,
   `route()` in app.js). My agents (`#manageView`) is a pop-up window (`#agentsModal`) over the call page; ✕, Escape or a
   click outside closes it (back to `#call`). Dialogs opened from it (New agent, type change, playbook) sit on top.
 - Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,

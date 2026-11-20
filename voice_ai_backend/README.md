@@ -106,6 +106,8 @@ Files rotate daily into `logs/archive/`. Full guide with all tables and ready SQ
 
 ## API
 
+`GET /api/dashboard?days=7|30|90&agent=all|<id>&tz=<minutes east of UTC>` = the user's 📊 Dashboard in one request (DashboardController).
+
 The SuperAdmin is hidden from admins (lists, totals, created by, activity, sign-ins, API stats, template counts; by id → 404 "User not found", `/api/super/*` → 404). SuperAdmin only: `GET/PUT /api/super/server-config` (.env / keys.env, secrets masked) · `POST /api/super/restart`.
 
 All routes are under `/api`, JSON in and out (errors are `{"error": "…"}`). Signed-in requests carry the HttpOnly cookie

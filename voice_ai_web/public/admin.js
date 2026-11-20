@@ -273,7 +273,7 @@ const FEATURE_GROUPS = [
   ["Talk channels", { "talk.call": "📞 Web call", "talk.chat": "💬 Live chat", "talk.voice": "🎤 Voice chat", "talk.whatsapp": "WhatsApp" }],
   ["My agents tabs", { "tab.profile": "👤 Profile", "tab.voice": "🧠 Voice & AI", "tab.availability": "🕒 Availability", "tab.tools": "🧰 Tools" }],
   ["Inside Tools", { "tool.calendar": "📅 Calendar", "tool.emergency": "🚨 Emergency", "tool.playbook": "📘 Playbook", "tool.summaries": "📨 Call summaries delivery" }],
-  ["Other", { history: "📚 Call summaries list", "agents.create": "＋ Create agents", "agents.delete": "🗑 Delete agents" }],
+  ["Other", { dashboard: "📊 Dashboard", history: "📚 Call summaries list", "agents.create": "＋ Create agents", "agents.delete": "🗑 Delete agents" }],
 ];
 const featureOn = (u, f) => !(u.permissions?.app && u.permissions.app[f] === false);
 const myFeature = (f) => isSuper() || state.access?.app?.[f] !== false;

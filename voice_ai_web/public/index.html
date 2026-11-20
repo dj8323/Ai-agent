@@ -829,6 +829,97 @@
     .va-card, .nf-card, .nf-card::before, .nf-card .nf-ico, .emg-card, .emg-grid, .cd-app, #toolPlaybooks .pb-item, .av-hol-country { animation: none !important; transition: none !important; }
   }
 
+
+  /* ---------- 📊 Dashboard (dashboard.js) ---------- */
+  :root { --ch-call: #2a78d6; --ch-chat: #eb6834; --ch-voice: #1baf7a; --ch-wa: #eda100; --db-grid: #1b143314; --db-axis: #1b143338;
+    --db-good: #0a7d3c; --db-warn: #a35a00; --db-tip: #1b1433; --db-tip-ink: #ffffff; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --ch-call: #3987e5; --ch-chat: #d95926; --ch-voice: #199e70; --ch-wa: #c98500;
+    --db-grid: #ffffff14; --db-axis: #ffffff38; --db-good: #34d399; --db-warn: #fbbf24; --db-tip: #f3efff; --db-tip-ink: #1b1433; } }
+  :root[data-theme="dark"] { --ch-call: #3987e5; --ch-chat: #d95926; --ch-voice: #199e70; --ch-wa: #c98500;
+    --db-grid: #ffffff14; --db-axis: #ffffff38; --db-good: #34d399; --db-warn: #fbbf24; --db-tip: #f3efff; --db-tip-ink: #1b1433; }
+  .db { grid-column: 1 / -1; display: grid; gap: 16px; min-width: 0; }
+  body:not([data-view="dashboard"]) .db { display: none; }
+  body[data-view="dashboard"] .wrap > .left-col, body[data-view="dashboard"] .wrap > .right-col { display: none; }
+  body.no-dashboard #navDash { display: none !important; }
+  .db h1 { margin: 0; font-size: clamp(22px, 3vw, 28px); letter-spacing: -.01em; text-wrap: balance; }
+  .db h2 { margin: 0; font-size: 15px; }
+  .db-muted, .db-sub { color: var(--muted); }
+  .db-sub { font-size: 12px; }
+  .db-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
+  .db-head p { margin: 2px 0 0; }
+  .db-incall { padding: 10px 14px; border-radius: 12px; background: color-mix(in srgb, var(--green) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--green) 35%, var(--border)); font-weight: 600; }
+  .db-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .db-ready .db-tile, .db-ready .db-card, .db-ready .db-hbar .fill { animation: none; }
+  .db-sel { width: auto; max-width: 220px; border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 7px 10px; border-radius: 10px; font: inherit; font-weight: 600; }
+  .db-seg { display: inline-flex; gap: 3px; padding: 3px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); }
+  .db-seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600; padding: 6px 12px; border-radius: 9px; cursor: pointer; }
+  .db-seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
+  .db-link { border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 0; font-size: 12px; }
+  .db-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
+  @media (max-width: 1000px) { .db-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 560px) { .db-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .db-tile { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 12px 14px 10px; display: grid; gap: 2px; min-width: 0;
+    backdrop-filter: blur(12px); animation: var(--tsa-enter, tsa-rise) .6s ease-out both; }
+  .db-tile .lab { font-size: 12px; color: var(--muted); font-weight: 600; }
+  .db-tile .val { font-size: 25px; font-weight: 750; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .db-tile .delta { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .db-tile .delta.up { color: var(--db-good); } .db-tile .delta.down { color: var(--db-warn); }
+  .db-tile svg { width: 100%; height: 26px; display: block; margin-top: 4px; }
+  .db-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 16px; }
+  .db-card { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 16px; display: grid; gap: 12px; align-content: start; min-width: 0;
+    box-shadow: var(--shadow); backdrop-filter: blur(12px); animation: var(--tsa-enter, tsa-rise) .7s ease-out both; }
+  .db-s8 { grid-column: span 8; } .db-s4 { grid-column: span 4; } .db-s7 { grid-column: span 7; } .db-s5 { grid-column: span 5; } .db-s12 { grid-column: span 12; }
+  @media (max-width: 900px) { .db-s8, .db-s4, .db-s7, .db-s5 { grid-column: span 12; } }
+  .db-card-h { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .db-legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--muted); align-items: center; }
+  .db-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .db-legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+  .db-chart { position: relative; min-width: 0; }
+  .db-chart svg { display: block; width: 100%; overflow: visible; }
+  .db-chart text { fill: var(--muted); font-size: 11px; font-family: inherit; }
+  .db-empty { padding: 26px 10px; text-align: center; color: var(--muted); font-size: 13px; }
+  .db-tablewrap { overflow-x: auto; }
+  .db-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  .db-table th { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); font-weight: 600; padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .db-table td { padding: 9px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+  .db-table tr:last-child td { border-bottom: 0; }
+  .db-table .r { text-align: right; font-variant-numeric: tabular-nums; }
+  .db-mix { display: flex; height: 18px; border-radius: 6px; overflow: hidden; gap: 2px; background: var(--panel-2); }
+  .db-mix i { display: block; height: 100%; }
+  .db-mixlist { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+  .db-mixlist li { display: grid; grid-template-columns: 12px 1fr auto auto; gap: 8px; align-items: center; font-size: 13px; }
+  .db-mixlist li i { width: 10px; height: 10px; border-radius: 3px; }
+  .db-mixlist b { font-variant-numeric: tabular-nums; }
+  .db-mixlist small { color: var(--muted); font-variant-numeric: tabular-nums; min-width: 38px; text-align: right; }
+  .db-big { font-size: 28px; font-weight: 750; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+  .db-bars { display: grid; gap: 9px; }
+  .db-hbar { display: grid; grid-template-columns: minmax(0, 170px) 1fr 34px; gap: 10px; align-items: center; font-size: 13px; }
+  .db-hbar .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .db-hbar .track { height: 10px; display: block; }
+  .db-hbar .fill { display: block; height: 100%; border-radius: 0 4px 4px 0; background: var(--c1); animation: db-grow 1s cubic-bezier(.2,.8,.2,1) both; }
+  .db-hbar b { text-align: right; font-variant-numeric: tabular-nums; }
+  .db-agent { display: flex; align-items: center; gap: 10px; }
+  .db-av { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-weight: 700; color: #fff; background: var(--grad); flex: none; font-size: 13px; }
+  .db-badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 99px; background: var(--panel-2); border: 1px solid var(--border); }
+  .db-spark { width: 110px; height: 26px; display: block; }
+  .db-list { display: grid; gap: 2px; margin: 0; padding: 0; list-style: none; }
+  .db-list li { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 6px; border-radius: 10px; }
+  .db-list li.click { cursor: pointer; }
+  .db-list li.click:hover { background: var(--panel-2); }
+  .db-when { font-size: 11px; font-weight: 700; text-align: center; line-height: 1.15; padding: 5px 7px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--border); min-width: 46px; }
+  .db-when b { display: block; font-size: 16px; }
+  .db-list .t div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+  .db-list .t small { color: var(--muted); display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .db-tag { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 99px; }
+  .db-tag.urgent { color: var(--db-warn); background: color-mix(in srgb, var(--db-warn) 14%, transparent); }
+  .db-tag.new { color: var(--accent); background: color-mix(in srgb, var(--c1) 12%, transparent); }
+  .db-ch { width: 30px; height: 30px; border-radius: 10px; display: grid; place-items: center; font-size: 15px; background: var(--panel-2); border: 1px solid var(--border); }
+  .db-tip { position: fixed; z-index: 90; pointer-events: none; background: var(--db-tip); color: var(--db-tip-ink); border-radius: 10px; padding: 8px 10px; font-size: 12px;
+    box-shadow: 0 8px 24px #0004; min-width: 120px; transform: translate(-50%, calc(-100% - 12px)); }
+  .db-tip b { display: block; margin-bottom: 4px; }
+  .db-tip div { display: flex; justify-content: space-between; gap: 14px; font-variant-numeric: tabular-nums; }
+  .db-tip i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+  @keyframes db-grow { from { width: 0; } }
   /* Access: an admin (or the SuperAdmin, for admins) can switch parts of the app off per account (body.no-<feature>) */
   body.no-talk-call [data-talk="call"], body.no-talk-call #callBtn,
   body.no-talk-chat [data-talk="chat"], body.no-talk-voice [data-talk="voice"], body.no-talk-whatsapp [data-talk="whatsapp"],
@@ -857,6 +948,7 @@
     </div>
     <div class="head-right">
       <nav class="topnav" aria-label="Main menu">
+        <button type="button" data-go="dashboard" id="navDash">📊 Dashboard</button>
         <button type="button" data-go="call" id="navCall">🎙 Call</button>
         <button type="button" data-go="agents" id="navAgents">🤖 My agents</button>
         <button type="button" data-go="learn" id="navLearn">📚 Tutorials</button>
@@ -876,6 +968,66 @@
       </div>
     </div>
   </header>
+
+  <!-- 📊 Dashboard: the start page (dashboard.js, data from GET /api/dashboard) -->
+  <section class="db" id="dashView" aria-labelledby="dbHello">
+    <div class="db-incall" id="dbInCall" hidden>📞 A conversation is still going on. <button type="button" class="db-link" data-go-call>Back to it</button></div>
+    <div class="db-head">
+      <div><h1 id="dbHello">Hello</h1><p id="dbHeadline" class="db-muted">Loading your numbers…</p></div>
+      <div class="db-filters">
+        <select id="dbAgent" class="db-sel" aria-label="Agent"><option value="all">All agents</option></select>
+        <div class="db-seg" role="group" aria-label="Period">
+          <button type="button" data-days="7" aria-pressed="false">7 days</button>
+          <button type="button" data-days="30" aria-pressed="true">30 days</button>
+          <button type="button" data-days="90" aria-pressed="false">90 days</button>
+        </div>
+      </div>
+    </div>
+    <div class="db-tiles" id="dbTiles" aria-label="Totals"></div>
+    <div class="db-grid">
+      <section class="db-card db-s8" aria-labelledby="dbActT">
+        <div class="db-card-h"><h2 id="dbActT">Conversations per day</h2><button type="button" class="db-link" id="dbTblBtn">Show as table</button></div>
+        <div class="db-legend" id="dbLegend"></div>
+        <div class="db-chart" id="dbActivity"></div>
+        <div class="db-tablewrap" id="dbActivityTable" hidden></div>
+      </section>
+      <section class="db-card db-s4" aria-labelledby="dbMixT">
+        <div class="db-card-h"><h2 id="dbMixT">How people reach you</h2><span class="db-sub" id="dbMixSub"></span></div>
+        <div class="db-mix" id="dbMixBar"></div>
+        <ul class="db-mixlist" id="dbMixList"></ul>
+        <div class="db-card-h" style="margin-top:8px"><h2>Reply speed</h2><span class="db-sub">average per day, seconds</span></div>
+        <div class="db-big" id="dbReplyBig">–</div>
+        <div class="db-chart" id="dbReply"></div>
+      </section>
+      <section class="db-card db-s7" aria-labelledby="dbHeatT">
+        <div class="db-card-h"><h2 id="dbHeatT">Busiest times</h2><span class="db-sub" id="dbHeatSub">by weekday and hour</span></div>
+        <div class="db-chart" id="dbHeat"></div>
+        <div class="db-legend" id="dbHeatLegend"></div>
+      </section>
+      <section class="db-card db-s5" aria-labelledby="dbTopT">
+        <div class="db-card-h"><h2 id="dbTopT">What callers want</h2><span class="db-sub">top intents</span></div>
+        <div class="db-bars" id="dbTopics"></div>
+        <div class="db-card-h" style="margin-top:8px"><h2>How conversations ended</h2></div>
+        <div class="db-bars" id="dbEnds"></div>
+      </section>
+      <section class="db-card db-s12" aria-labelledby="dbAgT">
+        <div class="db-card-h"><h2 id="dbAgT">Your agents</h2><span class="db-sub" id="dbAgentsSub"></span></div>
+        <div class="db-tablewrap"><table class="db-table" id="dbAgents"></table></div>
+      </section>
+      <section class="db-card db-s4" aria-labelledby="dbMeetT">
+        <div class="db-card-h"><h2 id="dbMeetT">📅 Upcoming meetings</h2><span class="db-sub">booked by your agents</span></div>
+        <ul class="db-list" id="dbMeetings"></ul>
+      </section>
+      <section class="db-card db-s4" aria-labelledby="dbMsgT">
+        <div class="db-card-h"><h2 id="dbMsgT">📨 Messages for you</h2><span class="db-sub" id="dbMsgSub"></span></div>
+        <ul class="db-list" id="dbMessages"></ul>
+      </section>
+      <section class="db-card db-s4" aria-labelledby="dbRecT">
+        <div class="db-card-h"><h2 id="dbRecT">🕘 Recent conversations</h2><span class="db-sub">all channels</span></div>
+        <ul class="db-list" id="dbRecent"></ul>
+      </section>
+    </div>
+  </section>
 
   <div class="left-col">
   <section class="card call-card">
@@ -1443,5 +1595,6 @@
 
 <script src="agent-face.js"></script>
 <script src="app.js"></script>
+<script src="dashboard.js"></script>
 </body>
 </html>

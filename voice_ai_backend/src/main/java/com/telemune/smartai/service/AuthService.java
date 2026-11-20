@@ -90,7 +90,7 @@ public class AuthService {
   /** Main-app features an admin can show or hide for users (the SuperAdmin decides them for admins). */
   public static final List<String> APP_FEATURES = List.of("talk.call", "talk.chat", "talk.voice", "talk.whatsapp",
       "tab.profile", "tab.voice", "tab.availability", "tab.tools", "tool.calendar", "tool.emergency", "tool.playbook", "tool.summaries",
-      "history", "agents.create", "agents.delete");
+      "history", "agents.create", "agents.delete", "dashboard");
 
   public static boolean isStaff(Object role) { return role != null && J.num(role) <= ROLE_ADMIN; }
   /** The role of a public user map; anything missing counts as a plain user (never as the SuperAdmin). */

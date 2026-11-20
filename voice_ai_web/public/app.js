@@ -2717,7 +2717,7 @@ async function saveCallerMessage(raw, turn) {
 const ACCESS_CLASSES = { "talk.call": "no-talk-call", "talk.chat": "no-talk-chat", "talk.voice": "no-talk-voice", "talk.whatsapp": "no-talk-whatsapp",
   "tab.profile": "no-tab-profile", "tab.voice": "no-tab-voice", "tab.availability": "no-tab-availability", "tab.tools": "no-tab-tools",
   "tool.calendar": "no-tool-calendar", "tool.emergency": "no-tool-emergency", "tool.playbook": "no-tool-playbook", "tool.summaries": "no-tool-summaries",
-  "history": "no-history", "agents.create": "no-agents-create", "agents.delete": "no-agents-delete" };
+  "history": "no-history", "agents.create": "no-agents-create", "agents.delete": "no-agents-delete", "dashboard": "no-dashboard" };
 function applyAccess(access) {
   const app = access?.app || {};
   state.access = app;
@@ -2842,7 +2842,8 @@ $("agentCallBtn").addEventListener("click", () => (location.hash = "call"));
 //   before() opens what the step needs (a tab, the call page); "Show me again" runs it again.
 // Each tour: needsAgent (start "Create your first agent" first if there is none).
 const goTab = (tab) => () => { if (location.hash !== `#agents/${tab}`) location.hash = `agents/${tab}`; };
-const goCall = () => { if (!/^#?(call)?$/.test(location.hash)) location.hash = "call"; };
+const goDash = () => { if (state.view !== "dashboard") location.hash = "dashboard"; };
+const goCall = () => { if (state.view !== "call" || location.hash !== "#call") location.hash = "call"; };
 const isOpen = (id) => $(id).classList.contains("open");
 
 const TOURS = [
@@ -2873,6 +2874,16 @@ const TOURS = [
         warn: () => $("naErr").textContent },
       { target: ".phone .stage", before: goCall, title: "🎉 Your agent is ready", text: "It's set up and selected for calls. Fine-tune it any time in **🤖 My agents**. Next, try a call!", next: true },
     ], then: "call" },
+  { id: "dashboard", icon: "📊", needs: ["dashboard"], title: "Your dashboard", needsAgent: true, desc: "Your start page: conversations, channels, reply speed, busy hours, agents, meetings and messages.",
+    steps: [
+      { target: "#navDash", before: goDash, title: "📊 Dashboard", text: "Your start page. It opens after you sign in.", next: true },
+      { target: ".db-filters", title: "Pick a period", text: "7, 30 or 90 days, for all agents or one. Everything below follows it.", next: true },
+      { target: "#dbTiles", title: "The totals", text: "Conversations, talk time, reply speed, meetings, messages and AI tokens, with the change against the period before.", next: true },
+      { target: "#dbActivity", title: "Every day", text: "Conversations per day by channel. Hover a day for the numbers, or use **Show as table**.", next: true },
+      { target: "#dbHeat", title: "Busiest times", text: "Darker squares are busier hours, in your time zone.", next: true },
+      { target: "#dbAgents", title: "Your agents", text: "How each agent is doing, with its trend line.", next: true },
+      { target: "#dbRecent", title: "Recent conversations", text: "Click one to open its summary and transcript.", next: true },
+    ] },
   { id: "call", icon: "🎙", needs: ["talk.call"], title: "Make a web call", needsAgent: true, desc: "Start a call, talk to your agent, follow the summary at the top, and end it.",
     steps: [
       { target: "#agentPick", before: goCall, title: "Pick the agent", text: "This is the agent you'll talk to. You can change it here any time.", next: true },
@@ -3136,12 +3147,12 @@ function showTutorial() {
     grid.appendChild(el);
   }
 }
-$("lrClose").addEventListener("click", () => (location.hash = "call"));
-$("learnModal").addEventListener("click", (e) => { if (e.target === $("learnModal")) location.hash = "call"; });
+$("lrClose").addEventListener("click", () => (location.hash = backPage()));
+$("learnModal").addEventListener("click", (e) => { if (e.target === $("learnModal")) location.hash = backPage(); });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || !$("learnModal").classList.contains("open")) return;
   if ([...document.querySelectorAll(".overlay.open")].some((o) => o !== $("learnModal"))) return;
-  location.hash = "call";
+  location.hash = backPage();
 });
 document.querySelectorAll("[data-tour]").forEach((b) => (b.onclick = () => startTour(b.dataset.tour)));
 $("firstAgentBtn").addEventListener("click", () => openAgentDialog());
@@ -3180,14 +3191,22 @@ function showTab(tab) {
   document.querySelectorAll(".tab-panel").forEach((p) => (p.hidden = p.dataset.panel !== state.tab));
   if (section) requestAnimationFrame(() => { const el = $(section); el.scrollIntoView({ block: "start", behavior: "smooth" }); el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); });
 }
+// 📊 Dashboard is the start page (no hash) when it's open for this account and the user has an agent; else 🎙 Call.
+const backPage = () => state.lastPage || startView();
+const startView = () => (allowed("dashboard") && (!state.agents || state.agents.length) ? "dashboard" : "call");
 function route() {
-  const [view, tab] = location.hash.replace(/^#/, "").split("/");
-  const agents = view === "agents", learn = view === "learn";
-  document.body.dataset.view = agents ? "agents" : learn ? "learn" : "call";
+  let [view, tab] = location.hash.replace(/^#/, "").split("/");
+  if (!view || (view === "dashboard" && !allowed("dashboard"))) view = startView();
+  const agents = view === "agents", learn = view === "learn", dash = view === "dashboard";
+  state.view = dash ? "dashboard" : agents || learn ? view : "call";
+  if (!agents && !learn) state.lastPage = state.view; // where ✕ on My agents / Tutorials goes back to
+  document.body.dataset.view = agents ? "agents" : learn ? "learn" : dash ? "dashboard" : "call";
   $("agentsModal").classList.toggle("open", agents);
   $("learnModal").classList.toggle("open", learn);
   if (learn) showTutorial();
-  $("navCall").setAttribute("aria-current", agents || learn ? "false" : "page");
+  $("navDash").setAttribute("aria-current", dash ? "page" : "false");
+  if (dash && typeof loadDashboard === "function") loadDashboard();
+  $("navCall").setAttribute("aria-current", agents || learn || dash ? "false" : "page");
   $("navAgents").setAttribute("aria-current", agents ? "page" : "false");
   $("navLearn").setAttribute("aria-current", learn ? "page" : "false");
   if (agents) {
@@ -3198,12 +3217,12 @@ function route() {
 document.querySelectorAll(".tabs [data-tab]").forEach((b) => (b.onclick = () => (location.hash = `agents/${b.dataset.tab}`)));
 document.querySelectorAll(".topnav [data-go]").forEach((b) => (b.onclick = () => (location.hash = b.dataset.go)));
 // My agents is a pop-up window over the call page: ✕, Escape or a click outside closes it.
-$("mgClose").addEventListener("click", () => (location.hash = "call"));
-$("agentsModal").addEventListener("click", (e) => { if (e.target === $("agentsModal")) location.hash = "call"; });
+$("mgClose").addEventListener("click", () => (location.hash = backPage()));
+$("agentsModal").addEventListener("click", (e) => { if (e.target === $("agentsModal")) location.hash = backPage(); });
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape" || !$("agentsModal").classList.contains("open")) return;
   if ([...document.querySelectorAll(".overlay.open")].some((o) => o !== $("agentsModal"))) return; // a dialog on top closes first
-  location.hash = "call";
+  location.hash = backPage();
 });
 window.addEventListener("hashchange", route);
 route();
@@ -3683,7 +3702,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAgent
     applyAccess(meRes.access);
     state.agentId = store.get(agentKey()) || ""; // the agent this user had open last time
     await loadAgents();
-    if (location.hash.startsWith("#learn")) route(); // now we know if the admin topic should show
+    route(); // now we know the access and whether there are agents (start page, admin topic in tutorials)
     await loadConfig();
     if (SETTINGS.currentAgent && SETTINGS.currentAgent.id !== state.agentId) { state.agentId = SETTINGS.currentAgent.id; renderAgents(); }
     await loadPlaybooks();
