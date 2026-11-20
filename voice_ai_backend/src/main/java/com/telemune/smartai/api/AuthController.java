@@ -41,7 +41,8 @@ public class AuthController {
   @GetMapping("/api/auth-options")
   Map<String, Object> options() {
     Map<String, Object> cfg = config.app();
-    return J.map("allowSignup", J.bool(J.get(cfg, "auth.allowSignup")), "appName", J.get(cfg, "branding.appName"), "tagline", J.get(cfg, "branding.tagline"));
+    return J.map("allowSignup", J.bool(J.get(cfg, "auth.allowSignup")), "appName", J.get(cfg, "branding.appName"), "tagline", J.get(cfg, "branding.tagline"),
+        "theme", J.map("name", J.get(cfg, "branding.theme.name"), "motion", J.get(cfg, "branding.theme.motion"))); // site theme (themes.js)
   }
 
   @PostMapping("/api/login")

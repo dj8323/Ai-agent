@@ -5,7 +5,7 @@
     "logo": "telemune-mark.png",
     "favicon": "telemune-logo.svg",
     "footer": "Powered by Telemune © 2027 · Designed by DJ",
-    "theme": { "primary": "#7c3aed", "secondary": "#ec4899", "tertiary": "#06b6d4" }
+    "theme": { "name": "violet", "motion": true, "primary": "#7c3aed", "secondary": "#ec4899", "tertiary": "#06b6d4" }
   },
   "agent": { "defaultName": "Aria", "defaultLanguage": "en-US", "defaultVoice": "marin", "defaultPlaybookId": "", "maxReplyWords": 25, "maxAgentsPerUser": 20, "speechSpeed": 1.0 },
   "models": { "chat": "gpt-4.1-mini", "tts": "gpt-4o-mini-tts", "reasoningEffort": "none", "maxReplyTokens": 1024, "maxSummaryTokens": 2048 },

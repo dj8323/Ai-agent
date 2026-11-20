@@ -366,6 +366,23 @@ The ● button records both sides of the call (your microphone and the agent's v
 
 Token totals count the chat replies and the summary. Text-to-speech audio is not included because OpenAI doesn't report it as tokens.
 
+## Site theme
+
+An admin with **⚙️ Settings** picks one look for the whole site in **Settings → 🎨 Theme**. It applies to the login page, the call page and the admin dashboard, for every user, straight away. Each theme has its own colours for light and dark mode, its own moving background and its own way cards come in:
+
+| Theme | Feel | Background | Cards come in |
+|---|---|---|---|
+| Telemune Violet | The original look | Network lines | Rise up |
+| Ocean Breeze | Calm, fresh | Flowing waves | Slide in |
+| Sunset Coral | Warm, friendly | Aurora glow | Zoom in |
+| Emerald Grove | Health, finance | Rising fireflies | Rise up |
+| Midnight Gold | Premium | Twinkling stars | Blur fade |
+| Corporate Blue | Clean, quiet | Soft drift | Blur fade |
+| Neon Pulse | Bold, techy | Neon grid | Tilt in |
+| Rose Quartz | Soft, playful | Floating bubbles | Pop |
+
+**Moving background** turns the animation off for everyone (a still background). People whose device asks for less motion never see it move. Each person still chooses light or dark with the 🌙 button.
+
 ## SuperAdmin
 
 Above the admins there is one **SuperAdmin** (role 0). It is set up on the server, not in the browser (steps in `voice_ai_backend/README.md` → SuperAdmin: two lines in `.env`, restart, sign in, change the password, remove the password line).

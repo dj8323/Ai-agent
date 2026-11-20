@@ -496,10 +496,13 @@ if (warnings.length) { $("warn").style.display = "block"; $("warn").textContent 
 
 function applyBranding(b) {
   const t = b.theme || {};
-  const root = document.documentElement.style;
-  if (t.primary) root.setProperty("--c1", t.primary);
-  if (t.secondary) root.setProperty("--c2", t.secondary);
-  if (t.tertiary) root.setProperty("--c3", t.tertiary);
+  window.TSA_THEME?.apply(t); // the site theme the admin picked (themes.js)
+  if (t.name === "custom") { // own brand colours instead of a ready-made theme
+    const root = document.documentElement.style;
+    if (t.primary) root.setProperty("--c1", t.primary);
+    if (t.secondary) root.setProperty("--c2", t.secondary);
+    if (t.tertiary) root.setProperty("--c3", t.tertiary);
+  }
   if (b.appName) { document.title = b.appName; $("brandName").textContent = b.appName; }
   if (b.tagline) $("brandTagline").textContent = b.tagline;
   if (b.footer) $("brandFooter").textContent = b.footer;

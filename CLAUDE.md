@@ -164,6 +164,13 @@ voice_ai_web/          ── frontend team ──
   public/app.js        Menu/tab routing, agent picker + summary, persona/availability/emergency editors, call flow,
                        speech in/out, tag parsing, messages, calendar, playbooks, call summaries.
   public/agent-face.js The cartoon agent on the call card: female or male by voice; states, 20 emotions, lip-sync.
+  public/themes.js     Site themes (2026-11-20), in <head> of all three pages: 8 themes (violet = the original, ocean,
+                       sunset, emerald, gold, corporate, neon, rose), each light+dark colours, a background `motion` and a card
+                       entrance (`--tsa-enter`). Sets <html data-site-theme data-motion>, caches in localStorage `tsa-site-theme`,
+                       then applies GET /api/auth-options `theme`. Admin → Settings → 🎨 Theme (`renderThemes`/`saveTheme` in
+                       admin.js) saves app_config `branding.theme {name, motion}`. branding primary/secondary/tertiary apply
+                       only when theme.name = "custom". motion.js draws the style from data-motion (network, waves, aurora,
+                       calm, fireflies, stars, grid, bubbles, off).
   public/motion.css + motion.js   Shared motion theme on all three pages: "Network" canvas background (`.net-bg`,
                        z-index -1, drawn by motion.js, colour --net-dot), glass cards rise in + lift on hover,
                        pill menu bar (.topnav, .tabs), bubbles pop in, typing dots (`showTyping()` in app.js while

@@ -8,6 +8,7 @@
 <script>
   try { const t = localStorage.getItem("va-theme"); if (t) document.documentElement.dataset.theme = t; } catch {}
 </script>
+<script src="themes.js"></script>
 <style>
   :root { --c1: #7c3aed; --c2: #ec4899; --c3: #06b6d4; --grad: linear-gradient(135deg, var(--c1), var(--c2) 55%, var(--c3)); }
   :root {
@@ -81,6 +82,16 @@
   .sw span::after { content: ""; position: absolute; left: 3px; top: 3px; width: 18px; height: 18px; border-radius: 50%; background: #fff; transition: transform .15s; box-shadow: 0 1px 3px #0003; }
   .sw input:checked + span { background: var(--grad); } .sw input:checked + span::after { transform: translateX(20px); }
   .sw input:focus-visible + span { outline: 2px solid var(--c1); outline-offset: 2px; }
+  .th-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 10px; margin-bottom: 6px; }
+  .th-card { text-align: left; font: inherit; color: var(--text); cursor: pointer; padding: 10px; border-radius: 14px; background: var(--panel-2);
+    border: 1.5px solid var(--border); display: grid; gap: 7px; transition: transform .2s, border-color .2s, box-shadow .2s; }
+  .th-card:hover { transform: translateY(-2px); }
+  .th-card:focus-visible { outline: 2px solid var(--c1); outline-offset: 2px; }
+  .th-card[aria-checked="true"] { border-color: var(--c1); box-shadow: 0 0 0 3px color-mix(in srgb, var(--c1) 25%, transparent); }
+  .th-strip { height: 30px; border-radius: 8px; display: flex; overflow: hidden; }
+  .th-strip i { flex: 1; }
+  .th-card b { font-size: 14px; }
+  .th-card small { display: flex; justify-content: space-between; gap: 6px; color: var(--muted); font-size: 12px; }
   .set-row input[type=number] { width: 80px; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; }
   .log { display: grid; gap: 2px; font-size: 13px; }
   .log-row { display: grid; grid-template-columns: 112px 110px 150px 1fr; gap: 10px; padding: 7px 8px; border-radius: 8px; align-items: baseline; }
@@ -353,6 +364,13 @@
   </div>
 
   <div class="view" data-view="settings" hidden>
+    <section class="card" aria-labelledby="thTitle">
+      <div class="toolbar"><h2 id="thTitle">🎨 Theme</h2><span class="sub" id="thNow"></span></div>
+      <p class="sub" style="margin:0 0 12px">One look for the whole site: the login page, the call page and this dashboard, for every user. Each theme has its own colours (light and dark), moving background and the way cards come in.</p>
+      <div class="th-grid" id="thGrid" role="radiogroup" aria-label="Site theme"></div>
+      <div class="set-row"><div>Moving background<small>Turn off for a still background (people who ask their device for less motion never see it move).</small></div>
+        <label class="sw" title="Moving background"><input type="checkbox" id="thMotion" aria-label="Moving background" /><span></span></label></div>
+    </section>
     <section class="card" aria-labelledby="setTitle">
       <div class="toolbar"><h2 id="setTitle">⚙️ App settings</h2></div>
       <div class="set-row"><div>Self sign-up<small>Show “Create account” on the login page. New accounts are users (role 2).</small></div>

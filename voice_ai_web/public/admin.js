@@ -583,7 +583,33 @@ async function loadSettings() {
   $("setAgents").value = config.agent.maxAgentsPerUser;
   $("setSilence").value = config.conversation.silenceRetrySeconds ?? 8;
   $("setRetries").value = config.conversation.silenceRetries ?? 2;
+  renderThemes();
 }
+
+// ---------- 🎨 site theme (branding.theme {name, motion}; themes.js has the list and applies it) ----------
+function renderThemes() {
+  const T = window.TSA_THEME; if (!T || !state.config) return;
+  const cur = state.config.branding?.theme || {};
+  const name = T.list.some((t) => t.id === cur.name) ? cur.name : "violet";
+  $("thMotion").checked = cur.motion !== false;
+  const t0 = T.list.find((t) => t.id === name);
+  $("thNow").textContent = `Now: ${t0.name}`;
+  $("thGrid").innerHTML = T.list.map((t) => `<button type="button" class="th-card" role="radio" aria-checked="${t.id === name}" data-theme-id="${t.id}">
+      <span class="th-strip"><i style="background:${t.c[0]}"></i><i style="background:${t.c[1]}"></i><i style="background:${t.c[2]}"></i><i style="background:${t.dark[0]}"></i><i style="background:${t.light[0]}"></i></span>
+      <b>${esc(t.name)}</b><small><span>${esc(t.note)}</span><span>${esc(T.motions[t.motion])}</span></small></button>`).join("");
+}
+async function saveTheme(patch, label) {
+  const theme = { ...(state.config.branding?.theme || {}), ...patch };
+  window.TSA_THEME.apply(theme); // show it at once
+  await saveSection("branding", { theme }, label);
+  renderThemes();
+}
+$("thGrid").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-theme-id]"); if (!b) return;
+  const t = window.TSA_THEME.list.find((x) => x.id === b.dataset.themeId);
+  saveTheme({ name: t.id }, `Theme “${t.name}”`);
+});
+$("thMotion").onchange = () => saveTheme({ motion: $("thMotion").checked }, $("thMotion").checked ? "Moving background on" : "Moving background off");
 async function saveSection(section, patch, label) {
   try {
     const { value } = await api(`/api/admin/config/${section}`, { method: "PUT", body: JSON.stringify({ ...state.config[section], ...patch }) });

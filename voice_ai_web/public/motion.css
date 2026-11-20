@@ -1,6 +1,7 @@
 /*
   TelemuneSmartAi motion theme, shared by every page (index, login, admin).
-  - "Network" background: drifting dots joined by lines that move away from the mouse (canvas added by motion.js).
+  - Moving background (canvas added by motion.js), one style per site theme (themes.js): network lines, waves, aurora,
+    soft drift, fireflies, stars, neon grid or bubbles; cards come in the theme's way (--tsa-enter).
   - Glass cards that rise in on load and lift on hover; dialogs pop in.
   - Pill menu bar with a gradient on the active item (top menu and the My agents tabs).
   - Conversation: bubbles pop in, typing dots while the agent thinks (shown by app.js); the caller's live bubble
@@ -18,14 +19,21 @@
 
 /* ---------- Cards & dialogs ---------- */
 .card { backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-  animation: tsa-rise .7s ease-out both; transition: transform .25s, box-shadow .25s; }
+  animation: var(--tsa-enter, tsa-rise) .7s ease-out both; transition: transform .25s, box-shadow .25s; }
 .card:hover { transform: translateY(-3px); box-shadow: 0 18px 50px color-mix(in srgb, var(--c1) 24%, transparent); }
 .wrap > .card:nth-child(2), .wrap > * > .card:nth-child(2) { animation-delay: .12s; }
 .wrap > .card:nth-child(3), .wrap > * > .card:nth-child(3) { animation-delay: .24s; }
 .wrap > .card:nth-child(4), .wrap > * > .card:nth-child(4) { animation-delay: .36s; }
 .wrap > .card:nth-child(n+5), .wrap > * > .card:nth-child(n+5) { animation-delay: .44s; }
 @keyframes tsa-rise { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: none; } }
-.shell { animation: tsa-rise .7s ease-out both; }               /* login box */
+/* how cards come in, per site theme (themes.js sets --tsa-enter) */
+@keyframes tsa-slide { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: none; } }
+@keyframes tsa-zoom { from { opacity: 0; transform: scale(.93); } to { opacity: 1; transform: none; } }
+@keyframes tsa-blur { from { opacity: 0; filter: blur(6px); } to { opacity: 1; filter: none; } }
+@keyframes tsa-tilt { from { opacity: 0; transform: perspective(900px) rotateX(16deg) translateY(16px); } to { opacity: 1; transform: none; } }
+@keyframes tsa-bounce { 0% { opacity: 0; transform: scale(.86); } 70% { opacity: 1; transform: scale(1.025); } 100% { opacity: 1; transform: none; } }
+.net-bg[hidden] { display: none; }
+.shell { animation: var(--tsa-enter, tsa-rise) .7s ease-out both; }               /* login box */
 .dialog { animation: tsa-pop .3s ease-out both; }
 
 /* ---------- Menu bar (pill, gradient on the active item) ---------- */

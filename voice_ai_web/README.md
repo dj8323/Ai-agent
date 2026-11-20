@@ -99,3 +99,9 @@ public/
   telemune-mark.png, telemune-logo.svg   logo / favicon
 certs/  logs/  (not in git)
 ```
+
+## Themes
+
+`public/themes.js` (loaded in the `<head>` of every page) holds the 8 site themes and applies the one the admin picked
+(`GET /api/auth-options` → `theme {name, motion}`, saved in Admin → Settings → 🎨 Theme as `branding.theme`). `public/motion.js`
+draws the theme's moving background and `public/motion.css` the way cards come in. To add a theme, add an entry to `THEMES` in themes.js.

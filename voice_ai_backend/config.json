@@ -6,6 +6,8 @@
     "favicon": "telemune-logo.svg",
     "footer": "Powered by Telemune © 2027 · Designed by DJ",
     "theme": {
+      "name": "violet",
+      "motion": true,
       "primary": "#7c3aed",
       "secondary": "#ec4899",
       "tertiary": "#06b6d4"
