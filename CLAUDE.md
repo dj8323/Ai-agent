@@ -48,6 +48,10 @@ Split on 2026-11-19 into two self-contained apps (own settings, run script, logs
   Admins create users only and set users' `permissions.app`, clipped to their own (`setPermissions`). `AuthService.effective(user)`
   → `/api/me` `access`; `ApiFilter.adminSectionAllowed` guards `/api/admin/*` per section; `AuthService.can()` guards agent
   create/delete and WhatsApp. Web: `applyAccess()` → `body.no-<feature>` classes; `isStaff` (role ≤ 1) in server.js.
+  `permissions.agentTypes` / `playbookTypes` (lists; absent = all, clipped to the giver's own): `AuthService.filterTypes` on
+  /api/agents, /api/templates, /api/playbooks; creating/changing to another type → 403. Activity log: `/api/admin/logs?kind=user|admin|auth&user=`
+  (`LogService.listActivity`); the dashboard opens on 👤 User activity. Tutorials: `TOURS` items take `needs` / `needsAny`
+  (features) and steps `feature`; `tourAllowed()` hides what an account can't use.
 
 - `/login.html` → POST `/api/login` → HttpOnly `tsa_session` cookie (`app_config.auth.sessionHours`, or `rememberDays`
   with "Keep me signed in"). The sessions table stores only the SHA-256 of the token.

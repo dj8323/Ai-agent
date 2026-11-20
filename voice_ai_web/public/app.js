@@ -2843,12 +2843,12 @@ const goCall = () => { if (!/^#?(call)?$/.test(location.hash)) location.hash = "
 const isOpen = (id) => $(id).classList.contains("open");
 
 const TOURS = [
-  { id: "first-agent", icon: "＋", title: "Create your first agent", desc: "Step by step, like the My agents tabs: profile, voice & AI, availability, tools, then create.",
+  { id: "first-agent", icon: "＋", needs: ["agents.create"], title: "Create your first agent", desc: "Step by step, like the My agents tabs: profile, voice & AI, availability, tools, then create.",
     steps: [
       { target: () => (state.agents.length ? "#sumNew" : "#firstAgentBtn"), before: goCall, title: "Open the new agent form",
         text: () => (state.agents.length ? "👉 Click **＋** next to \"Agent for this call\"." : "👉 Click **＋ Create my first agent**."), done: () => isOpen("agentDialog") },
       { target: "#naSteps", title: "Five short steps", text: "Creating an agent follows the same tabs as **🤖 My agents**: **Profile → Voice & AI → Availability → Tools → Review**. The bar shows how far you are.", next: true },
-      { target: "#naType", title: "1 · What is it for?", text: "👉 Pick the **Agent type**. To answer calls for someone who is busy, choose **Call Assistant (for a person)**. Hospital, Real Estate, Banking, HR and more are in the list too.",
+      { target: "#naType", title: "1 · What is it for?", text: "👉 Pick the **Agent type**. To answer calls for someone who is busy, choose **Call Assistant (for a person)**. The list shows the types your admin has opened for you.",
         next: true },
       { target: "#naTemplate", title: "Its script", text: "The template the agent follows: what it asks and in which order. Keep the suggested one or pick another.", next: true },
       { target: "#naName", title: "Give it a name", text: "👉 Type a name for your agent, for example **Brown**.", ready: () => !!$("naName").value.trim() },
@@ -2870,74 +2870,94 @@ const TOURS = [
         warn: () => $("naErr").textContent },
       { target: ".phone .stage", before: goCall, title: "🎉 Your agent is ready", text: "It's set up and selected for calls. Fine-tune it any time in **🤖 My agents**. Next, try a call!", next: true },
     ], then: "call" },
-  { id: "call", icon: "🎙", title: "Make a call", needsAgent: true, desc: "Start a call, talk to your agent, and end it.",
+  { id: "call", icon: "🎙", needs: ["talk.call"], title: "Make a web call", needsAgent: true, desc: "Start a call, talk to your agent, follow the summary at the top, and end it.",
     steps: [
       { target: "#agentPick", before: goCall, title: "Pick the agent", text: "This is the agent you'll talk to. You can change it here any time.", next: true },
-      { target: "#callBtn", before: goCall, title: "Start the call", text: "👉 Click **Start call**. The first time, allow the microphone.", done: () => state.inCall },
-      { target: ".phone .stage", title: "Talk to it", text: "The agent greets you. 👉 Say something, like **\"Hi, what can you do?\"** It answers after you pause for a second. To interrupt, just start talking.",
+      { target: "#talkModes", before: () => { goCall(); if (state.mode !== "call") setTalkMode("call"); }, title: "Web call is selected", text: "The buttons under the conversation pick how you talk. **📞 Web call** is the live voice call.", next: true },
+      { target: "#callBtn", title: "Start the call", text: "👉 Click **Start call**. The first time, allow the microphone.", done: () => state.inCall },
+      { target: ".phone .stage", title: "Talk to it", text: "The agent greets you. 👉 Say something, like **\"Hi, what can you do?\"** It answers after you pause for a second. To interrupt, just start talking. The cartoon agent listens, thinks and speaks with you.",
         done: () => state.turns.some((t) => !t.hidden), next: true, nextLabel: "Skip" },
-      { target: "#msgs", title: "Follow the conversation", text: "Your words and the agent's replies appear here, with what you wanted, your mood, your language and how fast it answered.", next: true },
+      { target: "#convSum", title: "Summary at the top", text: "This line shows what the caller wants while you talk. When the call ends it shows the AI summary in a few lines; **More ▾** opens the full summary and the downloads.", next: true },
+      { target: ".zoom", title: "Zoom the conversation", text: "**−** makes the messages smaller so you see more of the older ones, **+** makes them bigger, **100%** resets.", next: true },
       { target: "#callBtn", title: "End the call", text: "👉 Click **End call** when you're done (or say goodbye and the agent hangs up).", done: () => !state.inCall },
-      { target: ".card.history", title: "Your call is saved", text: "Every call is saved with an AI summary, its transcript and the recording (if you pressed ●).", next: true },
+      { target: ".card.history", title: "It's saved", text: "Every call is saved in **Call summaries** with its AI summary, transcript and the recording (if you pressed ●).", next: true },
     ] },
-  { id: "persona", icon: "👤", title: "Profile & greeting", needsAgent: true, desc: "Who the agent works for and the first thing it says.",
+  { id: "channels", icon: "💬", title: "Live chat, voice chat & WhatsApp", needsAgent: true, desc: "The other ways to talk: type, hold-to-talk, or send a WhatsApp message.",
+    needsAny: ["talk.chat", "talk.voice", "talk.whatsapp"],
+    steps: [
+      { target: "#talkModes", before: goCall, title: "Pick how to talk", text: "Switching channel ends what's running (it's saved first) and clears the conversation.", next: true },
+      { target: '#talkModes [data-talk="chat"]', feature: "talk.chat", title: "💬 Live chat", text: "Type and the agent answers in text straight away. No microphone needed. **End chat** saves it with a summary.", next: true },
+      { target: '#talkModes [data-talk="voice"]', feature: "talk.voice", title: "🎤 Voice chat", text: "**Hold** the mic button to talk and **let go** to send; the agent answers out loud. Mute and End are next to it.", next: true },
+      { target: '#talkModes [data-talk="whatsapp"]', feature: "talk.whatsapp", title: "WhatsApp", text: "Pick the country code, type the mobile number, then the message and **Send on WhatsApp**. It's sent from your business number and saved in Call summaries.", next: true },
+    ] },
+  { id: "persona", icon: "👤", needs: ["tab.profile"], title: "Profile & greeting", needsAgent: true, desc: "The agent's job, who it works for, anything else it should know, and its first line.",
     steps: [
       { target: "#pType", before: goTab("profile"), title: "Agent type", text: "The agent's job. Changing it resets its setup, so it asks you first.", next: true },
       { target: "#pTemplate", before: goTab("profile"), title: "Template", text: "Its script. Pick one for this type, or free conversation.", next: true },
       { target: "#pOwner", before: goTab("profile"), title: "Works for", text: "👉 Type the person it answers for. It introduces itself as their assistant.", next: true },
       { target: "#pOrg", before: goTab("profile"), title: "Organization", text: "The company or place it answers for.", next: true },
-      { target: "#pGreeting", before: goTab("profile"), title: "First line", text: "Leave it empty to use the template's greeting, or write your own. {agent}, {owner} and {org} are filled in for you.", next: true },
-      { target: "#pGreeting", before: goTab("profile"), title: "Saved by itself", text: "Your changes save by themselves; look for ✓ Saved at the top.", next: true },
+      { target: "#pDesc", before: goTab("profile"), title: "Others", text: "Anything else the agent should know, for example **Answers DJ's calls during meetings**.", next: true },
+      { target: "#pGreeting", before: goTab("profile"), title: "First line", text: "Leave it empty to use the template's greeting, or write your own. {agent}, {owner} and {org} are filled in for you. Changes save by themselves (✓ Saved at the top).", next: true },
     ] },
-  { id: "availability", icon: "🕒", title: "Availability & calendar", needsAgent: true, desc: "When meetings can be booked, and the calendar they go into.",
+  { id: "voice", icon: "🧠", needs: ["tab.voice"], title: "Voice & AI", needsAgent: true, desc: "Who hears, speaks and thinks, the language, the voice and how fast it talks.",
     steps: [
-      { target: "#avDays", before: goTab("availability"), title: "Available days", text: "👉 Tap the days the person is available, or **Weekdays**.", ready: () => av.days.length > 0 },
-      { target: "#avFrom", before: goTab("availability"), title: "From", text: "The time meetings can start.", next: true },
-      { target: "#avTo", before: goTab("availability"), title: "To", text: "The time the last meeting must end.", next: true },
-      { target: "#avTz", before: goTab("availability"), title: "Time zone", text: "Pick the time zone of those hours.", next: true },
-      { target: "#avPreview", before: goTab("availability"), title: "Saved", text: "The agent only offers meeting times inside these hours.", next: true },
-      { target: ["label[for=calToggle]"], before: goTab("calendar"), title: "Switch on the calendar", text: "👉 Switch on **Book into the calendar** so the agent can add confirmed meetings.",
-        ready: () => $("calToggle").checked, auto: true },
-      { target: "#calAppBtn", before: goTab("calendar"), title: "Your calendar", text: "Pick where you keep meetings (Google, Outlook, Yahoo, Apple or other). Each booked meeting then gets a one-click **＋ Add** button, and **⬇ Export all (.ics)** works for any app.", next: true },
+      { target: ".va-grid", before: goTab("voice"), title: "Hears, speaks, thinks", text: "**Speech-to-text** hears the caller (OpenAI, ElevenLabs or AWS). **Text-to-speech** is the agent's voice (OpenAI, AWS Polly, ElevenLabs or Cartesia). **LLM** thinks and replies (OpenAI).", next: true },
+      { target: () => (state.me?.role <= 1 ? "#llmSel" : "#llmProv"), before: goTab("voice"), title: "Models",
+        text: () => (state.me?.role <= 1 ? "As an admin you also pick the models. **gpt-4.1-mini** answers fastest. Users' agents always use the default models." : "You pick the providers; the models are the defaults your admin set."), next: true },
+      { target: "#lang", before: goTab("voice"), title: "Language", text: "Only languages both providers support are listed, the most spoken first. It also follows callers who mix languages.", next: true },
+      { target: "#voice", before: goTab("voice"), title: "Voice", text: "The chosen provider's voices. The cartoon agent on the call page follows: a man for male voices, a woman for the others.", next: true },
+      { target: ".tab-panel[data-panel=voice] .speed-bar", before: goTab("voice"), title: "Speaking speed", text: "Drag the **⏩ Speed** bar (0.5× to 2×).", next: true },
+      { target: "#previewBtn", before: goTab("voice"), title: "Hear it", text: "👉 Click **▶ Play** to hear the voice at that speed.", clickIn: "#previewBtn", next: true, nextLabel: "Skip" },
     ] },
-  { id: "voice", icon: "🧠", title: "Voice & speed", needsAgent: true, desc: "Speech providers, language, voice, speaking speed and AI model.",
+  { id: "availability", icon: "🕒", needs: ["tab.availability"], title: "Availability", needsAgent: true, desc: "When meetings can be booked: 24×7 or office hours, public holidays and days off.",
     steps: [
-      { target: ".va-grid", before: goTab("voice"), title: "Hears, speaks, thinks", text: "**Speech-to-text** hears the caller (OpenAI, ElevenLabs or AWS). **Text-to-speech** is the agent's voice (OpenAI, AWS Polly, ElevenLabs or Cartesia). Each has its own models.", next: true },
-      { target: "#lang", before: goTab("voice"), title: "Language", text: "Only languages both providers support are listed, the most spoken first. It also matches callers who mix languages.", next: true },
-      { target: "#voice", before: goTab("voice"), title: "Voice", text: "The voices of the chosen text-to-speech provider. The cartoon agent on the call page follows: a man for male voices, a woman for the others.", next: true },
-      { target: "#previewBtn", before: goTab("voice"), title: "Hear it", text: "👉 Click **▶** to hear a sample.", clickIn: "#previewBtn", next: true, nextLabel: "Skip" },
-      { target: ".tab-panel[data-panel=voice] .speed-bar", before: goTab("voice"), title: "Speaking speed", text: "Drag the **⏩ Speed** bar, then **▶ Play** to hear it.", next: true },
-      { target: () => (state.me?.role <= 1 ? "#llmSel" : ".tab-panel[data-panel=voice] .speed-bar"), before: goTab("voice"), title: "AI model",
-        text: () => (state.me?.role <= 1 ? "The LLM thinks and writes the replies. **gpt-4.1-mini** answers fastest. Only admins see this; users' agents use the default model." : "Your agent uses the default AI model, set by the admin."), next: true },
+      { target: ".av-quick", before: goTab("availability"), title: "Quick picks", text: "**🌐 24×7** = every day, all day. Or **Weekdays** / **Every day**, then set the hours.", next: true },
+      { target: "#avDays", before: goTab("availability"), title: "Days", text: "👉 Tap the days the person is available.", ready: () => av.days.length > 0 },
+      { target: "#avFrom", before: goTab("availability"), title: "Hours and time zone", text: "From, To and the time zone of those hours.", next: true },
+      { target: "label[for=avHol]", before: goTab("availability"), title: "🎉 Public holidays", text: "Switch it on and pick the country: the agent won't offer meetings on its national holidays and suggests the next working day.", next: true },
+      { target: "#avOffDate", before: goTab("availability"), title: "🏖 Days off", text: "Pick a date and **＋ Add day** for leave or office closures. Past days drop off by themselves.", next: true },
+      { target: "#avPreview", before: goTab("availability"), title: "What the agent reads", text: "This is exactly what the agent is told. It only offers times inside it.", next: true },
     ] },
-  { id: "emergency", icon: "🚨", title: "Emergency contact", needsAgent: true, desc: "Give callers the right number, WhatsApp or email in an emergency.",
+  { id: "calendar", icon: "📅", needs: ["tab.tools", "tool.calendar"], title: "Calendar", needsAgent: true, desc: "Let the agent book meetings, and add them to Google, Outlook, Yahoo or Apple.",
     steps: [
-      { target: "label[for=emgToggle]", before: goTab("emergency"), title: "Switch it on", text: "👉 Switch on **Emergency detection**.", ready: () => $("emgToggle").checked, auto: true },
+      { target: "label[for=calToggle]", before: goTab("calendar"), title: "Switch it on", text: "👉 Switch on **📅 Calendar**. A window asks where you keep your meetings.", ready: () => $("calToggle").checked, auto: true },
+      { target: "#calAppBtn", before: goTab("calendar"), title: "Your calendar app", text: "👉 Click it to pick **Google, Outlook, Yahoo, Apple or Other** and to see the booked meetings.", done: () => isOpen("calDialog"), next: true, nextLabel: "Skip" },
+      { target: () => (isOpen("calDialog") ? "#cdApps" : "#calAppBtn"), title: "One-click add", text: "Every meeting the agent books gets a **＋ Add** button for that calendar; **⬇ Export all (.ics)** works with any app.", next: true },
+    ] },
+  { id: "emergency", icon: "🚨", needs: ["tab.tools", "tool.emergency"], title: "Emergency contacts", needsAgent: true, desc: "Give callers the right number, WhatsApp or email in an emergency.",
+    steps: [
+      { target: "label[for=emgToggle]", before: goTab("emergency"), title: "Switch it on", text: "👉 Switch on **🚨 Emergency contacts**.", ready: () => $("emgToggle").checked, auto: true },
       { target: "#emgType", before: goTab("emergency"), title: "Related to", text: "What the contact is for: Ambulance, Police, Fire, a helpline, or Other.", next: true },
-      { target: "#emgVia", before: goTab("emergency"), title: "Phone, WhatsApp or email", text: "How to reach it: 📞 Phone, 💬 WhatsApp or ✉️ Email. WhatsApp and email contacts also get an alert from the server when the word is heard.", next: true },
+      { target: "#emgVia", before: goTab("emergency"), title: "Phone, WhatsApp or email", text: "How to reach it. WhatsApp and email contacts also get an alert from the server when the word is heard.", next: true },
       { target: "#emgNumber", before: goTab("emergency"), title: "Number or email", text: "Pick the country code (☎ Local for short numbers like 108) and type the number, or type the email address.", next: true },
       { target: "#emgSuggest", before: goTab("emergency"), title: "Keywords", text: "Words that trigger it. Tap suggestions or type your own below.", next: true },
       { target: "#emgAddBtn", before: goTab("emergency"), title: "Save it", text: "👉 Click **＋ Save contact**. It appears on the right.", done: () => state.rules.length > tourCtx.rules, warn: () => $("emgMsg").classList.contains("err") ? $("emgMsg").textContent : "" },
-      { target: "#emgRules", before: goTab("emergency"), title: "Saved", text: "During a call, a matching word shows a red banner with this contact, and the agent tells the caller first.", next: true },
+      { target: "#emgRules", before: goTab("emergency"), title: "Saved contacts", text: "✎ edits a contact, 🗑 removes it. During a call, a matching word shows a red banner and the agent tells the caller first.", next: true },
     ] },
-  { id: "playbook", icon: "📘", title: "Add a playbook", needsAgent: true, desc: "Write your own call script and use it on a call.",
+  { id: "playbook", icon: "📘", needs: ["tab.tools", "tool.playbook"], title: "Playbooks", needsAgent: true, desc: "Write your own call script and use it on a call.",
     steps: [
-      { target: "#addPbBtn", before: goTab("playbooks"), title: "New playbook", text: "👉 Click **＋ Add playbook**.", done: () => isOpen("pbDialog") },
-      { target: "#pbDialog .dialog", title: "Build the script", text: "👉 Pick an agent type, then a ready-made script or **Custom**, edit it and save.", done: () => !isOpen("pbDialog") && state.saved.length > tourCtx.playbooks },
-      { target: "#pbList", before: goTab("playbooks"), title: "Use it", text: "Click it here to use it for this agent, or pick it in the **Playbook** dropdown on the main page.", next: true },
-      { target: ".pb-pick-row", before: goCall, title: "On the call page too", text: "The **Playbook** dropdown on the call page picks a playbook for this agent; **✕** next to it removes it (back to the agent's template).", next: true },
+      { target: "#addPbBtn", before: goTab("playbooks"), title: "New playbook", text: "👉 Click **＋ Add**.", done: () => isOpen("pbDialog") },
+      { target: "#pbDialog .dialog", title: "Build the script", text: "👉 Pick a type, then a ready-made script or **Custom**, edit it and save.", done: () => !isOpen("pbDialog") && state.saved.length > tourCtx.playbooks },
+      { target: "#pbList", before: goTab("playbooks"), title: "Use it", text: "Click a playbook to use it for this agent (✓ shows the chosen one).", next: true },
+      { target: ".pb-pick-row", before: goCall, title: "On the call page too", text: "The **Playbook** dropdown on the call page picks one; **✕** removes it (back to the agent's template).", next: true },
     ] },
-  { id: "summaries", icon: "📚", title: "Call summaries", desc: "Find past calls, their summaries, transcripts and recordings.",
+  { id: "delivery", icon: "📨", needs: ["tab.tools", "tool.summaries"], title: "Summaries by WhatsApp & email", needsAgent: true, desc: "Get the AI summary of every call on WhatsApp or by email.",
     steps: [
-      { target: ".card.history", before: goCall, title: "Your calls", text: "Totals for all your calls: count, talk time, tokens, reply speed and recordings.", next: true },
-      { target: "#toggleHistory", before: goCall, title: "Show the list", text: "👉 Click **Show calls**.", done: () => !$("historyList").hidden },
-      { target: "#calls", title: "Open a call", text: "👉 Click a call to open it. (No calls yet? Make one first, then come back.)", done: () => isOpen("callDialog"), next: true, nextLabel: "Skip" },
-      { target: "#callDialog .dialog", title: "Everything about the call", text: "The AI summary, the full transcript with mood and intent, the recording, and downloads.", next: true },
+      { target: ".nf-grid", before: goTab("summaries"), title: "Where to send it", text: "👉 Switch on **WhatsApp** and/or **Email**; the card lights up. Flash SMS comes later.", next: true },
+      { target: "#toolSummaries", before: goTab("summaries"), title: "Number or email", text: "Type the WhatsApp number (with the country code) or the email address. After every call the summary is sent there, and it always stays in Call summaries too.", next: true },
     ] },
-  { id: "account", icon: "🔑", title: "Your account", desc: "Password, sign out and light or dark theme.",
+  { id: "summaries", icon: "📚", needs: ["history"], title: "Call summaries", desc: "Find past calls, chats and WhatsApp messages with their summaries.",
+    steps: [
+      { target: ".card.history", before: goCall, title: "Everything is kept", text: "Calls, live chats, voice chats and WhatsApp messages, with totals: records, talk time, tokens, reply speed and recordings.", next: true },
+      { target: "#toggleHistory", before: goCall, title: "Show the list", text: "👉 Click **Show all**.", done: () => !$("historyList").hidden },
+      { target: "#histFilter", title: "Filter by type", text: "**All · 📞 Calls · 💬 Live chat · 🎤 Voice chat · WhatsApp**, each with its count.", next: true },
+      { target: "#calls", title: "Open one", text: "👉 Click a row to open it. (Nothing yet? Make a call first, then come back.)", done: () => isOpen("callDialog"), next: true, nextLabel: "Skip" },
+      { target: "#callDialog .dialog", title: "Everything about it", text: "The AI summary, the full transcript with mood and intent, the recording, and downloads.", next: true },
+    ] },
+  { id: "account", icon: "🔑", title: "Your account", desc: "Password, sign out, light or dark theme (and the admin dashboard for admins).",
     steps: [
       { target: "#userBtn", before: goCall, title: "Your menu", text: "👉 Click your name.", done: () => !$("userDrop").hidden },
-      { target: "#userDrop", title: "Account options", text: "Change your password or sign out here.", next: true },
+      { target: "#userDrop", title: "Account options", text: () => (state.me?.role === 0 ? "Admin dashboard, 🔄 Restart backend, change your password or sign out." : state.me?.role === 1 ? "Admin dashboard, change your password or sign out." : "Change your password or sign out here."), next: true },
       { target: "#themeBtn", title: "Theme", text: "Switch between light and dark.", next: true },
     ] },
 ];
@@ -2961,6 +2981,8 @@ function startTour(id) {
   let t = TOURS.find((x) => x.id === id);
   if (!t) return;
   if (t.needsAgent && !state.agents.length) t = TOURS[0]; // nothing to show yet: create an agent first
+  if (!tourAllowed(t)) return;
+  t = { ...t, steps: t.steps.filter((st) => !st.feature || allowed(st.feature)) }; // skip steps for switched-off features
   endTour(true);
   if (location.hash.startsWith("#learn")) location.hash = "call";
   Object.assign(tourCtx, { tour: t, i: -1, agents: state.agents.length, rules: state.rules.length, playbooks: state.saved.length });
@@ -3081,11 +3103,14 @@ const tutEsc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": 
 const tutText = (t) => tutEsc(t).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
 
 // The 📚 Tutorials pop-up lists the tours (✓ = finished before).
+// a tour shows only when this account has its features (an admin can switch parts of the app off)
+const tourAllowed = (t) => (t.needs || []).every(allowed) && (!t.needsAny || t.needsAny.some(allowed));
 function showTutorial() {
   const done = toursDone();
   const grid = $("tourGrid");
   grid.innerHTML = "";
   for (const t of TOURS) {
+    if (!tourAllowed(t)) continue;
     const el = document.createElement("div");
     el.className = "tour-tile";
     el.innerHTML = `<div class="tt-top"><span class="tt-icon" aria-hidden="true">${t.icon}</span><div><b>${tutEsc(t.title)}</b><div class="tt-meta">${t.steps.length} steps · about ${Math.max(1, Math.round(t.steps.length / 3))} min</div></div></div>
@@ -3099,8 +3124,8 @@ function showTutorial() {
   if (state.me?.role <= 1) {
     const el = document.createElement("div");
     el.className = "tour-tile";
-    el.innerHTML = `<div class="tt-top"><span class="tt-icon" aria-hidden="true">👑</span><div><b>Admin dashboard</b><div class="tt-meta">for admins</div></div></div>
-      <p>Users, agent types & templates, app settings (including the silent-caller re-ask), sign-ins and the activity log.</p>`;
+    el.innerHTML = `<div class="tt-top"><span class="tt-icon" aria-hidden="true">👑</span><div><b>Admin dashboard</b><div class="tt-meta">${state.me?.role === 0 ? "for the SuperAdmin" : "for admins"}</div></div></div>
+      <p>${state.me?.role === 0 ? "Everything below, plus 🛡 Admins (create admins, choose what each sees) and 🗄 Server (server settings, restart)." : "The sections the SuperAdmin opened for you:"} overview with clickable totals, users (edit, access), all agents, calls &amp; usage, templates, settings, sign-ins and activity.</p>`;
     const b = document.createElement("button");
     b.type = "button"; b.className = "btn btn-small"; b.textContent = "Open the dashboard";
     b.onclick = () => (location.href = "/admin.html");

@@ -105,7 +105,29 @@ public class AuthService {
     for (String f : APP_FEATURES) app.put(f, !given.containsKey(f) || J.bool(given.get(f)));
     List<String> sections = superAdmin || !p.containsKey("admin") ? ADMIN_SECTIONS
         : J.list(p.get("admin")).stream().map(String::valueOf).filter(ADMIN_SECTIONS::contains).toList();
-    return J.map("admin", user != null && isStaff(user.get("role")) ? sections : List.of(), "app", app);
+    return J.map("admin", user != null && isStaff(user.get("role")) ? sections : List.of(), "app", app,
+        "agentTypes", superAdmin ? null : typeList(p.get("agentTypes")), "playbookTypes", superAdmin ? null : typeList(p.get("playbookTypes")));
+  }
+
+  /** A list of agent-type keys, or null (= every type). */
+  private static List<String> typeList(Object v) {
+    if (!(v instanceof List<?> l)) return null;
+    return l.stream().map(String::valueOf).filter(k -> k.matches("^[a-z0-9_-]{1,40}$")).distinct().toList();
+  }
+
+  /** The agent types (agentTypes) or playbook types (playbookTypes) this account may use: null = all. */
+  @SuppressWarnings("unchecked")
+  public static List<String> types(Map<String, Object> user, String which) {
+    return (List<String>) effective(user).get(which);
+  }
+
+  /** The type catalog with only the types this account may use (types it already uses stay visible via keep). */
+  public static Map<String, Object> filterTypes(Map<String, Object> catalog, Map<String, Object> user, String which, String keep) {
+    List<String> ok = types(user, which);
+    if (ok == null) return catalog;
+    Map<String, Object> out = new java.util.LinkedHashMap<>();
+    catalog.forEach((k, v) -> { if (ok.contains(k) || k.equals(keep)) out.put(k, v); });
+    return out;
   }
 
   public static boolean can(Map<String, Object> user, String feature) {
@@ -223,6 +245,14 @@ public class AuthService {
     for (String f : APP_FEATURES) app.put(f, (!want.containsKey(f) || J.bool(want.get(f))) && (bySuper || J.bool(mine.get(f))));
     Map<String, Object> out = J.map("app", app);
     if (targetAdmin) out.put("admin", J.list(in.get("admin")).stream().map(String::valueOf).filter(ADMIN_SECTIONS::contains).distinct().toList());
+    // agent types and playbook types: a list (or absent = all); never more than the one giving them has
+    for (String which : List.of("agentTypes", "playbookTypes")) {
+      List<String> want2 = typeList(in.get(which));
+      List<String> have = types(actor, which);
+      if (want2 == null && have == null) continue;
+      List<String> give = want2 == null ? have : have == null ? want2 : want2.stream().filter(have::contains).toList();
+      out.put(which, give);
+    }
     db.exec("UPDATE users SET permissions = ? WHERE id = ?", J.json(out), id);
   }
 

@@ -251,6 +251,11 @@
   .dbsec { margin-top: 10px; }
   .dbsec textarea { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; min-height: 140px; }
   .who { display: flex; align-items: center; gap: 10px; } .who small { display: block; color: var(--muted); font-size: 12px; }
+  .log-filters { margin-top: -4px; }
+  .seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel-2); }
+  .seg button { border: 0; background: none; color: var(--text); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+  .seg button[aria-pressed="true"] { background: var(--grad); color: #fff; }
+  .type-count { font-weight: 700; color: var(--c1); text-transform: none; letter-spacing: 0; }
 </style>
 <link rel="stylesheet" href="motion.css" />
 <script src="motion.js" defer></script>
@@ -377,6 +382,15 @@
   <div class="view" data-view="activity" hidden>
     <section class="card" aria-labelledby="logTitle">
       <div class="toolbar"><h2 id="logTitle">📜 Activity log</h2><span class="sub" id="apiLine" style="margin:0"></span></div>
+      <div class="toolbar log-filters">
+        <div class="seg" id="logKind" role="group" aria-label="What to show">
+          <button type="button" data-kind="user" aria-pressed="true">👤 User activity</button>
+          <button type="button" data-kind="admin" aria-pressed="false">🛡 Admin &amp; settings</button>
+          <button type="button" data-kind="auth" aria-pressed="false">🔐 Sign-ins</button>
+          <button type="button" data-kind="" aria-pressed="false">All</button>
+        </div>
+        <select class="search narrow" id="logUser" aria-label="User"><option value="">Every user</option></select>
+      </div>
       <div class="log" id="log"><div class="empty">Loading…</div></div>
       <div class="pager" id="logPager"></div>
     </section>

@@ -125,8 +125,9 @@ public class AdminController {
   }
 
   @GetMapping("/logs")
-  Map<String, Object> activity(@RequestParam(defaultValue = "1") int page, @RequestParam(required = false) String user) {
-    return logs.listActivity(page, 15, J.blank(user) ? null : user);
+  Map<String, Object> activity(@RequestParam(defaultValue = "1") int page, @RequestParam(required = false) String user,
+                               @RequestParam(required = false) String kind) {
+    return logs.listActivity(page, 15, J.blank(user) ? null : user, List.of("user", "auth", "admin").contains(kind) ? kind : null);
   }
 
   @GetMapping("/logins")

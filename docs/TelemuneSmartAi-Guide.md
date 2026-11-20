@@ -224,7 +224,7 @@ The menu at the top right has three buttons: **🎙 Call** (the main page), **�
 
 **📚 Tutorials** are **guided tours**: you do each step yourself on the real page while the tour shows you where. The thing to click or fill in is highlighted, a small card says what to do, and the tour **waits for you**, moving on by itself once you've done it (for steps that only explain, press **Next**). **Back** goes one step back, **Skip tour** stops, and **Show me again** brings back a highlight you've scrolled or clicked away from. When a tour ends, the card suggests the next one.
 
-Tours: Create your first agent, Make a call, Profile & greeting, Availability & calendar, Voice, speed & AI, Emergency contacts, Playbooks, Call summaries and Your account. Open **📚 Tutorials** to pick one; tours you've finished get a ✓. A user with no agents gets "Create your first agent" automatically the first time they sign in.
+Tours: Create your first agent, Make a web call, Live chat / voice chat / WhatsApp, Profile & greeting, Voice & AI, Availability, Calendar, Emergency contacts, Playbooks, Summaries by WhatsApp & email, Call summaries and Your account. Each tour shows only when the account can use that part of the app. Open **📚 Tutorials** to pick one; tours you've finished get a ✓. A user with no agents gets "Create your first agent" automatically the first time they sign in.
 
 ### The main page (🎙 Call)
 
@@ -378,7 +378,7 @@ The SuperAdmin sees everything an admin sees, plus:
 | 🗄 Server | The backend's `.env` (MySQL, ports, logging) and `keys.env` (provider keys), one box per setting. Passwords and keys show as •••• and only change when you type a new value; a copy of the old file is kept. Below: every **app configuration** section from the database as JSON. Server file changes apply after a restart |
 | 🔄 Restart backend | In the dashboard header, on the Server page and in the main page's user menu. The page waits and reloads when the backend is back (about 10 seconds) |
 
-**Who sees what.** Admins create users (only the SuperAdmin creates admins). In **✏️ Edit** an admin ticks what each user can see in the app: the talk channels (Web call, Live chat, Voice chat, WhatsApp), the My agents tabs (Profile, Voice & AI, Availability, Tools) and the tools inside (Calendar, Emergency, Playbook, Call summaries delivery), the Call summaries list, and whether they may create or delete agents. An admin can only give what it has itself; the SuperAdmin sets that for each admin. The **Created by** column in Users shows who made each account.
+**Who sees what.** Admins create users (only the SuperAdmin creates admins). In **✏️ Edit** an admin ticks what each user can see in the app: the talk channels (Web call, Live chat, Voice chat, WhatsApp), the My agents tabs (Profile, Voice & AI, Availability, Tools) and the tools inside (Calendar, Emergency, Playbook, Call summaries delivery), the Call summaries list, and whether they may create or delete agents. An admin can only give what it has itself; the SuperAdmin sets that for each admin. The same window also limits **which agent types** a user (or admin) can pick and **which playbook types** they can add, with a count such as *3 of 15*; ticking every box means all types, including ones added later. The 🛡 Admins cards show each admin's counts. The **Created by** column in Users shows who made each account.
 
 ## Admin dashboard
 
@@ -402,6 +402,10 @@ A table with each user's role, status, agents, records, talk time, tokens and la
 | ✏️ Edit | Change the **name, username, email, role (user/admin) and status (active/disabled)**, or **🔑 Reset password** (a new temporary password; the user is signed out and must change it). Disabling signs the user out at once. You can't remove your own admin access, and there is always at least one active admin |
 | 🗑 Delete | Hides the account (data is kept in the database) |
 | ＋ Add user | Creates an account with a temporary password (no agents; the user creates their own) |
+
+### 📜 Activity
+
+Opens on **👤 User activity**: what people did in the app (agents created and set up, calls and chats saved, playbooks, messages taken, WhatsApp sent, emergency alerts). The other filters are **🛡 Admin & settings** (accounts, access, templates, app and server settings, restarts), **🔐 Sign-ins** and **All**, plus a user picker. The Overview's *Latest activity* shows user activity too.
 
 ### 🤖 Agents and 📞 Calls & usage
 

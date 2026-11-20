@@ -35,17 +35,18 @@ public class AgentController {
   @GetMapping("/api/agents")
   Map<String, Object> list(@RequestAttribute("ctx") Ctx ctx) {
     return J.map("agents", agents.list(ctx.dataUserId).stream().map(agents::card).toList(), "currentId", ctx.agentId(),
-        "types", templates.catalog(false));
+        "types", AuthService.filterTypes(templates.catalog(false), ctx.user, "agentTypes", ctx.agent == null ? null : J.str(ctx.agent.get("agent_type"))));
   }
 
   @GetMapping("/api/templates")
-  Map<String, Object> templates() {
-    return J.map("types", templates.catalog(false));
+  Map<String, Object> templates(@RequestAttribute("ctx") Ctx ctx) {
+    return J.map("types", AuthService.filterTypes(templates.catalog(false), ctx.user, "agentTypes", ctx.agent == null ? null : J.str(ctx.agent.get("agent_type"))));
   }
 
   @PostMapping("/api/agents")
   ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
     if (!AuthService.can(ctx.user, "agents.create")) throw ApiException.forbidden("Creating agents is switched off for your account.");
+    typeAllowed(ctx, body.get("type"));
     Map<String, Object> a = agents.create(body, ctx.dataUserId);
     logs.activity(ctx, "agent.create", (String) a.get("name"), J.map("id", a.get("id"), "type", a.get("agent_type"), "template", a.get("template_id"),
         "for", J.blank(a.get("owner_name")) ? null : a.get("owner_name")));
@@ -54,6 +55,7 @@ public class AgentController {
 
   @PatchMapping("/api/agents/{id}")
   Map<String, Object> update(@PathVariable String id, @RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    if (body.containsKey("type")) typeAllowed(ctx, body.get("type"));
     Map<String, Object> a = agents.updateInfo(id, body, ctx.dataUserId);
     logs.activity(ctx, "agent.update", (String) a.get("name"), J.map("id", id, "changed", body.keySet()));
     return agents.card(a);
@@ -65,5 +67,11 @@ public class AgentController {
     Map<String, Object> a = agents.delete(id, ctx.dataUserId);
     logs.activity(ctx, "agent.delete", (String) a.get("name"), J.map("id", id));
     return J.map("ok", true);
+  }
+
+  /** An agent type this account may use (its admin can limit the list). */
+  private static void typeAllowed(Ctx ctx, Object type) {
+    java.util.List<String> ok = AuthService.types(ctx.user, "agentTypes");
+    if (ok != null && !ok.contains(J.str(type))) throw ApiException.forbidden("That agent type isn't open for your account.");
   }
 }

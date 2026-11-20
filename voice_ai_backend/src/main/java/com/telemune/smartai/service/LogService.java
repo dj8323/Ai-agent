@@ -48,12 +48,28 @@ public class LogService {
 
   /** Paginated activity log for the admin dashboard (optionally for one user). */
   public Map<String, Object> listActivity(int page, int pageSize, String userId) {
-    String where = userId != null ? "WHERE user_id = ?" : "";
-    Object[] args = userId != null ? new Object[]{userId} : new Object[]{};
+    return listActivity(page, pageSize, userId, null);
+  }
+
+  /**
+   * kind: "user" = what people did in the app (agents, calls, chats, messages, playbooks, WhatsApp…), "auth" = sign-ins and
+   * passwords, "admin" = accounts, settings, templates and server changes; null = everything.
+   */
+  public Map<String, Object> listActivity(int page, int pageSize, String userId, String kind) {
+    List<String> conds = new java.util.ArrayList<>();
+    List<Object> argList = new java.util.ArrayList<>();
+    if (userId != null) { conds.add("user_id = ?"); argList.add(userId); }
+    String adminActs = "(action LIKE 'user.%' OR action LIKE 'type.%' OR action LIKE 'template.%' OR action LIKE 'server.%' OR action = 'config.update')";
+    if ("auth".equals(kind)) conds.add("action LIKE 'auth.%'");
+    else if ("admin".equals(kind)) conds.add(adminActs);
+    else if ("user".equals(kind)) conds.add("action NOT LIKE 'auth.%' AND NOT " + adminActs);
+    String where = conds.isEmpty() ? "" : "WHERE " + String.join(" AND ", conds);
+    Object[] args = argList.toArray();
     long total = db.count("SELECT COUNT(*) FROM activity_logs " + where, args);
     int pages = (int) Math.max(1, Math.ceil(total / (double) pageSize));
     int p = Math.min(Math.max(1, page), pages);
-    Object[] full = userId != null ? new Object[]{userId, pageSize, (p - 1) * pageSize} : new Object[]{pageSize, (p - 1) * pageSize};
+    argList.add(pageSize); argList.add((p - 1) * pageSize);
+    Object[] full = argList.toArray();
     List<Map<String, Object>> rows = db.query(
         "SELECT id, user_id, username, action, target, details, ip, created_at FROM activity_logs " + where + " ORDER BY id DESC LIMIT ? OFFSET ?", full);
     return J.map("items", rows.stream().map(r -> J.map("id", r.get("id"), "userId", r.get("user_id"), "username", r.get("username"),

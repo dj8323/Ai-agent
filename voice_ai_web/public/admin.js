@@ -288,11 +288,27 @@ function renderAccess(u) {
       `<label><input type="checkbox" data-sec="${k}" ${secs.includes(k) ? "checked" : ""} />${SECTION_LABELS[k] || k}</label>`).join(""), "secs"));
   }
   const who = u.role === 1 ? "this admin (and the most they can give their users)" : "this user";
+  // agent types and playbook types: only those this account (the one editing) has itself
+  const typeGroup = (which, title, mine) => {
+    const keys = Object.keys(mine || {});
+    const cur = u.permissions?.[which];
+    const on = (k) => !cur || cur.includes(k);
+    return group(`${title} · <span class="type-count" data-count="${which}"></span>`, keys.map((k) =>
+      `<label><input type="checkbox" data-${which}="${esc(k)}" ${on(k) ? "checked" : ""} />${esc(mine[k].icon || "")} ${esc(mine[k].name)}</label>`).join("") || '<span class="sub">none</span>', "types");
+  };
+  box.insertAdjacentHTML("beforeend", typeGroup("agentTypes", "Agent types they can pick", state.myAgentTypes));
+  box.insertAdjacentHTML("beforeend", typeGroup("playbookTypes", "Playbook types they can add", state.myPbTypes));
+  const count = () => ["agentTypes", "playbookTypes"].forEach((w) => {
+    const all = box.querySelectorAll(`[data-${w}]`).length, on = box.querySelectorAll(`[data-${w}]:checked`).length;
+    const el = box.querySelector(`[data-count="${w}"]`); if (el) el.textContent = `${on} of ${all}`;
+  });
+  box.addEventListener("change", count);
+  setTimeout(count);
   box.insertAdjacentHTML("beforeend", FEATURE_GROUPS.map(([title, items]) => group(`${title} · for ${who}`, Object.entries(items).map(([f, label]) => {
     const lock = !myFeature(f);
     return `<label class="${lock ? "locked" : ""}" title="${lock ? "You don't have this yourself, so you can't give it" : ""}"><input type="checkbox" data-feat="${f}" ${featureOn(u, f) && !lock ? "checked" : ""} ${lock ? "disabled" : ""} />${label}</label>`;
   }).join(""), "feats")).join(""));
-  box.querySelectorAll("[data-all],[data-none]").forEach((b) => (b.onclick = () => b.closest(".acc-group").querySelectorAll("input:not(:disabled)").forEach((i) => (i.checked = b.hasAttribute("data-all")))));
+  box.querySelectorAll("[data-all],[data-none]").forEach((b) => (b.onclick = () => { b.closest(".acc-group").querySelectorAll("input:not(:disabled)").forEach((i) => (i.checked = b.hasAttribute("data-all"))); box.dispatchEvent(new Event("change")); }));
   box.dataset.before = JSON.stringify(readAccess(u, true));
 }
 function readAccess(u, raw) {
@@ -302,6 +318,12 @@ function readAccess(u, raw) {
   box.querySelectorAll("[data-feat]").forEach((i) => (app[i.dataset.feat] = i.checked));
   const out = { app };
   if (u.role === 1) out.admin = [...box.querySelectorAll("[data-sec]:checked")].map((i) => i.dataset.sec);
+  for (const w of ["agentTypes", "playbookTypes"]) {
+    const boxes = [...box.querySelectorAll(`[data-${w}]`)];
+    if (!boxes.length) continue;
+    const on = boxes.filter((i) => i.checked).map((i) => i.getAttribute(`data-${w.toLowerCase()}`) ?? i.dataset[w]);
+    out[w] = on.length === boxes.length && !state.myLimits?.[w] ? null : on; // every box ticked = all types (new ones too)
+  }
   if (raw) return out;
   return JSON.stringify(out) === box.dataset.before ? null : out; // unchanged: don't send
 }
@@ -478,6 +500,7 @@ function renderAdmins() {
       <div class="sub">${esc(a.email || "no email")} · ${a.disabled ? "⛔ disabled" : "✅ active"} · last sign-in ${fmtDate(a.lastLoginAt)} · created by ${creator(a)}</div>
       <div><div class="sub" style="margin-bottom:4px">Dashboard sections</div><div class="chips">${secs.map((x) => `<span class="chip on">${esc(x)}</span>`).join("") || '<span class="chip">none</span>'}</div></div>
       ${offFeats.length ? `<div class="sub">Switched off in the app: ${offFeats.map(esc).join(", ")}</div>` : ""}
+      <div class="sub">Agent types: <b>${a.role === 0 || !a.permissions?.agentTypes ? "all" : a.permissions.agentTypes.length}</b> · Playbook types: <b>${a.role === 0 || !a.permissions?.playbookTypes ? "all" : a.permissions.playbookTypes.length}</b> of ${Object.keys(state.myAgentTypes || {}).length}</div>
       <details class="made"><summary>👥 Users created: ${made.length}</summary>${made.length ? `<ul>${made.map((u) => `<li>${esc(u.name)} @${esc(u.username)} · ${roleName(u)}${u.disabled ? " · disabled" : ""}</li>`).join("")}</ul>` : '<div class="sub">None yet.</div>'}</details>
       <div class="u-actions">${a.role === 0 ? "" : `<button class="btn btn-ghost" data-edit="${esc(a.id)}">✏️ Edit &amp; access</button>`}<button class="btn btn-ghost" data-view="${esc(a.id)}">👁 View</button></div>
     </article>`;
@@ -591,11 +614,29 @@ const ACTIONS = {
   "message.add": "📨 message taken", "message.done": "📨 message done", "message.new": "📨 message reopened", "message.delete": "🗑 message deleted",
   "type.create": "🧩 added type", "type.update": "🧩 edited type", "template.create": "🧩 added template", "template.update": "🧩 edited template",
   "template.delete": "🗑 removed template",
+  "server.config": "🗄 server settings", "server.restart": "🔄 restarted backend", "whatsapp.send": "🟢 WhatsApp sent", "emergency.alert": "🚨 emergency alert",
+  "playbook.update": "📘 edited playbook",
 };
+state.logKind = "user"; state.logUser = "";
+$("logKind").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-kind]");
+  if (!b) return;
+  state.logKind = b.dataset.kind; state.logPage = 1;
+  $("logKind").querySelectorAll("button").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+  loadLog();
+});
+$("logUser").addEventListener("change", () => { state.logUser = $("logUser").value; state.logPage = 1; loadLog(); });
+async function loadRecent() { // overview: the latest things people did in the app (not sign-ins)
+  if (!mySections().includes("activity")) return;
+  const r = await api("/api/admin/logs?page=1&kind=user");
+  $("recentLog").innerHTML = r.items.slice(0, 6).map((l) => `<div class="lrow"><span class="w"><b>${esc(l.username || "—")}</b> ${esc(ACTIONS[l.action] || l.action)} <span class="muted">${esc(l.target || "")}</span></span><span class="m">${esc(fmtDate(l.at))}</span></div>`).join("") || '<div class="empty">Nothing yet.</div>';
+}
 async function loadLog() {
   if (!mySections().includes("activity")) return;
-  const data = await api(`/api/admin/logs?page=${state.logPage}`);
-  if (state.logPage === 1) $("recentLog").innerHTML = data.items.slice(0, 6).map((l) => `<div class="lrow"><span class="w"><b>${esc(l.username || "—")}</b> ${esc(ACTIONS[l.action] || l.action)} <span class="muted">${esc(l.target || "")}</span></span><span class="m">${esc(fmtDate(l.at))}</span></div>`).join("") || '<div class="empty">Nothing yet.</div>';
+  const data = await api(`/api/admin/logs?page=${state.logPage}${state.logKind ? `&kind=${state.logKind}` : ""}${state.logUser ? `&user=${encodeURIComponent(state.logUser)}` : ""}`);
+  loadRecent().catch(() => {});
+  const sel = $("logUser"), keep = sel.value; // the user filter lists every account
+  if (sel.options.length <= 1 && state.users.length) { for (const u of state.users) sel.add(new Option(`${u.name} @${u.username}`, u.id)); sel.value = keep; }
   $("log").innerHTML = data.items.length ? data.items.map((l) => `
     <div class="log-row">
       <span class="when">${esc(fmtDate(l.at))}</span>
@@ -781,6 +822,9 @@ $("newTypeBtn").onclick = async () => {
   try {
     await loadMe();
     route();
+    const [tt, pb] = await Promise.all([api("/api/templates").catch(() => ({})), api("/api/playbooks").catch(() => ({}))]);
+    state.myAgentTypes = tt.types || {}; state.myPbTypes = pb.types || {};
+    state.myLimits = { agentTypes: state.access?.agentTypes, playbookTypes: state.access?.playbookTypes };
     const can = (v) => mySections().includes(v);
     if (can("settings")) loadSettings().catch(() => {});
     if (can("activity")) loadLog().catch(() => {});

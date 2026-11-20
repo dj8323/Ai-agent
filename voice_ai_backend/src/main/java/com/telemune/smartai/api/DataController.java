@@ -58,11 +58,13 @@ public class DataController {
   // ---------- playbooks ----------
   @GetMapping("/api/playbooks")
   Map<String, Object> playbooks(@RequestAttribute("ctx") Ctx ctx) {
-    return J.map("types", templates.catalog(false), "saved", playbooks.list(ctx.dataUserId));
+    return J.map("types", com.telemune.smartai.service.AuthService.filterTypes(templates.catalog(false), ctx.user, "playbookTypes", null), "saved", playbooks.list(ctx.dataUserId));
   }
 
   @PostMapping("/api/playbooks")
   ResponseEntity<Map<String, Object>> addPlaybook(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    java.util.List<String> okTypes = com.telemune.smartai.service.AuthService.types(ctx.user, "playbookTypes");
+    if (okTypes != null && !okTypes.contains(J.str(body.get("type")))) throw com.telemune.smartai.web.ApiException.forbidden("That playbook type isn't open for your account.");
     Map<String, Object> pb = playbooks.add(body, ctx.dataUserId);
     logs.activity(ctx, "playbook.add", (String) pb.get("name"), J.map("id", pb.get("id"), "type", pb.get("type")));
     return ResponseEntity.status(201).body(pb);
