@@ -280,9 +280,9 @@ voice_ai_web/          ── frontend team ──
   support, most spoken first), `renderVoices()`. Only OpenAI voices take emotion instructions.
 - **Connected calendar (2026-11-20):** `calendar_accounts` (one per agent; provider google | microsoft | caldav + label yahoo|icloud|zoho|other;
   `secret` = AES-GCM via `util/SecretBox`, key `CALENDAR_TOKEN_KEY` in .env, auto-created). `service/CalendarSyncService` (OAuth with PKCE,
-  token refresh, Google freeBusy/events, Graph calendarView/events, CalDAV discovery/REPORT/PUT, `check()` = provider busy + app events +
+  token refresh, Google events list (busy) + insert (scope calendar.events only), Graph calendarView/events, CalDAV discovery/REPORT/PUT, `check()` = provider busy + app events +
   availability plan → free or busy + 3 suggestions, `book()` re-checks), `api/CalendarAccountController`. Keys in keys.env
-  `calendar.google.*`, `calendar.microsoft.*`, `calendar.oauth.redirect-base`. Agent flow: `<calendar-check:LOCAL|MIN>` (or `NOW` =
+  `calendar.google.*`, `calendar.microsoft.*` (tenant consumers; old names `google.oauth.*`/`outlook.oauth.*` also read), `calendar.oauth.redirect-base`. Agent flow: `<calendar-check:LOCAL|MIN>` (or `NOW` =
   `calendar.immediateMinutes`, per agent `agents.calendar_immediate_min`) → app `checkCalendarSlot` → hidden `[calendar check: FREE|BUSY …]`
   sent after the speech (`sendCalendarNote`, `state.calNote`) → `<calendar:…>` → POST /api/calendar {when} (201 / 409 + options →
   `[calendar booking failed: …]`). Setup guide: `docs/TelemuneSmartAi-Calendar-Setup.md`.

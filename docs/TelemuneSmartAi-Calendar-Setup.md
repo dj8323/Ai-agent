@@ -32,7 +32,7 @@ Google needs an "OAuth client" for the app. It takes about 10 minutes.
 4. **APIs & Services → OAuth consent screen** (Google Auth Platform):
    - User type: **External** (or Internal if everyone is in your Google Workspace).
    - App name `TelemuneSmartAi`, support email, developer email → Save.
-   - **Data access / Scopes** → Add: `openid`, `.../auth/userinfo.email`, `.../auth/calendar.events`, `.../auth/calendar.freebusy` → Save.
+   - **Data access / Scopes** → Add: `openid`, `.../auth/userinfo.email`, `.../auth/calendar.events` → Save. (Busy times are read from the event list, so no other calendar scope is needed.)
    - **Audience / Test users**: while the app is in *Testing*, add the Google accounts that will connect (up to 100).
 5. **APIs & Services → Credentials → Create credentials → OAuth client ID**:
    - Application type: **Web application**, name `TelemuneSmartAi web`.
@@ -52,6 +52,23 @@ calendar.oauth.redirect-base=https://smartai.yourcompany.com
 - Google does not accept a raw IP address (like `https://10.0.0.5:8443`) as a redirect address, only `localhost` or a real domain name. For use from other computers, give the server a domain name with HTTPS.
 - While the consent screen is in **Testing**, only the listed test users can connect, and Google shows an "unverified app" notice. For everyone, press **Publish app**. Calendar scopes are "sensitive", so Google asks for a short verification (privacy policy link, a video of the sign-in) before the notice goes away.
 
+### Reusing the older voiceAi project's apps (Telemune, 20 Nov 2026)
+
+The same Google OAuth client (`20377242979-78v4…apps.googleusercontent.com`) and Entra app (`0cca26b2-…`) are used, and their IDs and
+secrets are in `keys.env`. The old project's key names (`google.oauth.client-id/-secret`, `outlook.oauth.client-id/-secret/-tenant`) are
+read too. Each app only needs this app's return addresses **added** next to the old ones (the old ones stay):
+
+| Console | Add this redirect URI |
+|---|---|
+| Google Cloud → Credentials → the OAuth client → Authorised redirect URIs | `http://localhost:8323/api/calendar-oauth/google/callback` and `https://<public address>/api/calendar-oauth/google/callback` |
+| Entra → App registrations → the app → Authentication → Web → Redirect URIs | `http://localhost:8323/api/calendar-oauth/microsoft/callback` and `https://<public address>/api/calendar-oauth/microsoft/callback` |
+
+Tested on 20 Nov 2026 before adding them: Google answered `redirect_uri_mismatch` and Microsoft answered "redirect_uri is not valid",
+which means both apps and the keys are accepted and only the addresses are missing. The Entra app is registered for personal accounts
+(`calendar.microsoft.tenant=consumers`: Outlook.com, Hotmail, Live); for work Microsoft 365 accounts its supported account types must be
+changed to "any organizational directory and personal accounts" and the tenant set to `common`. When this app runs under a path on the
+public server (like the old `/televoiceAi/`), set `calendar.oauth.redirect-base=https://tryai.telemune.com/<path>` and register that.
+
 ## 3. Outlook / Microsoft 365 (SuperAdmin, once per server)
 
 1. Open **https://entra.microsoft.com** → **Identity → Applications → App registrations → New registration**.
@@ -65,7 +82,7 @@ calendar.oauth.redirect-base=https://smartai.yourcompany.com
 ```properties
 calendar.microsoft.client-id=00000000-0000-0000-0000-000000000000
 calendar.microsoft.client-secret=xxxxx~xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-calendar.microsoft.tenant=common
+calendar.microsoft.tenant=common    # consumers = personal accounts only; organizations = work only
 ```
 
 Client secrets expire, so set a reminder to make a new one before the date shown.
@@ -110,4 +127,5 @@ The app finds the first calendar for events at that address and books into it.
 - API: `GET /api/calendar-accounts` · `POST /api/calendar-accounts/oauth/{google|microsoft}` {origin} → {url} · `GET /api/calendar-oauth/{provider}/callback` · `POST /api/calendar-accounts/caldav` {label, url, username, password} · `DELETE /api/calendar-accounts` · `POST /api/calendar/check` {when: "YYYY-MM-DDTHH:MM" or "NOW", minutes} · `POST /api/calendar` {title, when, durationMin}: 201 booked, 409 busy with `suggestions`.
 - Agent tags: `<calendar-check:YYYY-MM-DDTHH:MM|MIN>` or `<calendar-check:NOW|MIN>` → hidden note `[calendar check: FREE …]` / `[calendar check: BUSY … Free options: …]` → `<calendar:TITLE|YYYY-MM-DDTHH:MM|MIN>` → on 409 `[calendar booking failed: …]`.
 - Code: `CalendarSyncService` (providers, check, book), `CalendarAccountController`, `SecretBox`, `Prompts.calendarPrompt`; web `app.js` `checkCalendarSlot`, `addCalendarEvent`, `sendCalendarNote`, `renderCalApp`, `calendarReturn`.
+- The older project's key names are read as fallbacks: `google.oauth.client-id/-secret`, `outlook.oauth.client-id/-secret/-tenant`. Google scopes: `calendar.google.scopes` (default `openid email …/calendar.events`).
 - Provider URLs can be pointed elsewhere for tests: `calendar.google.auth-url / token-url / api-url / userinfo-url`, `calendar.microsoft.auth-url / token-url / graph-url`.

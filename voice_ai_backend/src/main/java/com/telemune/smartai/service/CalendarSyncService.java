@@ -95,8 +95,15 @@ public class CalendarSyncService {
     try { return J.readMap(t); } catch (Exception e) { return null; }
   }
 
+  /** The older TelemuneSmartAi voice project's key names work too, so its settings can be copied as they are. */
+  private static final Map<String, String> ALIASES = Map.of(
+      "calendar.google.client-id", "google.oauth.client-id", "calendar.google.client-secret", "google.oauth.client-secret",
+      "calendar.microsoft.client-id", "outlook.oauth.client-id", "calendar.microsoft.client-secret", "outlook.oauth.client-secret",
+      "calendar.microsoft.tenant", "outlook.oauth.tenant");
+
   private String prop(String k, String def) {
     String v = env.getProperty(k);
+    if ((v == null || v.isBlank()) && ALIASES.containsKey(k)) v = env.getProperty(ALIASES.get(k));
     return v == null || v.isBlank() ? def : v.trim();
   }
 
@@ -171,7 +178,8 @@ public class CalendarSyncService {
 
   private String googleApi() { return prop("calendar.google.api-url", "https://www.googleapis.com/calendar/v3"); }
   private String graph() { return prop("calendar.microsoft.graph-url", "https://graph.microsoft.com/v1.0"); }
-  private static final String GOOGLE_SCOPES = "openid email https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.freebusy";
+  // calendar.events only (plus sign-in basics): busy times come from the event list, so no extra sensitive scope needs Google's review
+  private String googleScopes() { return prop("calendar.google.scopes", "openid email https://www.googleapis.com/auth/calendar.events"); }
   private static final String MS_SCOPES = "offline_access openid email User.Read Calendars.ReadWrite";
 
   /** The address Google/Microsoft send the person back to; must be registered in their console exactly like this. */
@@ -197,7 +205,7 @@ public class CalendarSyncService {
     catch (Exception e) { throw new IllegalStateException(e); }
     pending.put(state, new Pending(userId, J.str(agent.get("id")), provider, redirect, verifier, Instant.now()));
     String q = "google".equals(provider)
-        ? "client_id=" + enc(prop("calendar.google.client-id", "")) + "&redirect_uri=" + enc(redirect) + "&response_type=code&scope=" + enc(GOOGLE_SCOPES)
+        ? "client_id=" + enc(prop("calendar.google.client-id", "")) + "&redirect_uri=" + enc(redirect) + "&response_type=code&scope=" + enc(googleScopes())
           + "&access_type=offline&prompt=consent&include_granted_scopes=true"
         : "client_id=" + enc(prop("calendar.microsoft.client-id", "")) + "&redirect_uri=" + enc(redirect) + "&response_type=code&response_mode=query&scope="
           + enc(MS_SCOPES) + "&prompt=select_account";
@@ -420,12 +428,23 @@ public class CalendarSyncService {
     String p = J.str(row.get("provider"));
     List<Busy> out = new ArrayList<>();
     if ("google".equals(p)) {
-      Map<String, Object> res = postJson(googleApi() + "/freeBusy", accessToken(row),
-          J.map("timeMin", from.toString(), "timeMax", to.toString(), "items", List.of(J.map("id", J.str(row.get("calendar_ref"), 300).isEmpty() ? "primary" : row.get("calendar_ref")))));
-      for (Object c : J.obj(res.get("calendars")).values()) {
-        Map<String, Object> cal = J.obj(c);
-        if (!J.list(cal.get("errors")).isEmpty()) throw ApiException.bad("Google Calendar couldn't share free/busy times.");
-        for (Object b : J.list(cal.get("busy"))) out.add(new Busy(OffsetDateTime.parse(J.str(J.obj(b).get("start"))).toInstant(), OffsetDateTime.parse(J.str(J.obj(b).get("end"))).toInstant()));
+      // the event list (calendar.events scope): every event that isn't cancelled, marked "free" or declined counts as busy
+      String cal = enc(J.str(row.get("calendar_ref"), 300).isEmpty() ? "primary" : J.str(row.get("calendar_ref")));
+      String base = googleApi() + "/calendars/" + cal + "/events?singleEvents=true&orderBy=startTime&maxResults=250"
+          + "&timeMin=" + enc(from.toString()) + "&timeMax=" + enc(to.toString());
+      String pageToken = null;
+      for (int page = 0; page < 5; page++) {
+        Map<String, Object> res = getJson(base + (pageToken == null ? "" : "&pageToken=" + enc(pageToken)), accessToken(row), null);
+        for (Object v : J.list(res.get("items"))) {
+          Map<String, Object> ev = J.obj(v);
+          if ("cancelled".equals(ev.get("status")) || "transparent".equals(ev.get("transparency"))) continue;
+          boolean declined = J.list(ev.get("attendees")).stream().map(J::obj).anyMatch(a -> J.bool(a.get("self")) && "declined".equals(a.get("responseStatus")));
+          if (declined) continue;
+          Instant s = googleTime(J.obj(ev.get("start")), zone), e = googleTime(J.obj(ev.get("end")), zone);
+          if (s != null && e != null && e.isAfter(s)) out.add(new Busy(s, e));
+        }
+        pageToken = J.blank(res.get("nextPageToken")) ? null : J.str(res.get("nextPageToken"));
+        if (pageToken == null) break;
       }
     } else if ("microsoft".equals(p)) {
       String url = graph() + "/me/calendarView?startDateTime=" + enc(from.toString()) + "&endDateTime=" + enc(to.toString()) + "&$select=start,end,showAs&$top=200";
@@ -443,6 +462,15 @@ public class CalendarSyncService {
     }
     markOk(row);
     return out;
+  }
+
+  /** Google event time: dateTime (with offset) or an all-day date in the owner's zone. */
+  private static Instant googleTime(Map<String, Object> t, ZoneId zone) {
+    try {
+      if (!J.blank(t.get("dateTime"))) return OffsetDateTime.parse(J.str(t.get("dateTime"))).toInstant();
+      if (!J.blank(t.get("date"))) return LocalDate.parse(J.str(t.get("date"))).atStartOfDay(zone).toInstant();
+    } catch (Exception ignored) { /* unreadable time: skip */ }
+    return null;
   }
 
   private static Instant msTime(Map<String, Object> t) {
