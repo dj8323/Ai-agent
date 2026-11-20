@@ -48,6 +48,7 @@ public class Db {
     addColumn("agents", "greeting", "VARCHAR(400) NOT NULL DEFAULT '' AFTER owner_availability");
     addColumn("agents", "availability_plan", "JSON NULL AFTER greeting");
     addColumn("agents", "meeting_minutes", "INT NULL AFTER availability_plan");
+    addColumn("agents", "calendar_app", "VARCHAR(16) NULL AFTER meeting_minutes");
     addColumn("agents", "speech_speed", "DECIMAL(3,2) NULL AFTER meeting_minutes");
     addColumn("api_logs", "request_id", "VARCHAR(16) NULL AFTER id");
     addColumn("activity_logs", "request_id", "VARCHAR(16) NULL AFTER id");
@@ -63,6 +64,7 @@ public class Db {
     addColumn("agents", "stt_provider", "VARCHAR(20) NULL AFTER tts_model");
     addColumn("agents", "notify", "JSON NULL AFTER speech_speed");
     widen("agents", "voice", 64, "VARCHAR(64) NOT NULL DEFAULT 'marin'");
+    widen("agents", "owner_availability", 600, "VARCHAR(600) NOT NULL DEFAULT ''"); // 24×7, public holidays and days off
     widen("calls", "voice", 64, "VARCHAR(64) NOT NULL DEFAULT ''");
     // Call summaries cover every channel (2026-11-19): web call, live chat, voice chat, WhatsApp messages.
     if (addColumnNew("calls", "channel", "VARCHAR(10) NOT NULL DEFAULT 'call' AFTER ended_by")) {

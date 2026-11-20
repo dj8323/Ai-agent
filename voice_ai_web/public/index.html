@@ -584,6 +584,7 @@
   .day-picks button { min-width: 48px; padding: 9px 10px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
   .day-picks button[aria-pressed="true"] { background: var(--grad); color: #fff; border-color: transparent; }
   .day-quick { display: flex; gap: 10px; margin-top: 6px; }
+  .day-quick .link.on { font-weight: 700; color: var(--c1); text-decoration: underline; }
   .av-row { display: grid; grid-template-columns: 1fr 1fr 1.6fr; gap: 8px; margin: 14px 0 10px; }
   @media (max-width: 560px) { .av-row { grid-template-columns: 1fr 1fr; } .av-row label:last-child { grid-column: 1 / -1; } }
   .emg-add-row.three { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.4fr); }
@@ -707,6 +708,125 @@
   .td-box.reset { border-color: color-mix(in srgb, var(--amber) 55%, var(--border)); background: color-mix(in srgb, var(--amber) 8%, var(--panel-2)); }
   .td-box ul { margin: 6px 0 0; padding-left: 18px; }
   .td-box li { margin: 2px 0; }
+
+  /* ===== Voice & AI: three cards (hears · speaks · thinks), then language, voice and speed with ▶ Play on the right ===== */
+  .va-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 760px) { .va-grid { grid-template-columns: 1fr; } }
+  .va-card { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--panel-2) 70%, transparent); transition: transform .2s ease, border-color .25s ease, box-shadow .25s ease; }
+  .va-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--c1) 45%, var(--border)); box-shadow: 0 10px 24px color-mix(in srgb, var(--c1) 12%, transparent); }
+  .va-head { display: flex; align-items: center; gap: 10px; }
+  .va-head b { display: block; font-size: 14px; }
+  .va-head .sub { display: block; font-size: 12px; }
+  .va-ico { width: 34px; height: 34px; border-radius: 10px; display: grid; place-items: center; font-size: 17px; background: var(--grad); flex: none;
+    box-shadow: 0 6px 14px color-mix(in srgb, var(--c1) 30%, transparent); }
+  .va-card select { width: 100%; }
+  .va-default { display: flex; flex-direction: column; padding: 8px 10px; border-radius: 10px; background: var(--panel); border: 1px dashed var(--border); font-weight: 600; font-size: 13.5px; }
+  .va-default .sub { font-weight: 400; font-size: 11.5px; }
+  body.is-admin .user-only { display: none !important; }
+  .va-voice { margin-top: 12px; padding: 12px; border-radius: 14px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel-2) 70%, transparent); }
+  .va-two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  @media (max-width: 560px) { .va-two { grid-template-columns: 1fr; } }
+  .va-voice .play-speed { margin-top: 10px; flex-wrap: nowrap; }
+  .va-voice .btn-play { margin-left: auto; }
+
+  /* ===== Availability ===== */
+  .av-quick { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+  .av-chip { border: 1px solid var(--border); background: var(--panel-2); color: var(--text); border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; cursor: pointer;
+    transition: transform .15s ease, background .2s ease; }
+  .av-chip:hover { transform: translateY(-1px); border-color: var(--c1); }
+  .av-chip[aria-pressed="true"] { background: var(--grad); color: #fff; border-color: transparent; box-shadow: 0 6px 16px color-mix(in srgb, var(--c1) 30%, transparent); }
+  .av-extra { margin-top: 10px; padding: 12px; border-radius: 14px; border: 1px solid var(--border); background: color-mix(in srgb, var(--panel-2) 60%, transparent); display: flex; flex-direction: column; gap: 8px; }
+  .av-extra .switch-row { margin: 0; }
+  .av-hol-country { max-width: 280px; animation: slide-down .25s ease-out; }
+  .av-off-row { display: flex; gap: 8px; align-items: center; }
+  .av-off-row input { max-width: 200px; }
+  .av-row.locked { opacity: .55; pointer-events: none; }
+
+  /* ===== Tools ===== */
+  .tool-switch { margin: 0; }
+  .tool-switch .ts-title { font-weight: 700; font-size: 14.5px; display: inline-flex; align-items: center; gap: 8px; }
+  .cal-app-link { margin-top: 6px; font-size: 13px; }
+  .pb-sub { font-weight: 400; font-size: 12px; }
+  #toolPlaybooks .pb-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; }
+  #toolPlaybooks .pb-item { transition: transform .18s ease, border-color .2s ease, box-shadow .2s ease; animation: rise-in .3s ease-out both; }
+  #toolPlaybooks .pb-item:hover { transform: translateY(-2px); border-color: var(--c1); }
+  #toolPlaybooks .pb-item.selected { border-color: var(--c1); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c1) 25%, transparent); }
+  #toolPlaybooks .pb-item.selected .pb-icon::after { content: "✓"; position: absolute; right: -6px; bottom: -6px; width: 16px; height: 16px; border-radius: 50%;
+    background: var(--grad); color: #fff; font-size: 10px; display: grid; place-items: center; }
+  #toolPlaybooks .pb-icon { position: relative; }
+
+  /* emergency: form on the left, saved contacts on the right */
+  .emg-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 12px; margin-top: 10px; animation: slide-down .3s ease-out; }
+  @media (max-width: 760px) { .emg-grid { grid-template-columns: 1fr; } }
+  .emg-form { display: flex; flex-direction: column; gap: 8px; padding: 10px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--red) 25%, var(--border)); background: color-mix(in srgb, var(--red) 4%, var(--panel-2)); }
+  .emg-two { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .emg-form .kw-suggest { display: flex; flex-wrap: wrap; gap: 5px; }
+  .emg-side { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .emg-side-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .emg-side .emg-rules { margin: 0; gap: 8px; }
+  .emg-rules .emg-card { flex-direction: row; }
+  .emg-card { display: flex; gap: 10px; align-items: flex-start; padding: 9px 10px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel);
+    animation: card-in .35s cubic-bezier(.2,.8,.3,1.2) both; transition: transform .18s ease, border-color .2s ease; }
+  .emg-card:hover { transform: translateX(2px); border-color: color-mix(in srgb, var(--red) 40%, var(--border)); }
+  .emg-card .ec-ico { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; flex: none; background: color-mix(in srgb, var(--red) 14%, transparent); }
+  .emg-card.whatsapp .ec-ico { background: color-mix(in srgb, #25d366 18%, transparent); }
+  .emg-card.email .ec-ico { background: color-mix(in srgb, var(--c1) 16%, transparent); }
+  .emg-card .ec-body { flex: 1; min-width: 0; }
+  .emg-card .ec-name { font-weight: 700; font-size: 13.5px; }
+  .emg-card .ec-num { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+  .emg-card .ec-kw { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; }
+  .emg-card .ec-kw span { font-size: 11px; padding: 1px 7px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); }
+  .emg-card .ec-act { display: flex; gap: 2px; }
+  .emg-card .ec-act button { border: 0; background: none; cursor: pointer; font-size: 14px; padding: 3px; border-radius: 6px; color: var(--muted); }
+  .emg-card .ec-act button:hover { background: var(--panel-2); color: var(--text); }
+  .emg-empty { font-size: 13px; color: var(--muted); padding: 14px; border: 1px dashed var(--border); border-radius: 12px; text-align: center; }
+
+  /* call summaries: channel cards that light up when on */
+  .nf-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 6px 0 8px; }
+  @media (max-width: 640px) { .nf-grid { grid-template-columns: 1fr; } }
+  .nf-card { position: relative; display: flex; align-items: center; gap: 10px; padding: 12px; border-radius: 14px; border: 1px solid var(--border); background: var(--panel-2);
+    cursor: pointer; overflow: hidden; text-transform: none; letter-spacing: 0; color: var(--text); font-size: 14px; transition: transform .2s ease, box-shadow .3s ease, border-color .3s ease; }
+  .nf-card:hover { transform: translateY(-2px); }
+  .nf-card .nf-ico { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 17px; flex: none; background: var(--panel); border: 1px solid var(--border);
+    transition: transform .35s cubic-bezier(.2,.8,.3,1.4), background .3s ease; }
+  .nf-card .nf-ico svg { width: 18px; height: 18px; fill: var(--muted); transition: fill .3s ease; }
+  .nf-card .nf-name { flex: 1; font-weight: 700; display: flex; flex-direction: column; }
+  .nf-card .nf-name .sub { font-weight: 400; font-size: 11.5px; }
+  .nf-card .switch { flex: none; }
+  .nf-card::before { content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1.5px; background: var(--grad); opacity: 0;
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask-composite: exclude; transition: opacity .3s ease; pointer-events: none; }
+  .nf-card:has(input:checked) { box-shadow: 0 10px 26px color-mix(in srgb, var(--c1) 20%, transparent); border-color: transparent; }
+  .nf-card:has(input:checked)::before { opacity: 1; animation: nf-glow 2.4s ease-in-out infinite; }
+  .nf-card:has(input:checked) .nf-ico { background: var(--grad); transform: scale(1.08) rotate(-6deg); border-color: transparent; animation: nf-bob 2.4s ease-in-out infinite; }
+  .nf-card:has(input:checked) .nf-ico svg { fill: #fff; }
+  .nf-card.soon { opacity: .6; cursor: default; }
+  .nf-card.soon:hover { transform: none; }
+  @keyframes nf-glow { 0%, 100% { filter: hue-rotate(0deg); } 50% { filter: hue-rotate(25deg); } }
+  @keyframes nf-bob { 0%, 100% { transform: scale(1.08) rotate(-6deg); } 50% { transform: scale(1.12) rotate(4deg); } }
+  #toolSummaries .nf-to:not([hidden]) { animation: slide-down .3s ease-out; margin-bottom: 8px; }
+  #toolSummaries .cc-row select, #waCc { flex: 0 0 110px; max-width: 110px; }
+
+  /* calendar pop-up */
+  .cd-dialog { max-width: 560px; }
+  .cd-apps { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 10px 0 14px; }
+  .cd-app { display: flex; align-items: center; gap: 10px; padding: 11px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text);
+    font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; text-align: left; transition: transform .18s ease, border-color .2s ease, box-shadow .2s ease;
+    animation: rise-in .3s ease-out both; }
+  .cd-app:nth-child(2) { animation-delay: .04s; } .cd-app:nth-child(3) { animation-delay: .08s; } .cd-app:nth-child(4) { animation-delay: .12s; } .cd-app:nth-child(5) { animation-delay: .16s; }
+  .cd-app:hover { transform: translateY(-2px); border-color: var(--c1); }
+  .cd-app[aria-checked="true"] { border-color: var(--c1); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c1) 30%, transparent); background: color-mix(in srgb, var(--c1) 8%, var(--panel-2)); }
+  .cd-logo { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 13px; flex: none; }
+  .cd-logo.g { background: #4285f4; } .cd-logo.o { background: #0f6cbd; } .cd-logo.y { background: #6001d2; } .cd-logo.a { background: #1d1d1f; } .cd-logo.x { background: var(--muted); }
+  .cd-dialog .cal-box { margin-top: 0; }
+  .cal-actions .cal-add { font-weight: 600; }
+
+  @keyframes slide-down { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+  @keyframes rise-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes card-in { from { opacity: 0; transform: translateX(14px) scale(.97); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .va-card, .nf-card, .nf-card::before, .nf-card .nf-ico, .emg-card, .emg-grid, .cd-app, #toolPlaybooks .pb-item, .av-hol-country { animation: none !important; transition: none !important; }
+  }
 </style>
 <link rel="stylesheet" href="motion.css" />
 <script src="motion.js" defer></script>
@@ -949,59 +1069,70 @@
               <label class="mini"><span id="pOwnerLabel">Works for</span><input type="text" id="pOwner" maxlength="60" placeholder="e.g. DJ" autocomplete="off" /></label>
               <label class="mini"><span>Organization</span><input type="text" id="pOrg" maxlength="80" placeholder="e.g. Telemune" autocomplete="off" /></label>
             </div>
-            <label class="mini"><span>What it's for <em class="sub">(optional)</em></span><input type="text" id="pDesc" maxlength="300" placeholder="e.g. Answers DJ's calls during meetings" autocomplete="off" /></label>
+            <label class="mini"><span>Others <em class="sub">(optional: anything else the agent should know)</em></span><input type="text" id="pDesc" maxlength="300" placeholder="e.g. Answers DJ's calls during meetings" autocomplete="off" /></label>
             <label class="mini"><span>First line of every call <em class="sub">(empty = the template's)</em></span><textarea id="pGreeting" rows="2" maxlength="400"></textarea></label>
             <div class="greet-preview" id="pPreview" aria-live="polite"></div>
           </div>
         </div>
 
         <div class="tab-panel" data-panel="voice" role="tabpanel" hidden>
-          <p class="panel-lead">How the agent sounds, and which AI models it uses.</p>
-          <div class="block-title">🗣️ Voice &amp; language</div>
-          <div class="prov-grid">
-            <div class="prov-box">
-              <div class="block-title">🎙 Speech-to-text <span class="sub">hears the caller</span></div>
-              <div class="vl-row">
-                <label class="mini"><span>Provider</span><select id="sttProv"></select></label>
-                <label class="mini admin-only" title="Speech-to-text model (admins only)"><span>Model</span><select id="sttSel"></select></label>
-              </div>
+          <p class="panel-lead">How the agent hears the caller, thinks, and speaks.</p>
+          <!-- Hears (STT) · Speaks (TTS) · Thinks (LLM). Model pickers are for admins only. -->
+          <div class="va-grid">
+            <div class="va-card">
+              <div class="va-head"><span class="va-ico">🎙</span><div><b>Speech-to-text</b><span class="sub">hears the caller</span></div></div>
+              <select id="sttProv" aria-label="Speech-to-text provider"></select>
+              <select id="sttSel" class="admin-only" aria-label="Speech-to-text model" title="Model (admins only)"></select>
             </div>
-            <div class="prov-box">
-              <div class="block-title">🔊 Text-to-speech <span class="sub">the agent's voice</span></div>
-              <div class="vl-row">
-                <label class="mini"><span>Provider</span><select id="ttsProv"></select></label>
-                <label class="mini admin-only" title="Text-to-speech model (admins only)"><span>Model</span><select id="ttsSel"></select></label>
-              </div>
+            <div class="va-card">
+              <div class="va-head"><span class="va-ico">🔊</span><div><b>Text-to-speech</b><span class="sub">the agent's voice</span></div></div>
+              <select id="ttsProv" aria-label="Text-to-speech provider"></select>
+              <select id="ttsSel" class="admin-only" aria-label="Text-to-speech model" title="Model (admins only)"></select>
             </div>
-          </div>
-          <div class="vl-row" style="margin-top:12px">
-            <label class="mini"><span>Language <em class="sub" id="langHint"></em></span><select id="lang"></select></label>
-            <div class="mini"><label for="voice"><span>Voice</span></label>
-              <div class="voice-row"><select id="voice"></select></div>
+            <div class="va-card">
+              <div class="va-head"><span class="va-ico">🧠</span><div><b>LLM</b><span class="sub">thinks and replies</span></div></div>
+              <select id="llmSel" class="admin-only" aria-label="LLM model"></select>
+              <div class="va-default user-only"><span id="llmDefault">Default model</span><span class="sub">set by the admin</span></div>
             </div>
           </div>
-          <div class="hint-line" id="provHint"></div>
-          <!-- ▶ preview and the speaking speed bar side by side -->
-          <div class="play-speed">
-            <button class="btn btn-play" id="previewBtn" type="button" title="Hear this voice at this speed" aria-label="Preview voice">▶ Play</button>
-            <label class="speed-bar"><span>⏩ Speed</span><input type="range" id="speedRange" min="0.5" max="2" step="0.05" value="1" aria-label="Speaking speed" /><output id="speedVal">1.00×</output></label>
-          </div>
-        <div class="block-title admin-only" style="margin-top:16px">🧠 AI model <span class="sub">admins only · users get the default</span></div>
-          <div class="model-row admin-only">
-            <label class="mini" title="Large language model: thinks and writes replies"><span>LLM (OpenAI)</span><select id="llmSel"></select></label>
+          <div class="va-voice">
+            <div class="va-two">
+              <label class="mini"><span>🌐 Language <em class="sub" id="langHint"></em></span><select id="lang"></select></label>
+              <label class="mini"><span>🗣 Voice</span><select id="voice"></select></label>
+            </div>
+            <!-- speaking speed bar, ▶ Play on the right -->
+            <div class="play-speed">
+              <label class="speed-bar"><span>⏩ Speed</span><input type="range" id="speedRange" min="0.5" max="2" step="0.05" value="1" aria-label="Speaking speed" /><output id="speedVal">1.00×</output></label>
+              <button class="btn btn-play" id="previewBtn" type="button" title="Hear this voice at this speed" aria-label="Preview voice">▶ Play</button>
+            </div>
+            <div class="hint-line" id="provHint"></div>
           </div>
           <div class="hint-line admin-only" id="modelsHint"></div>
         </div>
 
         <div class="tab-panel" data-panel="availability" role="tabpanel" hidden>
           <p class="panel-lead">When <span id="avWho">the owner</span> can take meetings. The agent only offers times inside these hours.</p>
-          <div class="mini"><span>Days</span><div class="day-picks" id="avDays" role="group" aria-label="Available days"></div><div class="day-quick"><button class="link" type="button" data-days="1,2,3,4,5">Weekdays</button><button class="link" type="button" data-days="1,2,3,4,5,6,7">Every day</button><button class="link" type="button" data-days="">None</button></div></div>
+          <div class="av-quick" role="group" aria-label="Quick picks">
+            <button type="button" class="av-chip av-247" id="av247" aria-pressed="false">🌐 24×7</button>
+            <button type="button" class="av-chip" data-days="1,2,3,4,5">Weekdays</button>
+            <button type="button" class="av-chip" data-days="1,2,3,4,5,6,7">Every day</button>
+            <button type="button" class="av-chip" data-days="">None</button>
+          </div>
+          <div class="mini"><span>Days</span><div class="day-picks" id="avDays" role="group" aria-label="Available days"></div></div>
           <div class="av-row">
             <label class="mini"><span>From</span><input type="time" id="avFrom" value="09:00" /></label>
             <label class="mini"><span>To</span><input type="time" id="avTo" value="18:00" /></label>
             <label class="mini"><span>Time zone</span><select id="avTz"></select></label>
           </div>
-          <label class="mini"><span>Note <em class="sub">(optional, e.g. "Not on public holidays")</em></span><input type="text" id="avNote" maxlength="200" autocomplete="off" /></label>
+          <div class="av-extra">
+            <label class="switch-row" for="avHol"><span><b>🎉 Off on public holidays</b><br /><span class="sub">The agent won't offer meetings on that country's national holidays and suggests the next working day.</span></span><input type="checkbox" id="avHol" class="switch" /></label>
+            <label class="mini av-hol-country" id="avHolWrap" hidden><span>Holidays of</span><select id="avHolCountry"></select></label>
+            <div class="mini"><span>🏖 Days off <em class="sub">(leave, office closed)</em></span>
+              <div class="av-off-row"><input type="date" id="avOffDate" aria-label="Day off" /><button class="btn btn-small" id="avOffAdd" type="button">＋ Add day</button></div>
+              <div class="kw-list" id="avOffList"></div>
+            </div>
+            <label class="mini"><span>Other note <em class="sub">(optional)</em></span><input type="text" id="avNote" maxlength="200" placeholder="e.g. Prefers afternoon meetings" autocomplete="off" /></label>
+          </div>
           <div class="greet-preview" id="avPreview"></div>
           <button class="link" id="avClear" type="button">Clear availability</button>
         </div>
@@ -1009,61 +1140,70 @@
         <!-- 🧰 Tools: calendar, emergency contacts, playbook and call-summary delivery in one tab -->
         <div class="tab-panel tools-panel" data-panel="tools" role="tabpanel" hidden>
         <section class="tool-sec" id="toolCalendar">
-          <h4 class="tool-head">📅 Calendar <span class="sec-note" id="calNote"></span></h4>
-          <label class="switch-row" for="calToggle">
-            <span><b>Book into the calendar</b><br /><span class="sub">The agent adds confirmed meetings, bookings and reminders here.</span></span>
+          <label class="switch-row tool-switch" for="calToggle">
+            <span class="ts-title">📅 Calendar <span class="sec-note" id="calNote"></span></span>
             <input type="checkbox" id="calToggle" class="switch" />
           </label>
-          
-          <div class="cal-box" id="calendarCard" hidden>
-            <div class="cal-head"><span class="sub">Upcoming events</span><a class="link" id="icsAll" href="/api/calendar/calendar.ics" download>⬇ Export all (.ics)</a></div>
-            <div class="cal-list" id="calList"><div class="empty">No events yet. Ask the agent to book or remind you of something.</div></div>
-          </div>
+          <button class="link cal-app-link" id="calAppBtn" type="button" hidden></button>
         </section>
 
         <section class="tool-sec" id="toolEmergency">
-          <h4 class="tool-head">🚨 Emergency contacts <span class="sec-note" id="emgNote"></span></h4>
-          <label class="switch-row" for="emgToggle">
-            <span><b>Emergency detection</b><br /><span class="sub">If the caller says a keyword, the agent gives the right contact straight away.</span></span>
+          <label class="switch-row tool-switch" for="emgToggle">
+            <span class="ts-title">🚨 Emergency contacts <span class="sec-note" id="emgNote"></span></span>
             <input type="checkbox" id="emgToggle" class="switch" />
           </label>
-          <div class="emg-add" id="emgAdd" hidden>
-            <div class="emg-add-title">＋ Add emergency contact</div>
-            <div class="emg-add-row three">
-              <label class="mini"><span>Related to</span><select id="emgType"></select></label>
-              <label class="mini"><span>Contact by</span><select id="emgVia"><option value="phone">📞 Phone</option><option value="whatsapp">💬 WhatsApp</option><option value="email">✉️ Email</option></select></label>
+          <div class="emg-grid" id="emgAdd" hidden>
+            <div class="emg-form">
+              <div class="emg-two">
+                <label class="mini"><span>Related to</span><select id="emgType"></select></label>
+                <label class="mini"><span>Contact by</span><select id="emgVia"><option value="phone">📞 Phone</option><option value="whatsapp">💬 WhatsApp</option><option value="email">✉️ Email</option></select></label>
+              </div>
+              <label class="mini" id="emgCustomWrap" hidden><span>Name</span><input type="text" id="emgCustom" maxlength="40" placeholder="e.g. Coast guard" /></label>
               <div class="mini"><span id="emgNumberLabel">Number</span><div class="cc-row"><select id="emgCc" aria-label="Country code"></select><input type="text" id="emgNumber" maxlength="120" inputmode="tel" placeholder="e.g. 108" aria-labelledby="emgNumberLabel" /></div></div>
+              <div class="mini"><span>Keywords</span>
+                <div class="kw-suggest" id="emgSuggest"></div>
+                <div class="kw-list" id="emgPicked"></div>
+                <input type="text" id="emgKwInput" maxlength="40" placeholder="Type your own keyword and press Enter" />
+              </div>
+              <div class="emg-add-foot">
+                <span class="emg-msg" id="emgMsg" aria-live="polite"></span>
+                <button class="btn btn-small" id="emgAddBtn" type="button">＋ Save contact</button>
+              </div>
             </div>
-            <label class="mini" id="emgCustomWrap" hidden><span>Name</span><input type="text" id="emgCustom" maxlength="40" placeholder="e.g. Coast guard" /></label>
-            <div class="mini"><span>Keywords <em class="sub">(tap to pick, or type your own)</em></span>
-              <div class="kw-suggest" id="emgSuggest"></div>
-              <input type="text" id="emgKwInput" maxlength="40" placeholder="Type a keyword and press Enter" />
-              <div class="kw-list" id="emgPicked"></div>
-            </div>
-            <div class="emg-add-foot">
-              <span class="emg-msg" id="emgMsg" aria-live="polite"></span>
-              <button class="btn btn-small" id="emgAddBtn" type="button">＋ Add</button>
+            <div class="emg-side">
+              <div class="emg-side-title">Saved <span class="sec-note" id="emgCount"></span></div>
+              <div class="emg-rules" id="emgRules"></div>
+              <p class="hint-line" id="emgChanHint"></p>
             </div>
           </div>
-          <div class="block-title" style="margin-top:14px">Saved contacts <span class="sec-note" id="emgCount"></span></div>
-          <div class="emg-rules" id="emgRules"></div>
-          <p class="hint-line" id="emgChanHint"></p>
         </section>
 
         <section class="tool-sec" id="toolPlaybooks">
-          <h4 class="tool-head">📘 Playbook <button class="btn btn-small" id="addPbBtn" type="button">＋ Add playbook</button></h4>
-          <p class="panel-lead">A playbook is your own call script. Pick one for this agent here or on the call page; it takes the place of the template.</p>
+          <h4 class="tool-head">📘 Playbook <span class="sub pb-sub">your own call script, used instead of the template</span><button class="btn btn-small" id="addPbBtn" type="button">＋ Add</button></h4>
           <div class="pb-list" id="pbList"></div>
         </section>
 
         <section class="tool-sec" id="toolSummaries">
-          <h4 class="tool-head">📨 Call summaries <span class="sec-note" id="nfNote"></span></h4>
-          <p class="panel-lead">After every call, send its AI summary to:</p>
-          <label class="switch-row" for="nfWa"><span><b>💬 WhatsApp</b> <span class="sub" id="nfWaState"></span></span><input type="checkbox" id="nfWa" class="switch" /></label>
+          <h4 class="tool-head">📨 Call summaries <span class="sub pb-sub">sent after every call</span><span class="sec-note" id="nfNote"></span></h4>
+          <div class="nf-grid">
+            <label class="nf-card wa" for="nfWa">
+              <span class="nf-ico"><svg viewBox="0 0 24 24"><path d="M12.05 21.78h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.88 9.89-9.88 2.64 0 5.12 1.03 6.99 2.9a9.83 9.83 0 0 1 2.89 6.99c0 5.45-4.44 9.88-9.88 9.88zm8.41-18.3A11.82 11.82 0 0 0 12.05 0C5.5 0 .16 5.34.16 11.89c0 2.1.55 4.14 1.59 5.95L.06 24l6.3-1.65a11.88 11.88 0 0 0 5.68 1.45h.01c6.55 0 11.89-5.34 11.89-11.89 0-3.18-1.24-6.17-3.48-8.41z"/></svg></span>
+              <span class="nf-name">WhatsApp<span class="sub" id="nfWaState"></span></span>
+              <input type="checkbox" id="nfWa" class="switch" />
+            </label>
+            <label class="nf-card mail" for="nfMail">
+              <span class="nf-ico">✉️</span>
+              <span class="nf-name">Email<span class="sub" id="nfMailState"></span></span>
+              <input type="checkbox" id="nfMail" class="switch" />
+            </label>
+            <label class="nf-card sms soon" for="nfSms">
+              <span class="nf-ico">⚡</span>
+              <span class="nf-name">Flash SMS<span class="sub">coming later</span></span>
+              <input type="checkbox" id="nfSms" class="switch" disabled />
+            </label>
+          </div>
           <div class="cc-row nf-to" id="nfWaRow" hidden><select id="nfWaCc" aria-label="Country code"></select><input type="tel" id="nfWaTo" maxlength="15" placeholder="WhatsApp mobile number" aria-label="WhatsApp mobile number" /></div>
-          <label class="switch-row" for="nfMail"><span><b>✉️ Email</b> <span class="sub" id="nfMailState"></span></span><input type="checkbox" id="nfMail" class="switch" /></label>
           <input type="text" id="nfMailTo" class="nf-to" maxlength="200" inputmode="email" placeholder="Email address (several: separate with commas)" hidden />
-          <label class="switch-row" for="nfSms"><span><b>⚡ Flash SMS</b> <span class="sub">coming later</span></span><input type="checkbox" id="nfSms" class="switch" disabled /></label>
           <p class="hint-line">The summary always stays in Call summaries too.</p>
         </section>
         </div>
@@ -1128,6 +1268,29 @@
   </div>
 </div>
 
+<!-- Calendar: where the owner keeps meetings. Each booked meeting gets a one-click "add to" link for that app (no account link needed). -->
+<div class="overlay" id="calDialog" role="dialog" aria-modal="true" aria-labelledby="cdTitle">
+  <div class="dialog cd-dialog">
+    <div class="dialog-head">
+      <h3 id="cdTitle">📅 Where do you keep your meetings?</h3>
+      <button class="icon-btn" id="cdClose" type="button" title="Close" aria-label="Close">✕</button>
+    </div>
+    <p class="lead">Meetings the agent books get a one-click <b>Add</b> button for this calendar.</p>
+    <div class="cd-apps" id="cdApps" role="radiogroup" aria-label="Calendar app">
+      <button type="button" class="cd-app" data-app="google" role="radio"><span class="cd-logo g">G</span>Google Calendar</button>
+      <button type="button" class="cd-app" data-app="outlook" role="radio"><span class="cd-logo o">O</span>Outlook</button>
+      <button type="button" class="cd-app" data-app="yahoo" role="radio"><span class="cd-logo y">Y!</span>Yahoo Calendar</button>
+      <button type="button" class="cd-app" data-app="apple" role="radio"><span class="cd-logo a">🍎</span>Apple Calendar</button>
+      <button type="button" class="cd-app" data-app="other" role="radio"><span class="cd-logo x">⋯</span>Other (.ics file)</button>
+    </div>
+    <div class="cal-box" id="calendarCard">
+      <div class="cal-head"><span class="sub">Upcoming meetings</span><a class="link" id="icsAll" href="/api/calendar/calendar.ics" download>⬇ Export all (.ics)</a></div>
+      <div class="cal-list" id="calList"><div class="empty">No events yet. Ask the agent to book or remind you of something.</div></div>
+    </div>
+    <div class="form-actions"><button type="button" class="btn btn-primary" id="cdDone">Done</button></div>
+  </div>
+</div>
+
 <div class="overlay" id="typeDialog" role="alertdialog" aria-modal="true" aria-labelledby="tdTitle" aria-describedby="tdLead">
   <div class="dialog td-dialog">
     <div class="dialog-head">
@@ -1169,7 +1332,7 @@
           <div><label for="naName">Agent name <span class="req">*</span></label><input type="text" id="naName" maxlength="24" placeholder="e.g. Brown" autocomplete="off" /></div>
           <div><label for="naOwner" id="naOwnerLabel">Works for</label><input type="text" id="naOwner" maxlength="60" placeholder="e.g. DJ" autocomplete="off" /></div>
           <div><label for="naOrg">Organization (optional)</label><input type="text" id="naOrg" maxlength="80" placeholder="e.g. Telemune" autocomplete="off" /></div>
-          <div class="span2"><label for="naDesc">What it's for (optional)</label><input type="text" id="naDesc" maxlength="300" placeholder="e.g. Answers DJ's calls during meetings" autocomplete="off" /></div>
+          <div class="span2"><label for="naDesc">Others (optional)</label><input type="text" id="naDesc" maxlength="300" placeholder="e.g. Answers DJ's calls during meetings" autocomplete="off" /></div>
         </div>
         <div class="greet-preview" id="naPreview" aria-live="polite"></div>
       </section>
@@ -1192,13 +1355,15 @@
       <section class="na-step" data-step="availability" hidden>
         <p class="lead">When <b id="naAvWho">the owner</b> can take meetings. The agent only offers times inside these hours. Optional: skip it and the agent asks the caller for a time.</p>
         <div class="mini"><span>Days</span><div class="day-picks" id="naDays" role="group" aria-label="Available days"></div>
-          <div class="day-quick"><button class="link" type="button" data-na-days="1,2,3,4,5">Weekdays</button><button class="link" type="button" data-na-days="1,2,3,4,5,6,7">Every day</button><button class="link" type="button" data-na-days="">None</button></div></div>
+          <div class="day-quick"><button class="link" type="button" id="na247" aria-pressed="false">🌐 24×7</button><button class="link" type="button" data-na-days="1,2,3,4,5">Weekdays</button><button class="link" type="button" data-na-days="1,2,3,4,5,6,7">Every day</button><button class="link" type="button" data-na-days="">None</button></div></div>
         <div class="av-row">
           <label class="mini"><span>From</span><input type="time" id="naFrom" value="09:00" /></label>
           <label class="mini"><span>To</span><input type="time" id="naTo" value="18:00" /></label>
           <label class="mini"><span>Time zone</span><select id="naTz"></select></label>
         </div>
-        <label class="mini"><span>Note <em class="sub">(optional, e.g. "Not on public holidays")</em></span><input type="text" id="naAvNote" maxlength="200" autocomplete="off" /></label>
+        <label class="switch-row" for="naHol"><span><b>🎉 Off on public holidays</b><br /><span class="sub">No meetings on that country's national holidays.</span></span><input type="checkbox" id="naHol" class="switch" /></label>
+        <label class="mini av-hol-country" id="naHolWrap" hidden><span>Holidays of</span><select id="naHolCountry"></select></label>
+        <label class="mini"><span>Other note <em class="sub">(optional)</em></span><input type="text" id="naAvNote" maxlength="200" autocomplete="off" /></label>
         <div class="greet-preview" id="naAvPreview"></div>
       </section>
 

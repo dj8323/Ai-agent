@@ -202,6 +202,7 @@ async function loadConfig() {
   state.channels = c.channels || {};
   state.countryCodes = (c.countryCodes || []).map((x, i) => ({ ...x, sort: i }));
   fillCc($("waCc")); fillCc($("nfWaCc")); fillEmgCc($("emgCc"), $("emgVia").value);
+  fillHolidayCountries($("avHolCountry"), $("avHolCountry").value || "IN"); fillHolidayCountries($("naHolCountry"), "IN");
   const cfg = c.settings || {};
   Object.assign(SETTINGS, cfg);
   Object.assign(CONFIG, cfg.conversation || {});
@@ -270,7 +271,7 @@ function renderPersonaPreview() {
   $("pGreeting").placeholder = renderTpl(tpl?.greeting || type.greeting || "", v);
   const greet = p.greeting || tpl?.greeting || type.greeting || "";
   if (type.needsOwner && !p.ownerName && /\{owner\}/.test(greet)) $("pPreview").textContent = "⚠ Fill in Works for: the greeting and the script use that name.";
-  else showPreview($("pPreview"), "First line:", renderTpl(greet, v));
+  else $("pPreview").textContent = "";
   $("pTemplateHint").textContent = tpl ? `🎯 ${renderTpl(tpl.goal, v)}` : `${type.icon || "✨"} ${type.name || "Agent"}: no fixed script, it helps with whatever the caller needs.`;
   $("personaNote").textContent = p.ownerName ? `for ${p.ownerName}` : p.organization || "";
   $("personaNote").classList.toggle("on", !!(p.ownerName || p.organization));
@@ -338,7 +339,7 @@ $("pType").addEventListener("change", async () => {
 
 // ---------- availability: days + hours + time zone (the agent only offers meeting times inside them) ----------
 const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const av = { days: [] };
+const av = { days: [], allDay: false, offDates: [] };
 const localTz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC"; } catch { return "UTC"; } })();
 [...new Set([localTz, "Asia/Kolkata", "Asia/Dubai", "Asia/Singapore", "Asia/Tokyo", "Europe/London", "Europe/Berlin",
   "America/New_York", "America/Chicago", "America/Los_Angeles", "Australia/Sydney", "UTC"])].forEach((z) => $("avTz").add(new Option(z.replace(/_/g, " "), z)));
@@ -349,12 +350,49 @@ DAY_NAMES.forEach((d, i) => {
   $("avDays").appendChild(b);
 });
 document.querySelectorAll("[data-days]").forEach((b) => (b.onclick = () => {
+  if (av.allDay) setAllDay(false);
   av.days = b.dataset.days ? b.dataset.days.split(",").map(Number) : [];
   renderAvailability(); markDirty();
 }));
+// 🌐 24×7: every day, all day (From/To locked); press again to go back to office hours
+function setAllDay(on) {
+  av.allDay = on;
+  if (on) { av.days = [1, 2, 3, 4, 5, 6, 7]; $("avFrom").value = "00:00"; $("avTo").value = "23:59"; }
+  else if ($("avFrom").value === "00:00" && $("avTo").value === "23:59") { $("avFrom").value = "09:00"; $("avTo").value = "18:00"; }
+}
+$("av247").addEventListener("click", () => { setAllDay(!av.allDay); renderAvailability(); markDirty(); });
+// 🎉 public holidays of a country (the agent knows the main ones and today's date) and 🏖 single days off
+function fillHolidayCountries(sel, iso) {
+  if (sel.options.length <= 1) { sel.innerHTML = ""; for (const c of state.countryCodes || []) sel.add(new Option(`${c.flag} ${c.name}`, c.iso2)); }
+  if (iso && [...sel.options].some((o) => o.value === iso)) sel.value = iso;
+}
+$("avHol").addEventListener("change", () => { fillHolidayCountries($("avHolCountry"), $("avHolCountry").value || "IN"); renderAvailability(); markDirty(); });
+$("avHolCountry").addEventListener("change", () => { renderAvailability(); markDirty(); });
+$("avOffAdd").addEventListener("click", () => {
+  const d = $("avOffDate").value;
+  if (!d) return $("avOffDate").focus();
+  if (!av.offDates.includes(d)) av.offDates = [...av.offDates, d].sort();
+  $("avOffDate").value = "";
+  renderAvailability(); markDirty();
+});
+const todayIso = () => new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD, local
+const fmtDay = (iso) => new Date(iso + "T12:00:00").toLocaleDateString([], { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+const countryName = (iso) => (state.countryCodes || []).find((c) => c.iso2 === iso)?.name || iso;
+// one plan → the text the agent reads (also used by the new agent wizard)
+function planToText(p) {
+  if (!p) return "";
+  const when = p.allDay ? `Available 24×7 (any day, any time; ${p.tz.replace(/_/g, " ")})`
+    : p.days.length ? `${dayRanges(p.days)}, ${fmtClock(p.from)}–${fmtClock(p.to)} (${p.tz.replace(/_/g, " ")})` : "";
+  const hol = p.holidays?.on && p.holidays.country ? `Not available on public holidays in ${countryName(p.holidays.country)}: don't offer meetings on them, suggest the next working day` : "";
+  const off = (p.offDates || []).filter((d) => d >= todayIso());
+  return [when, hol, off.length ? `Days off: ${off.map(fmtDay).join(", ")}` : "", p.note].filter(Boolean).join(". ");
+}
 ["avFrom", "avTo", "avTz"].forEach((id) => $(id).addEventListener("change", () => { renderAvailability(); markDirty(); }));
 $("avNote").addEventListener("input", () => { renderAvailability(); markDirty(); });
-$("avClear").addEventListener("click", () => { av.days = []; $("avNote").value = ""; renderAvailability(); markDirty(); });
+$("avClear").addEventListener("click", () => {
+  setAllDay(false); av.days = []; av.offDates = []; $("avNote").value = ""; $("avHol").checked = false;
+  renderAvailability(); markDirty();
+});
 
 function dayRanges(days) {
   if (days.length === 7) return "Every day";
@@ -368,15 +406,12 @@ function dayRanges(days) {
 const fmtClock = (hhmm) => { const [h, m] = String(hhmm || "0:0").split(":").map(Number); return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); };
 function availabilityPlan() {
   const note = $("avNote").value.trim();
-  if (!av.days.length && !note) return null;
-  return { days: av.days, from: $("avFrom").value || "09:00", to: $("avTo").value || "18:00", tz: $("avTz").value, note };
+  const holidays = { on: $("avHol").checked, country: $("avHolCountry").value || "IN" };
+  const offDates = av.offDates.filter((d) => d >= todayIso());
+  if (!av.days.length && !note && !holidays.on && !offDates.length) return null;
+  return { days: av.days, from: $("avFrom").value || "09:00", to: $("avTo").value || "18:00", tz: $("avTz").value, note, allDay: av.allDay, holidays, offDates };
 }
-function availabilityText() {
-  const p = availabilityPlan();
-  if (!p) return "";
-  const when = p.days.length ? `${dayRanges(p.days)}, ${fmtClock(p.from)}–${fmtClock(p.to)} (${p.tz.replace(/_/g, " ")})` : "";
-  return [when, p.note].filter(Boolean).join(". ");
-}
+function availabilityText() { return planToText(availabilityPlan()); }
 function fillAvailability(a) {
   const p = a.availabilityPlan;
   av.days = Array.isArray(p?.days) ? p.days.map(Number) : [];
@@ -385,10 +420,30 @@ function fillAvailability(a) {
   if (p?.tz && ![...$("avTz").options].some((o) => o.value === p.tz)) $("avTz").add(new Option(p.tz, p.tz));
   $("avTz").value = p?.tz || localTz;
   $("avNote").value = p ? p.note || "" : a.availability || ""; // older agents only had a text
+  av.allDay = !!p?.allDay;
+  av.offDates = Array.isArray(p?.offDates) ? [...p.offDates] : [];
+  $("avHol").checked = !!p?.holidays?.on;
+  fillHolidayCountries($("avHolCountry"), p?.holidays?.country || "IN");
   renderAvailability();
 }
 function renderAvailability() {
   $("avDays").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(av.days.includes(Number(b.dataset.day)))));
+  $("av247").setAttribute("aria-pressed", String(av.allDay));
+  document.querySelectorAll(".av-quick [data-days]").forEach((b) => b.setAttribute("aria-pressed", String(!av.allDay && b.dataset.days !== "" && b.dataset.days === av.days.join(","))));
+  document.querySelector(".tab-panel[data-panel=availability] .av-row").classList.toggle("locked", av.allDay);
+  $("avHolWrap").hidden = !$("avHol").checked;
+  const offBox = $("avOffList");
+  offBox.innerHTML = "";
+  for (const d of av.offDates.filter((x) => x >= todayIso())) {
+    const chip = document.createElement("span");
+    chip.className = "kw";
+    chip.textContent = fmtDay(d);
+    const x = document.createElement("button");
+    x.type = "button"; x.textContent = "×"; x.setAttribute("aria-label", `Remove ${d}`);
+    x.onclick = () => { av.offDates = av.offDates.filter((y) => y !== d); renderAvailability(); markDirty(); };
+    chip.appendChild(x);
+    offBox.appendChild(chip);
+  }
   const owner = $("pOwner").value.trim();
   $("avWho").textContent = owner || "the owner";
   const text = availabilityText();
@@ -420,6 +475,7 @@ function fillForm() {
   state.playbookId = state.saved.some((p) => p.id === a.defaultPlaybookId) ? a.defaultPlaybookId : "";
   renderPlaybooks();
   setSelect($("llmSel"), SETTINGS.models.chat);
+  $("llmDefault").textContent = SETTINGS.models.chat || "Default model";
   $("calToggle").checked = !!SETTINGS.calendar?.enabled;
   $("emgToggle").checked = !!SETTINGS.emergency?.enabled;
   state.rules = structuredClone(SETTINGS.emergency?.rules || []);
@@ -427,7 +483,8 @@ function fillForm() {
   fillNotify(SETTINGS.currentAgent?.notify);
   fillPersona();
   state.savedSnapshot = formSnapshot();
-  $("calendarCard").hidden = !SETTINGS.calendar?.enabled;
+  state.calApp = SETTINGS.calendar?.app || "";
+  renderCalApp();
   renderNotes();
   renderSummary();
   prepareGreeting();
@@ -2228,7 +2285,39 @@ async function loadModels() {
   $("modelsHint").textContent = m.source === "account" ? "The LLM list shows the models your OpenAI account can use." : "Couldn't reach OpenAI; showing common models.";
 }
 ["llmSel", "sttSel", "ttsSel"].forEach((id) => $(id).addEventListener("change", () => { $(id).title = $(id).value; markDirty(); }));
-$("calToggle").addEventListener("change", () => { renderNotes(); markDirty(); });
+$("calToggle").addEventListener("change", () => { renderNotes(); renderCalApp(); markDirty(); if ($("calToggle").checked) openCalDialog(); });
+const CAL_APPS = { google: "Google Calendar", outlook: "Outlook", yahoo: "Yahoo Calendar", apple: "Apple Calendar", other: "Other (.ics)" };
+function renderCalApp() {
+  $("calAppBtn").hidden = !$("calToggle").checked;
+  $("calAppBtn").textContent = state.calApp ? `${CAL_APPS[state.calApp]} · meetings ›` : "Choose your calendar ›";
+  document.querySelectorAll("#cdApps .cd-app").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.app === state.calApp)));
+}
+function openCalDialog() {
+  renderCalApp();
+  $("calDialog").classList.add("open");
+  loadCalendar();
+}
+const closeCalDialog = () => $("calDialog").classList.remove("open");
+$("calAppBtn").addEventListener("click", openCalDialog);
+$("cdApps").addEventListener("click", (e) => {
+  const b = e.target.closest(".cd-app");
+  if (!b) return;
+  state.calApp = b.dataset.app;
+  renderCalApp(); markDirty(); loadCalendar();
+});
+["cdClose", "cdDone"].forEach((id) => $(id).addEventListener("click", closeCalDialog));
+$("calDialog").addEventListener("click", (e) => { if (e.target === $("calDialog")) closeCalDialog(); });
+// one-click "add to" link for a booked meeting in the chosen calendar app (no account link needed)
+function calAddLink(app, e) {
+  const st = new Date(e.start), en = new Date(st.getTime() + (e.durationMin || 30) * 60000);
+  const z = (d) => d.toISOString().replace(/[-:]/g, "").replace(/\.\d{3}/, "");
+  const q = (o) => new URLSearchParams(o).toString();
+  const details = `Booked by your TelemuneSmartAi agent${e.notes ? ": " + e.notes : ""}`;
+  if (app === "google") return `https://calendar.google.com/calendar/render?${q({ action: "TEMPLATE", text: e.title, dates: `${z(st)}/${z(en)}`, details })}`;
+  if (app === "outlook") return `https://outlook.live.com/calendar/0/deeplink/compose?${q({ path: "/calendar/action/compose", rru: "addevent", subject: e.title, startdt: st.toISOString(), enddt: en.toISOString(), body: details })}`;
+  if (app === "yahoo") return `https://calendar.yahoo.com/?${q({ v: "60", title: e.title, st: z(st), et: z(en), desc: details })}`;
+  return "";
+}
 $("emgToggle").addEventListener("change", () => { renderRules(); markDirty(); if ($("emgToggle").checked) $("emgType").focus(); });
 
 // Keywords offered in the "pick a keyword" list (anyone can also type their own).
@@ -2261,50 +2350,34 @@ function renderRules() {
   const box = $("emgRules");
   box.innerHTML = "";
   box.classList.toggle("off", !$("emgToggle").checked);
+  if (!state.rules.length) { box.innerHTML = '<div class="emg-empty">No contacts yet. Saved ones show here.</div>'; return; }
   state.rules.forEach((r, i) => {
+    const type = ["email", "whatsapp"].includes(r.type) ? r.type : "phone";
     const el = document.createElement("div");
-    el.className = "rule";
-    el.innerHTML = `
-      <div class="rule-top">
-        <input type="text" class="r-label" placeholder="Service, e.g. Ambulance" maxlength="40" aria-label="Emergency service name" />
-        <select class="r-type" aria-label="Contact by"><option value="phone">📞 Phone</option><option value="whatsapp">💬 WhatsApp</option><option value="email">✉️ Email</option></select>
-        <input type="text" class="r-num" placeholder="Number" maxlength="120" inputmode="tel" aria-label="Emergency number or email" />
-        <button type="button" class="rule-del" title="Remove this emergency number" aria-label="Remove">🗑</button>
-      </div>
-      <div class="kw-list"></div>
-      <div class="kw-add">
-        <select aria-label="Pick a keyword"><option value="">＋ Pick keyword…</option></select>
-        <input type="text" placeholder="or type a keyword + Enter" maxlength="40" aria-label="Type a keyword" />
-      </div>`;
-    el.querySelector(".r-label").value = r.label;
-    el.querySelector(".r-num").value = r.number;
-    el.querySelector(".r-type").value = ["email", "whatsapp"].includes(r.type) ? r.type : "phone";
-    el.querySelector(".r-num").placeholder = r.type === "email" ? "name@example.com" : r.type === "whatsapp" ? "WhatsApp number" : "Number";
-    el.querySelector(".r-type").addEventListener("change", (e) => { r.type = e.target.value; renderRules(); markDirty(); });
-    el.querySelector(".r-label").addEventListener("input", (e) => { r.label = e.target.value; markDirty(); });
-    el.querySelector(".r-num").addEventListener("input", (e) => { r.number = e.target.value; markDirty(); });
-    el.querySelector(".rule-del").addEventListener("click", () => { state.rules.splice(i, 1); renderRules(); markDirty(); });
-    const list = el.querySelector(".kw-list");
-    r.keywords.forEach((k, j) => {
-      const chip = document.createElement("span");
-      chip.className = "kw";
-      chip.textContent = k;
-      const x = document.createElement("button");
-      x.type = "button"; x.textContent = "×"; x.setAttribute("aria-label", `Remove keyword ${k}`);
-      x.onclick = () => { r.keywords.splice(j, 1); renderRules(); markDirty(); };
-      chip.appendChild(x);
-      list.appendChild(chip);
-    });
-    const addKw = (k) => {
-      k = k.trim().toLowerCase();
-      if (k && !r.keywords.includes(k)) { r.keywords.push(k); renderRules(); markDirty(); }
+    el.className = "emg-card " + type;
+    el.style.animationDelay = `${i * 0.05}s`;
+    el.innerHTML = `<span class="ec-ico"></span><div class="ec-body"><div class="ec-name"></div><div class="ec-num"></div><div class="ec-kw"></div></div>
+      <div class="ec-act"><button type="button" class="ec-edit" title="Edit" aria-label="Edit">✎</button><button type="button" class="ec-del" title="Remove" aria-label="Remove">🗑</button></div>`;
+    el.querySelector(".ec-ico").textContent = type === "email" ? "✉️" : type === "whatsapp" ? "💬" : "📞";
+    el.querySelector(".ec-name").textContent = r.label;
+    el.querySelector(".ec-num").textContent = r.number;
+    for (const k of r.keywords) el.querySelector(".ec-kw").appendChild(Object.assign(document.createElement("span"), { textContent: k }));
+    el.querySelector(".ec-del").onclick = () => { state.rules.splice(i, 1); renderRules(); markDirty(); };
+    // ✎ puts it back into the form on the left; saving with the same name updates it
+    el.querySelector(".ec-edit").onclick = () => {
+      const known = EMERGENCY_TYPES[r.label] ? r.label : "Other";
+      $("emgType").value = known;
+      $("emgCustomWrap").hidden = known !== "Other";
+      if (known === "Other") $("emgCustom").value = r.label;
+      setEmgVia(type);
+      const plus = String(r.number).trim().startsWith("+");
+      if (type !== "email" && plus) { const sp = splitNumber(r.number); fillEmgCc($("emgCc"), type, sp.iso); $("emgNumber").value = sp.local; }
+      else { fillEmgCc($("emgCc"), type, type === "whatsapp" ? "IN" : ""); $("emgNumber").value = r.number; }
+      emgForm.picked = [...r.keywords];
+      renderEmgForm();
+      emgMsg(`Editing ${r.label}: change it and click Save contact.`, "ok");
+      $("emgNumber").focus();
     };
-    const pick = el.querySelector("select");
-    for (const k of KEYWORD_SUGGESTIONS.filter((k) => !r.keywords.includes(k))) pick.add(new Option(k, k));
-    pick.addEventListener("change", () => addKw(pick.value));
-    const typed = el.querySelector(".kw-add input");
-    typed.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addKw(typed.value); } });
-    typed.addEventListener("blur", () => typed.value && addKw(typed.value));
     box.appendChild(el);
   });
 }
@@ -2433,7 +2506,7 @@ function formPayload() {
   return {
     agent: { defaultName: agentName(), defaultLanguage: lang(), defaultVoice: $("voice").value, defaultPlaybookId: state.playbookId, speechSpeed: speed() },
     models: { chat: $("llmSel").value, stt: $("sttSel").value, tts: $("ttsSel").value, ttsProvider: ttsProv(), sttProvider: sttProv() },
-    calendar: { enabled: $("calToggle").checked },
+    calendar: { enabled: $("calToggle").checked, app: state.calApp || "" },
     emergency: { enabled: $("emgToggle").checked, rules: state.rules },
     persona: personaPayload(),
     notify: notifyPayload(),
@@ -2513,9 +2586,7 @@ async function autoSave() {
       SETTINGS.currentAgent = data.agent;
       renderAgents();
     }
-    const calWasHidden = $("calendarCard").hidden;
-    $("calendarCard").hidden = !SETTINGS.calendar?.enabled;
-    if (calWasHidden && SETTINGS.calendar?.enabled) loadCalendar();
+    if (SETTINGS.calendar?.enabled && isOpen("calDialog")) loadCalendar();
     setSaveStatus(pending ? "✓ Saved · finish the new number" : "✓ Saved");
     clearTimeout(state.saveFade);
     if (!pending) state.saveFade = setTimeout(() => setSaveStatus(""), 2500);
@@ -2600,13 +2671,15 @@ async function loadCalendar() {
     const d = new Date(e.start);
     const el = document.createElement("div");
     el.className = "cal-item" + (e.start < nowIso ? " past" : "");
-    el.innerHTML = `<div class="cal-date"><div class="d"></div><div class="m"></div></div><div><div class="cal-title"></div><div class="cal-when"></div></div><div class="cal-actions"><a title="Add to your calendar app">⬇ .ics</a><button type="button" title="Delete event" aria-label="Delete event">🗑</button></div>`;
+    el.innerHTML = `<div class="cal-date"><div class="d"></div><div class="m"></div></div><div><div class="cal-title"></div><div class="cal-when"></div></div><div class="cal-actions"><a class="cal-add" target="_blank" rel="noopener" hidden></a><a title="Add to your calendar app">⬇ .ics</a><button type="button" title="Delete event" aria-label="Delete event">🗑</button></div>`;
     el.querySelector(".d").textContent = d.getDate();
     el.querySelector(".m").textContent = d.toLocaleString([], { month: "short" });
     el.querySelector(".cal-title").textContent = e.title;
     el.querySelector(".cal-when").textContent = `${d.toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })} · ${e.durationMin} min · ${e.source}`;
-    const a = el.querySelector("a");
+    const a = el.querySelector("a:not(.cal-add)");
     a.href = `/api/calendar/${e.id}.ics`; a.download = `event-${e.id}.ics`;
+    const link = calAddLink(state.calApp, e);
+    if (link) Object.assign(el.querySelector(".cal-add"), { href: link, hidden: false, textContent: `＋ ${CAL_APPS[state.calApp].split(" ")[0]}`, title: `Add to ${CAL_APPS[state.calApp]}` });
     el.querySelector("button").onclick = async () => {
       if (!confirm(`Delete "${e.title}" from the calendar?`)) return;
       await fetch(`/api/calendar/${e.id}`, { method: "DELETE" });
@@ -2765,7 +2838,6 @@ const TOURS = [
       { target: "#naName", title: "Give it a name", text: "👉 Type a name for your agent, for example **Brown**.", ready: () => !!$("naName").value.trim() },
       { target: "#naOwner", title: "Who does it work for?", text: "Type the person it answers for, for example **DJ**. A Call Assistant needs this; for other types it's optional.",
         ready: () => !typeOf(na.type).needsOwner || !!$("naOwner").value.trim() },
-      { target: ["#naPreview:not(:empty)", "#naType"], title: "Its first line", text: "This is what the agent will say at the start of every call.", next: true },
       { target: "#naNext", title: "Next step", text: "👉 Click **Next →**.", done: () => NA_STEPS[na.step] === "voice", warn: () => $("naErr").textContent },
       { target: "#naVoice", title: "2 · Voice & AI", text: "Pick the speech providers, the language it speaks and its voice.", next: true },
       { target: ".na-step[data-step=voice] .speed-bar", title: "Speaking speed", text: "Drag the **⏩ Speed** bar to make it talk slower or faster.", next: true },
@@ -2799,7 +2871,7 @@ const TOURS = [
       { target: "#pOwner", before: goTab("profile"), title: "Works for", text: "👉 Type the person it answers for. It introduces itself as their assistant.", next: true },
       { target: "#pOrg", before: goTab("profile"), title: "Organization", text: "The company or place it answers for.", next: true },
       { target: "#pGreeting", before: goTab("profile"), title: "First line", text: "Leave it empty to use the template's greeting, or write your own. {agent}, {owner} and {org} are filled in for you.", next: true },
-      { target: "#pPreview", before: goTab("profile"), title: "Preview", text: "This is exactly what it will say. Your changes save by themselves; look for ✓ Saved at the top.", next: true },
+      { target: "#pGreeting", before: goTab("profile"), title: "Saved by itself", text: "Your changes save by themselves; look for ✓ Saved at the top.", next: true },
     ] },
   { id: "availability", icon: "🕒", title: "Availability & calendar", needsAgent: true, desc: "When meetings can be booked, and the calendar they go into.",
     steps: [
@@ -2810,16 +2882,16 @@ const TOURS = [
       { target: "#avPreview", before: goTab("availability"), title: "Saved", text: "The agent only offers meeting times inside these hours.", next: true },
       { target: ["label[for=calToggle]"], before: goTab("calendar"), title: "Switch on the calendar", text: "👉 Switch on **Book into the calendar** so the agent can add confirmed meetings.",
         ready: () => $("calToggle").checked, auto: true },
-      { target: "#calendarCard", before: goTab("calendar"), title: "Booked meetings", text: "Booked meetings show here, and **⬇ Export all (.ics)** adds them to your own calendar.", next: true },
+      { target: "#calAppBtn", before: goTab("calendar"), title: "Your calendar", text: "Pick where you keep meetings (Google, Outlook, Yahoo, Apple or other). Each booked meeting then gets a one-click **＋ Add** button, and **⬇ Export all (.ics)** works for any app.", next: true },
     ] },
   { id: "voice", icon: "🧠", title: "Voice & speed", needsAgent: true, desc: "Speech providers, language, voice, speaking speed and AI model.",
     steps: [
-      { target: ".prov-grid", before: goTab("voice"), title: "Speech providers", text: "**Speech-to-text** hears the caller (OpenAI, ElevenLabs or AWS). **Text-to-speech** is the agent's voice (OpenAI, AWS Polly, ElevenLabs or Cartesia). Each has its own models.", next: true },
+      { target: ".va-grid", before: goTab("voice"), title: "Hears, speaks, thinks", text: "**Speech-to-text** hears the caller (OpenAI, ElevenLabs or AWS). **Text-to-speech** is the agent's voice (OpenAI, AWS Polly, ElevenLabs or Cartesia). Each has its own models.", next: true },
       { target: "#lang", before: goTab("voice"), title: "Language", text: "Only languages both providers support are listed, the most spoken first. It also matches callers who mix languages.", next: true },
       { target: "#voice", before: goTab("voice"), title: "Voice", text: "The voices of the chosen text-to-speech provider. The cartoon agent on the call page follows: a man for male voices, a woman for the others.", next: true },
       { target: "#previewBtn", before: goTab("voice"), title: "Hear it", text: "👉 Click **▶** to hear a sample.", clickIn: "#previewBtn", next: true, nextLabel: "Skip" },
       { target: ".tab-panel[data-panel=voice] .speed-bar", before: goTab("voice"), title: "Speaking speed", text: "Drag the **⏩ Speed** bar, then **▶ Play** to hear it.", next: true },
-      { target: () => (state.me?.role === 1 ? ".model-row" : ".tab-panel[data-panel=voice] .speed-bar"), before: goTab("voice"), title: "AI model",
+      { target: () => (state.me?.role === 1 ? "#llmSel" : ".tab-panel[data-panel=voice] .speed-bar"), before: goTab("voice"), title: "AI model",
         text: () => (state.me?.role === 1 ? "The LLM thinks and writes the replies. **gpt-4.1-mini** answers fastest. Only admins see this; users' agents use the default model." : "Your agent uses the default AI model, set by the admin."), next: true },
     ] },
   { id: "emergency", icon: "🚨", title: "Emergency contact", needsAgent: true, desc: "Give callers the right number, WhatsApp or email in an emergency.",
@@ -2829,7 +2901,7 @@ const TOURS = [
       { target: "#emgVia", before: goTab("emergency"), title: "Phone, WhatsApp or email", text: "How to reach it: 📞 Phone, 💬 WhatsApp or ✉️ Email. WhatsApp and email contacts also get an alert from the server when the word is heard.", next: true },
       { target: "#emgNumber", before: goTab("emergency"), title: "Number or email", text: "Pick the country code (☎ Local for short numbers like 108) and type the number, or type the email address.", next: true },
       { target: "#emgSuggest", before: goTab("emergency"), title: "Keywords", text: "Words that trigger it. Tap suggestions or type your own below.", next: true },
-      { target: "#emgAddBtn", before: goTab("emergency"), title: "Add it", text: "👉 Click **＋ Add**.", done: () => state.rules.length > tourCtx.rules, warn: () => $("emgMsg").classList.contains("err") ? $("emgMsg").textContent : "" },
+      { target: "#emgAddBtn", before: goTab("emergency"), title: "Save it", text: "👉 Click **＋ Save contact**. It appears on the right.", done: () => state.rules.length > tourCtx.rules, warn: () => $("emgMsg").classList.contains("err") ? $("emgMsg").textContent : "" },
       { target: "#emgRules", before: goTab("emergency"), title: "Saved", text: "During a call, a matching word shows a red banner with this contact, and the agent tells the caller first.", next: true },
     ] },
   { id: "playbook", icon: "📘", title: "Add a playbook", needsAgent: true, desc: "Write your own call script and use it on a call.",
@@ -3128,7 +3200,7 @@ const na = { type: "personal", step: 0, days: [], rules: [], busy: false, playbo
 
 function openAgentDialog() {
   if (state.inCall) return;
-  Object.assign(na, { type: "personal", step: 0, days: [], rules: [], busy: false, calTouched: false, created: null, playbookId: "" });
+  Object.assign(na, { type: "personal", step: 0, days: [], rules: [], busy: false, calTouched: false, created: null, playbookId: "", allDay: false });
   $("naForm").reset();
   $("naErr").textContent = "";
   // Voice step starts from the agent in use (or the app's defaults): providers, language, voice
@@ -3287,22 +3359,29 @@ DAY_NAMES.forEach((d, i) => {
   b.onclick = () => { const n = i + 1; na.days = na.days.includes(n) ? na.days.filter((x) => x !== n) : [...na.days, n].sort(); renderNaDays(); };
   $("naDays").appendChild(b);
 });
-document.querySelectorAll("[data-na-days]").forEach((b) => (b.onclick = () => { na.days = b.dataset.naDays ? b.dataset.naDays.split(",").map(Number) : []; renderNaDays(); }));
+document.querySelectorAll("[data-na-days]").forEach((b) => (b.onclick = () => { naAllDay(false); na.days = b.dataset.naDays ? b.dataset.naDays.split(",").map(Number) : []; renderNaDays(); }));
+function naAllDay(on) {
+  na.allDay = on;
+  if (on) { na.days = [1, 2, 3, 4, 5, 6, 7]; $("naFrom").value = "00:00"; $("naTo").value = "23:59"; }
+  else if ($("naFrom").value === "00:00" && $("naTo").value === "23:59") { $("naFrom").value = "09:00"; $("naTo").value = "18:00"; }
+}
+$("na247").addEventListener("click", () => { naAllDay(!na.allDay); renderNaDays(); });
+$("naHol").addEventListener("change", () => { fillHolidayCountries($("naHolCountry"), $("naHolCountry").value || "IN"); renderNaDays(); });
+$("naHolCountry").addEventListener("change", renderNaDays);
 ["naFrom", "naTo", "naTz"].forEach((id) => $(id).addEventListener("change", renderNaDays));
 $("naAvNote").addEventListener("input", renderNaDays);
 function naPlan() {
   const note = $("naAvNote").value.trim();
-  if (!na.days.length && !note) return null;
-  return { days: na.days, from: $("naFrom").value || "09:00", to: $("naTo").value || "18:00", tz: $("naTz").value, note };
+  const holidays = { on: $("naHol").checked, country: $("naHolCountry").value || "IN" };
+  if (!na.days.length && !note && !holidays.on) return null;
+  return { days: na.days, from: $("naFrom").value || "09:00", to: $("naTo").value || "18:00", tz: $("naTz").value, note, allDay: !!na.allDay, holidays, offDates: [] };
 }
-function naPlanText() {
-  const p = naPlan();
-  if (!p) return "";
-  const when = p.days.length ? `${dayRanges(p.days)}, ${fmtClock(p.from)}–${fmtClock(p.to)} (${p.tz.replace(/_/g, " ")})` : "";
-  return [when, p.note].filter(Boolean).join(". ");
-}
+function naPlanText() { return planToText(naPlan()); }
 function renderNaDays() {
   $("naDays").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(na.days.includes(Number(b.dataset.day)))));
+  $("na247").setAttribute("aria-pressed", String(!!na.allDay));
+  $("na247").classList.toggle("on", !!na.allDay);
+  $("naHolWrap").hidden = !$("naHol").checked;
   const owner = $("naOwner").value.trim();
   $("naAvWho").textContent = owner || "the owner";
   const text = naPlanText();
@@ -3494,7 +3573,10 @@ $("naForm").addEventListener("submit", async (e) => {
     state.playbookId = state.saved.some((p) => p.id === na.playbookId) ? na.playbookId : ""; renderPlaybooks();
     av.days = [...na.days]; $("avFrom").value = $("naFrom").value; $("avTo").value = $("naTo").value;
     if (![...$("avTz").options].some((o) => o.value === $("naTz").value)) $("avTz").add(new Option($("naTz").value, $("naTz").value));
-    $("avTz").value = $("naTz").value; $("avNote").value = $("naAvNote").value.trim(); renderAvailability();
+    $("avTz").value = $("naTz").value; $("avNote").value = $("naAvNote").value.trim();
+    av.allDay = !!na.allDay; av.offDates = [];
+    $("avHol").checked = $("naHol").checked; fillHolidayCountries($("avHolCountry"), $("naHolCountry").value || "IN");
+    renderAvailability();
     $("calToggle").checked = $("naCal").checked;
     $("emgToggle").checked = $("naEmg").checked && na.rules.length > 0;
     state.rules = $("naEmg").checked ? structuredClone(na.rules) : [];

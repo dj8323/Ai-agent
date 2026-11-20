@@ -123,7 +123,7 @@ public class AgentService {
           J.blank(in.get("playbookId")) ? null : J.str(in.get("playbookId"), 16), calendar ? 1 : 0, emergency ? 1 : 0,
           count == 0 || J.bool(in.get("isDefault")) ? 1 : 0,
           modelId(in.get("chatModel")), modelId(in.get("ttsModel")), sttEngine, modelId(in.get("sttModel")),
-          templateId, owner, J.str(in.get("organization"), 80), J.str(in.get("availability"), 300), J.str(in.get("greeting"), 400));
+          templateId, owner, J.str(in.get("organization"), 80), J.str(in.get("availability"), 600), J.str(in.get("greeting"), 400));
       if (J.bool(in.get("isDefault")) && count > 0) db.exec("UPDATE agents SET is_default = 0 WHERE user_id = ? AND id <> ?", userId, id);
       writeRules(id, rules);
     });
@@ -188,14 +188,14 @@ public class AgentService {
     if (p.containsKey("ownerName")) db.exec("UPDATE agents SET owner_name = ? WHERE id = ?", J.str(p.get("ownerName"), 60), id);
     if (p.containsKey("description")) db.exec("UPDATE agents SET description = ? WHERE id = ?", J.str(p.get("description"), 300), id);
     if (p.containsKey("organization")) db.exec("UPDATE agents SET organization = ? WHERE id = ?", J.str(p.get("organization"), 80), id);
-    if (p.containsKey("availability")) db.exec("UPDATE agents SET owner_availability = ? WHERE id = ?", J.str(p.get("availability"), 300), id);
+    if (p.containsKey("availability")) db.exec("UPDATE agents SET owner_availability = ? WHERE id = ?", J.str(p.get("availability"), 600), id);
     if (p.containsKey("availabilityPlan")) db.exec("UPDATE agents SET availability_plan = ? WHERE id = ?", cleanPlan(p.get("availabilityPlan")), id);
     if (p.containsKey("greeting")) db.exec("UPDATE agents SET greeting = ? WHERE id = ?", J.str(p.get("greeting"), 400), id);
   }
 
   private static final Pattern HHMM = Pattern.compile("^([01]\\d|2[0-3]):[0-5]\\d$");
 
-  /** Availability picker → JSON {days:[1..7] (1 = Monday), from, to, tz, note}, or null. */
+  /** Availability picker → JSON {days:[1..7] (1 = Monday), from, to, tz, note, allDay, holidays:{on, country}, offDates:[YYYY-MM-DD]}, or null. */
   private static String cleanPlan(Object v) {
     Map<String, Object> p = J.obj(v);
     if (p.isEmpty()) return null;
@@ -206,8 +206,16 @@ public class AgentService {
     }
     days.sort(null);
     String from = J.str(p.get("from")), to = J.str(p.get("to"));
-    return J.json(J.map("days", days, "from", HHMM.matcher(from).matches() ? from : "09:00", "to", HHMM.matcher(to).matches() ? to : "18:00",
-        "tz", J.str(p.get("tz"), 60), "note", J.str(p.get("note"), 200)));
+    Map<String, Object> hol = J.obj(p.get("holidays"));
+    List<String> off = new ArrayList<>();
+    for (Object d : J.list(p.get("offDates"))) {
+      String s = J.str(d, 10);
+      if (s.matches("^\\d{4}-\\d{2}-\\d{2}$") && !off.contains(s) && off.size() < 30) off.add(s);
+    }
+    off.sort(null);
+    return J.json(J.map("days", days, "from", HHMM.matcher(from).matches() ? from : "09:00", "to", HHMM.matcher(to).matches() || "23:59".equals(to) ? to : "18:00",
+        "tz", J.str(p.get("tz"), 60), "note", J.str(p.get("note"), 200), "allDay", J.bool(p.get("allDay")),
+        "holidays", J.map("on", J.bool(hol.get("on")), "country", J.str(hol.get("country"), 2)), "offDates", off));
   }
 
   private static final Pattern EMAIL = Pattern.compile("^[^\\s@]{1,64}@[^\\s@]{1,60}\\.[^\\s@]{2,}$");
@@ -290,6 +298,10 @@ public class AgentService {
         if (in.get("calendar") instanceof Map<?, ?>) {
           Map<String, Object> cal = J.obj(in.get("calendar"));
           db.exec("UPDATE agents SET calendar_enabled = ? WHERE id = ?", J.bool(cal.get("enabled")) ? 1 : 0, agentId);
+          if (cal.containsKey("app")) { // where the owner keeps meetings (one-click "add to" links)
+            String app = J.str(cal.get("app"));
+            db.exec("UPDATE agents SET calendar_app = ? WHERE id = ?", List.of("google", "outlook", "yahoo", "apple", "other").contains(app) ? app : null, agentId);
+          }
           if (cal.containsKey("defaultDurationMin")) {
             long mins = J.num(cal.get("defaultDurationMin"));
             db.exec("UPDATE agents SET meeting_minutes = ? WHERE id = ?", mins >= 5 && mins <= 480 ? mins : null, agentId);

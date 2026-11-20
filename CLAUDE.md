@@ -269,6 +269,14 @@ voice_ai_web/          ── frontend team ──
   provider (`slots`), one retry on a dropped connection; an agent with no voice of its provider gets `defaultVoice()` (first one).
 - **Emergency numbers:** `#emgCc` / `#naEmgCc` (`fillEmgCc`: ☎ Local + `country_codes`), `emgNumberValue()`: phone = "+CC number"
   or a local short number, WhatsApp = "+CC mobile" (`fullNumber`), email = address.
+- **Agent setup tabs, 2026-11-20 layout:** Profile: `#pDesc` is "Others", no first-line preview (`#pPreview` only warns when
+  Works for is missing). Voice & AI: `.va-grid` cards (STT `#sttProv`, TTS `#ttsProv`, LLM `#llmSel` admin / `#llmDefault` user,
+  `.user-only`), `.va-voice` (language, voice, `.play-speed` with ▶ `#previewBtn` on the right). Availability: `#av247`
+  (`setAllDay`, plan.allDay, 00:00–23:59), `#avHol` + `#avHolCountry` (plan.holidays {on, country}), `#avOffDate/#avOffAdd/#avOffList`
+  (plan.offDates, future only), `planToText()` shared with the wizard (`#na247`, `#naHol`). `agents.owner_availability` is VARCHAR(600).
+  Tools: calendar = switch + `#calAppBtn` → `#calDialog` (`agents.calendar_app` google|outlook|yahoo|apple|other, settings
+  calendar.app; `calAddLink()` one-click add URLs per event; `#calendarCard` list lives in the pop-up). Emergency = `.emg-grid`
+  (form left, `renderRules()` → `.emg-card` with ✎ edit / 🗑 on the right). Summaries = `.nf-card` channel cards (`:has(input:checked)` glow).
 - **Animated inputs** (motion.css): focus = `box-glow` ring + lift, hover tint, placeholders `ph-breathe`; off with reduced motion.
 
 - Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions

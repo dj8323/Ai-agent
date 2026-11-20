@@ -116,8 +116,8 @@ public class AppConfigService {
     return J.map(
         "agent", agentSec,
         "models", models, "speechToText", stt,
-        "calendar", a.get("meeting_minutes") == null ? J.map("enabled", J.bool(a.get("calendar_enabled")))
-            : J.map("enabled", J.bool(a.get("calendar_enabled")), "defaultDurationMin", a.get("meeting_minutes")),
+        "calendar", a.get("meeting_minutes") == null ? J.map("enabled", J.bool(a.get("calendar_enabled")), "app", J.str(a.get("calendar_app")))
+            : J.map("enabled", J.bool(a.get("calendar_enabled")), "app", J.str(a.get("calendar_app")), "defaultDurationMin", a.get("meeting_minutes")),
         "emergency", J.map("enabled", J.bool(a.get("emergency_enabled")), "rules", a.getOrDefault("rules", List.of())));
   }
 

@@ -79,10 +79,11 @@ CREATE TABLE IF NOT EXISTS agents (
   template_id       VARCHAR(40)  NULL,                    -- agent_templates.id (the script/persona it runs)
   owner_name        VARCHAR(60)  NOT NULL DEFAULT '',     -- who the agent works for, e.g. "DJ"
   organization      VARCHAR(80)  NOT NULL DEFAULT '',     -- e.g. "City Hospital"
-  owner_availability VARCHAR(300) NOT NULL DEFAULT '',    -- e.g. "Weekdays 3 to 6 pm"
+  owner_availability VARCHAR(600) NOT NULL DEFAULT '',    -- e.g. "Weekdays 3 to 6 pm"
   greeting          VARCHAR(400) NOT NULL DEFAULT '',     -- own first line; empty = the template's greeting
   availability_plan JSON         NULL,                    -- {days:[1..7], from:"15:00", to:"18:00", tz, note}; owner_availability is its text
   meeting_minutes   INT          NULL,                    -- meeting length for calendar bookings; NULL = app default
+  calendar_app      VARCHAR(16)  NULL,                    -- where the owner keeps meetings: google | outlook | yahoo | apple | other (one-click add links)
   speech_speed      DECIMAL(3,2) NULL,                    -- how fast the agent speaks (0.50–2.00, 1 = normal); NULL = app default
   notify            JSON         NULL,                    -- send call summaries: {whatsapp:{on,to}, email:{on,to}, sms:{on,to}}
   created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
