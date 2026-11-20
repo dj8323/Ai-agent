@@ -841,19 +841,26 @@
   body:not([data-view="dashboard"]) .db { display: none; }
   body[data-view="dashboard"] .wrap > .left-col, body[data-view="dashboard"] .wrap > .right-col { display: none; }
   body.no-dashboard #navDash { display: none !important; }
-  .db h1 { margin: 0; font-size: clamp(22px, 3vw, 28px); letter-spacing: -.01em; text-wrap: balance; }
+  .db h1 { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.3; }
   .db h2 { margin: 0; font-size: 15px; }
   .db-muted, .db-sub { color: var(--muted); }
   .db-sub { font-size: 12px; }
-  .db-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; }
-  .db-head p { margin: 2px 0 0; }
+  /* one slim bar: greeting on the left, agent + period on the right */
+  .db-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; padding: 8px 8px 8px 12px;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 16px; backdrop-filter: blur(12px); }
+  .db-who { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .db-wave { width: 34px; height: 34px; flex: none; border-radius: 11px; display: grid; place-items: center; font-size: 17px;
+    background: color-mix(in srgb, var(--c1) 14%, var(--panel-2)); }
+  .db-head p { margin: 0; font-size: 12px; color: var(--muted); }
+  .db-head p b { color: var(--text); font-variant-numeric: tabular-nums; }
   .db-incall { padding: 10px 14px; border-radius: 12px; background: color-mix(in srgb, var(--green) 14%, var(--panel)); border: 1px solid color-mix(in srgb, var(--green) 35%, var(--border)); font-weight: 600; }
   .db-filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .db-ready .db-tile, .db-ready .db-card, .db-ready .db-hbar .fill { animation: none; }
-  .db-sel { width: auto; max-width: 220px; border: 1px solid var(--border); background: var(--panel); color: var(--text); padding: 7px 10px; border-radius: 10px; font: inherit; font-weight: 600; }
-  .db-seg { display: inline-flex; gap: 3px; padding: 3px; border-radius: 12px; background: var(--panel); border: 1px solid var(--border); }
-  .db-seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-weight: 600; padding: 6px 12px; border-radius: 9px; cursor: pointer; }
-  .db-seg button[aria-pressed="true"] { background: var(--panel-2); color: var(--text); box-shadow: inset 0 0 0 1px var(--border); }
+  .db-sel { width: auto; max-width: 200px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); padding: 6px 10px; border-radius: 10px; font: inherit; font-size: 13px; font-weight: 600; }
+  .db-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 11px; background: var(--panel-2); border: 1px solid var(--border); }
+  .db-seg button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 5px 11px; border-radius: 8px; cursor: pointer; transition: background .2s, color .2s; }
+  .db-seg button:hover { color: var(--text); }
+  .db-seg button[aria-pressed="true"] { background: var(--grad); color: #fff; }
   .db-link { border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; padding: 0; font-size: 12px; }
   .db-tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
   @media (max-width: 1000px) { .db-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
@@ -973,7 +980,7 @@
   <section class="db" id="dashView" aria-labelledby="dbHello">
     <div class="db-incall" id="dbInCall" hidden>📞 A conversation is still going on. <button type="button" class="db-link" data-go-call>Back to it</button></div>
     <div class="db-head">
-      <div><h1 id="dbHello">Hello</h1><p id="dbHeadline" class="db-muted">Loading your numbers…</p></div>
+      <div class="db-who"><span class="db-wave" aria-hidden="true">👋</span><div><h1 id="dbHello">Hello</h1><p id="dbHeadline">Loading your numbers…</p></div></div>
       <div class="db-filters">
         <select id="dbAgent" class="db-sel" aria-label="Agent"><option value="all">All agents</option></select>
         <div class="db-seg" role="group" aria-label="Period">

@@ -54,7 +54,8 @@
   }
   window.loadDashboard = () => {
     const h = new Date().getHours(), me = state.me;
-    $("dbHello").textContent = `${h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"}${me ? ", " + (me.name || me.username).split(" ")[0] : ""}`;
+    const first = me ? cap((me.name || me.username).trim().split(/\s+/)[0]) : "";
+    $("dbHello").textContent = `${h < 12 ? "Good morning" : h < 17 ? "Good afternoon" : "Good evening"}${first ? ", " + first : ""}`;
     $("dbInCall").hidden = !(state.inCall || state.session);
     fillAgents();
     load();
@@ -75,8 +76,8 @@
   function render() {
     const d = D.data; if (!d) return;
     const t = d.totals, who = D.agent === "all" ? "Your agents" : (state.agents || []).find((a) => a.id === D.agent)?.name || "This agent";
-    $("dbHeadline").textContent = t.conversations
-      ? `${who} handled ${fmt(t.conversations)} conversation${t.conversations === 1 ? "" : "s"} in the last ${d.days} days.`
+    $("dbHeadline").innerHTML = t.conversations
+      ? `${e(who)} handled <b>${fmt(t.conversations)}</b> conversation${t.conversations === 1 ? "" : "s"} in the last ${d.days} days`
       : d.agentCount ? `No conversations in the last ${d.days} days yet. Start one from 🎙 Call.` : "Create your first agent on 🎙 Call to see your numbers here.";
     D.w = $("dbActivity").clientWidth;
     tiles(d); activity(d.daily); mix(d.daily); reply(d.daily, t); heat(d.heat);
