@@ -396,6 +396,10 @@ Shown names ≠ hash routes: 📊 Insights = `#dashboard`, 💬 Conversations = 
 
 ## Testing tips
 
+- **UAT (2026-11-20):** `node uat/run-uat.mjs` = 61 API acceptance tests with its own tester accounts (`uat.*.<run>`, deleted at the
+  end; `--keep`, `--cleanup <run|all>`, `--ai`, `UAT_SUPER_USER/PASS`). Plan, screen checks, manual cases, known issues and
+  sign-off: `docs/TelemuneSmartAi-UAT.md` (+ PDF). Reports in `uat/reports/` (gitignored). Add a case there for every new feature.
+
 - Backend: `cd voice_ai_backend && ./run.sh --build` (or `mvn -q -o -DskipTests package`), then restart with `./runScript.sh`.
   Web syntax: `cd voice_ai_web && npm run check`.
 - API tests with curl against `http://127.0.0.1:8324` and a cookie jar (sign up a throw-away user and delete it after:
