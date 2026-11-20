@@ -370,28 +370,34 @@ Token totals count the chat replies and the summary. Text-to-speech audio is not
 
 Admins land on `/admin.html`, a single page that shows every user, every agent and every call, with tools to manage accounts and app settings. **Open my agent** at the top takes the admin to their own agents.
 
-### Totals (top row)
+### Menu
 
-Users (active and admins), agents (and per user), calls and turns, talk time, tokens, average reply time, playbooks and calendar events, recordings, new messages waiting, and templates, summed across all users.
+A pill menu at the top (it stays in view while scrolling) opens one section at a time: **📊 Overview · 👥 Users · 🤖 Agents · 📞 Calls & usage · 🧩 Templates · ⚙️ Settings · 🔐 Sign-ins · 📜 Activity**. Each section has its own link (for example `/admin.html#users`).
 
-### User cards
+### 📊 Overview
 
-One card per user shows their role badge, a chip per agent (★ = default), their main LLM, a "signed up" chip for self sign-ups, calls, talk time, tokens, number of agents, and last call and sign-in times. A search box filters by name, username, email, agent name, type or model.
+Totals grouped by category: **👥 People** (users, agents), **📞 Conversations** (records, talk time, average reply, recordings), **🔢 AI usage** (tokens) and **📚 Content** (playbooks, booked events, new messages, templates). **Click any tile** to see it user by user (for example Records shows calls, live chats, voice chats and WhatsApp messages per user; Tokens shows input and output); click a user there to open everything about them. Below: the five most active users and the latest activity.
+
+### 👥 Users
+
+A table with each user's role, status, agents, records, talk time, tokens and last sign-in, a filter (all, admins, users, disabled) and search. Row buttons:
 
 | Button | What it does |
 | --- | --- |
-| 👁 View agent & calls | Opens a side panel: every agent with its language, voice, models, playbook, calendar and emergency setup; playbooks; usage; the user's calls page by page. Click a call for its summary, transcript, recording player and downloads |
-| 🔑 Reset password | Sets a new temporary password; the user is signed out and must change it |
-| Make admin / Make user | Changes the role |
-| ⛔ Disable / ✅ Enable | Blocks or restores sign-in; disabling signs the user out at once |
+| 👁 View | Every agent with its language, voice, providers, playbook, calendar and emergency setup; playbooks; usage; the user's calls, chats and WhatsApp messages page by page. Click one for its summary, recording and transcript |
+| ✏️ Edit | Change the **name, username, email, role (user/admin) and status (active/disabled)**, or **🔑 Reset password** (a new temporary password; the user is signed out and must change it). Disabling signs the user out at once. You can't remove your own admin access, and there is always at least one active admin |
 | 🗑 Delete | Hides the account (data is kept in the database) |
 | ＋ Add user | Creates an account with a temporary password (no agents; the user creates their own) |
 
-Admins can only read other users' data; they cannot change another user's agents or calls.
+### 🤖 Agents and 📞 Calls & usage
+
+**Agents** lists every agent of every user: owner, type, language and voice, providers (speech-to-text · text-to-speech · LLM, with the model), tools (📅 calendar, 🚨 emergency contacts, 📘 playbook) and booked events. **Calls & usage** shows per user: records split into 📞 calls, 💬 chats, 🎤 voice chats and WhatsApp, talk time, turns, tokens, average reply, recordings and the last call. Click a row to open that user.
+
+Admins can read other users' agents and calls; they edit accounts, not another user's agents or calls.
 
 ### Agent types & templates
 
-The **🧩 Agent types & templates** card lists every type on the left. Pick one to edit:
+**🧩 Templates** in the menu lists every type on the left. Pick one to edit:
 
 - **The type**: name, icon, description, the persona used when an agent has no template, the greeting, and three switches: *Ask "works for whom?"* (makes it required), *Calendar on for new agents*, and *Available to users*.
 - **Its templates**, one panel each: name, persona, greeting, goal, steps and rules (one per line), what the summary should cover, *Pre-selected for new agents* and *Available to users*. Each shows how many agents use it. Save or 🗑 delete (agents using a deleted template go back to free conversation).

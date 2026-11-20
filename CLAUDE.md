@@ -142,7 +142,9 @@ voice_ai_web/          ── frontend team ──
   server.js            Static files + /api proxy + page guard + https + web.log/error.log.
   scripts/make-cert.sh self-signed HTTPS cert → certs/ (remade when the IP changes; --force).
   public/login.html    Sign in + Create account.
-  public/admin.html + admin.js   KPIs, users, 🧩 agent types & templates editor, ⚙️ settings, 🔐 sign-ins, 📜 log.
+  public/admin.html + admin.js   Pill menu (#overview #users #agents #usage #templates #settings #logins #activity, `route()`):
+                       grouped KPI tiles → `openKpi(key)` per-user table (#kpiDialog), users table + ✏️ `openEdit()`
+                       (#editDialog), all-agents table, usage per user, 🧩 types & templates, ⚙️ settings, 🔐 sign-ins, 📜 log.
   public/index.html    Layout + CSS (light/dark tokens): top menu, Call view (call card + summary card,
                        conversation, call summaries), My agents view (list + tabbed editor), dialogs.
   public/app.js        Menu/tab routing, agent picker + summary, persona/availability/emergency editors, call flow,
@@ -179,7 +181,7 @@ voice_ai_web/          ── frontend team ──
 | GET/POST/PATCH/DELETE | `/api/messages[/:id]` | current agent's messages (`?scope=all`, `?status=new\|done`) / add {callerName, callerNumber, urgency, message} / {status} / delete |
 | GET/POST | `/api/calls` (`?channel=`), `/api/calls/stats` (+ `byChannel`), `/api/calls/:id` (GET/DELETE), `/:id/summary`, `/:id/recording` (GET/PUT) | history of every channel |
 | GET | `/api/admin/overview`, `/api/admin/logs?page&user`, `/api/admin/logins?page` | admin: totals + users / activity / sign-ins |
-| POST/GET/PATCH/DELETE | `/api/admin/users[/:id]` | admin: users |
+| POST/GET/PATCH/DELETE | `/api/admin/users[/:id]` | admin: users (PATCH {name, username, email, role, disabled, password}) |
 | GET / PUT | `/api/admin/config[/:section]` | admin: app_config |
 | GET / PUT | `/api/admin/log-level` | admin: current log levels / change {logger: com.telemune or SQL, level} until restart |
 | GET | `/api/admin/templates` | admin: all types + templates (+ how many agents use each) |

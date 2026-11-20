@@ -171,6 +171,53 @@
   .lrow .ok { color: var(--green); } .lrow .bad { color: var(--red); }
   footer { text-align: center; color: var(--muted); font-size: 13px; padding: 4px 0 8px; }
   footer b { color: var(--text); }
+  /* menu + views */
+  .admin-nav { display: flex; flex-wrap: wrap; gap: 6px; padding: 6px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel); box-shadow: var(--shadow);
+    position: sticky; top: 10px; z-index: 30; backdrop-filter: blur(14px); width: fit-content; max-width: 100%; }
+  .admin-nav a { padding: 8px 14px; border-radius: 999px; color: var(--text); text-decoration: none; font-size: 13.5px; font-weight: 600; transition: background .2s ease, transform .15s ease; white-space: nowrap; }
+  .admin-nav a:hover { background: var(--panel-2); transform: translateY(-1px); }
+  .admin-nav a[aria-current="page"] { background: var(--grad); color: #fff; box-shadow: 0 6px 16px color-mix(in srgb, var(--c1) 30%, transparent); }
+  .view { display: flex; flex-direction: column; gap: 16px; animation: view-in .3s ease-out; }
+  @keyframes view-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .view-lead { margin: 0; }
+  .kpi-groups { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+  .kgroup { background: var(--panel); border: 1px solid var(--border); border-radius: 18px; padding: 12px; box-shadow: var(--shadow); }
+  .kgroup h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+  .kgroup .kpis { grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+  .kpi { cursor: pointer; transition: transform .18s ease, border-color .2s ease; text-align: left; font: inherit; color: var(--text); width: 100%; }
+  .kpi:hover { transform: translateY(-3px); border-color: var(--c1); }
+  .kpi .v { font-size: 22px; }
+  .kpi .more { position: absolute; right: 10px; top: 10px; font-size: 11px; color: var(--muted); opacity: 0; transition: opacity .2s; }
+  .kpi:hover .more { opacity: 1; }
+  .link-btn { font-size: 13px; color: var(--c1); text-decoration: none; font-weight: 600; }
+  .tools-right { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .search.narrow { min-width: 0; width: auto; }
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 14px; }
+  .tbl { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  .tbl th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 10px 12px; background: var(--panel-2); position: sticky; top: 0; white-space: nowrap; }
+  .tbl td { padding: 10px 12px; border-top: 1px solid var(--border); vertical-align: middle; }
+  .tbl tbody tr { transition: background .15s ease; }
+  .tbl tbody tr.click { cursor: pointer; }
+  .tbl tbody tr:hover { background: color-mix(in srgb, var(--c1) 6%, transparent); }
+  .tbl .n { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .tbl .who { display: flex; align-items: center; gap: 10px; min-width: 180px; }
+  .tbl .who .av { width: 32px; height: 32px; font-size: 13px; }
+  .tbl .who small { display: block; color: var(--muted); font-size: 12px; }
+  .tbl .acts { display: flex; gap: 4px; justify-content: flex-end; white-space: nowrap; }
+  .tbl .acts button { border: 1px solid var(--border); background: var(--panel-2); color: var(--text); border-radius: 8px; padding: 5px 9px; cursor: pointer; font: inherit; font-size: 12px; }
+  .tbl .acts button:hover { border-color: var(--c1); }
+  .tbl .acts button.danger { color: var(--red); }
+  .tbl .muted { color: var(--muted); }
+  .tbl tr.off td { opacity: .6; }
+  .lbl-note { text-transform: none; letter-spacing: 0; font-weight: 500; }
+  .top-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; cursor: pointer; }
+  .top-row:hover { background: var(--panel-2); }
+  .top-row .grow { flex: 1; min-width: 0; }
+  .top-row .bar { height: 6px; border-radius: 999px; background: var(--panel-2); overflow: hidden; margin-top: 4px; }
+  .top-row .bar i { display: block; height: 100%; background: var(--grad); border-radius: inherit; animation: bar-in .6s ease-out; }
+  @keyframes bar-in { from { width: 0 !important; } }
+  @media (prefers-reduced-motion: reduce) { .view, .top-row .bar i { animation: none; } }
+  .muted { color: var(--muted); }
 </style>
 <link rel="stylesheet" href="motion.css" />
 <script src="motion.js" defer></script>
@@ -195,19 +242,57 @@
     </div>
   </header>
 
-  <section class="kpis" id="kpis" aria-label="Totals across all users"></section>
+  <!-- Menu: one section at a time (#overview, #users, …) -->
+  <nav class="admin-nav" id="adminNav" aria-label="Admin sections">
+    <a href="#overview" data-view="overview">📊 Overview</a>
+    <a href="#users" data-view="users">👥 Users</a>
+    <a href="#agents" data-view="agents">🤖 Agents</a>
+    <a href="#usage" data-view="usage">📞 Calls &amp; usage</a>
+    <a href="#templates" data-view="templates">🧩 Templates</a>
+    <a href="#settings" data-view="settings">⚙️ Settings</a>
+    <a href="#logins" data-view="logins">🔐 Sign-ins</a>
+    <a href="#activity" data-view="activity">📜 Activity</a>
+  </nav>
 
-  <section class="card">
-    <div class="toolbar">
-      <h2>👥 Users &amp; their agents</h2>
-      <div style="display:flex;gap:8px;flex-wrap:wrap">
-        <input class="search" id="search" type="search" placeholder="Search name, username, agent…" aria-label="Search users" />
-        <button class="btn btn-grad" id="addUserBtn" type="button">＋ Add user</button>
-      </div>
+  <div class="view" data-view="overview">
+    <p class="sub view-lead">Click any tile to see it user by user.</p>
+    <div class="kpi-groups" id="kpis" aria-label="Totals across all users"></div>
+    <div class="two-col">
+      <section class="card"><div class="toolbar"><h2>🏆 Most active users</h2><a class="link-btn" href="#usage">All usage ›</a></div><div id="topUsers"></div></section>
+      <section class="card"><div class="toolbar"><h2>🕘 Latest activity</h2><a class="link-btn" href="#activity">Full log ›</a></div><div class="log" id="recentLog"></div><p class="sub" id="apiLine2"></p></section>
     </div>
-    <div class="users" id="users"><div class="empty">Loading…</div></div>
-  </section>
+  </div>
 
+  <div class="view" data-view="users" hidden>
+    <section class="card">
+      <div class="toolbar">
+        <h2>👥 Users</h2>
+        <div class="tools-right">
+          <select id="userFilter" class="search narrow" aria-label="Show"><option value="">All</option><option value="admin">👑 Admins</option><option value="user">👤 Users</option><option value="off">⛔ Disabled</option></select>
+          <input class="search" id="search" type="search" placeholder="Search name, username, email, agent…" aria-label="Search users" />
+          <button class="btn btn-grad" id="addUserBtn" type="button">＋ Add user</button>
+        </div>
+      </div>
+      <div class="tbl-wrap"><table class="tbl" id="usersTbl"><thead><tr><th>User</th><th>Role</th><th>Status</th><th class="n">Agents</th><th class="n">Calls</th><th class="n">Talk time</th><th class="n">Tokens</th><th>Last sign-in</th><th></th></tr></thead><tbody id="users"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody></table></div>
+    </section>
+  </div>
+
+  <div class="view" data-view="agents" hidden>
+    <section class="card">
+      <div class="toolbar"><h2>🤖 All agents</h2><input class="search" id="agentSearch" type="search" placeholder="Search agent, user, type, voice…" aria-label="Search agents" /></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Agent</th><th>User</th><th>Type</th><th>Language · voice</th><th>Providers (STT · TTS · LLM)</th><th>Tools</th><th class="n">Events</th></tr></thead><tbody id="agentsTbl"></tbody></table></div>
+    </section>
+  </div>
+
+  <div class="view" data-view="usage" hidden>
+    <section class="card">
+      <div class="toolbar"><h2>📞 Calls &amp; usage by user</h2><span class="sub" id="apiLineU"></span></div>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>User</th><th class="n">Records</th><th class="n">📞 Calls</th><th class="n">💬 Chats</th><th class="n">🎤 Voice</th><th class="n">WhatsApp</th><th class="n">Talk time</th><th class="n">Turns</th><th class="n">Tokens</th><th class="n">Avg reply</th><th class="n">🎙</th><th>Last call</th></tr></thead><tbody id="usageTbl"></tbody></table></div>
+      <p class="sub">Click a user to open their agents, calls, chats and WhatsApp messages.</p>
+    </section>
+  </div>
+
+  <div class="view" data-view="templates" hidden>
   <section class="card" aria-labelledby="tplTitle">
     <div class="toolbar">
       <h2 id="tplTitle">🧩 Agent types &amp; templates</h2>
@@ -224,8 +309,9 @@
     </div>
   </section>
 
-  <div class="two-col">
-    <div class="side-col">
+  </div>
+
+  <div class="view" data-view="settings" hidden>
     <section class="card" aria-labelledby="setTitle">
       <div class="toolbar"><h2 id="setTitle">⚙️ App settings</h2></div>
       <div class="set-row"><div>Self sign-up<small>Show “Create account” on the login page. New accounts are users (role 2).</small></div>
@@ -242,12 +328,17 @@
         <input type="number" id="setRetries" min="0" max="10" aria-label="Re-asks before hanging up" /></div>
       <p class="sub" style="margin:8px 0 0">Stored in MySQL (<code>app_config</code>). Changes apply straight away.</p>
     </section>
+  </div>
+
+  <div class="view" data-view="logins" hidden>
     <section class="card" aria-labelledby="loginTitle">
       <div class="toolbar"><h2 id="loginTitle">🔐 Sign-ins</h2><span class="sub" style="margin:0">every attempt, from <code>login_attempts</code></span></div>
       <div class="log" id="logins"><div class="empty">Loading…</div></div>
       <div class="pager" id="loginPager"></div>
     </section>
-    </div>
+  </div>
+
+  <div class="view" data-view="activity" hidden>
     <section class="card" aria-labelledby="logTitle">
       <div class="toolbar"><h2 id="logTitle">📜 Activity log</h2><span class="sub" id="apiLine" style="margin:0"></span></div>
       <div class="log" id="log"><div class="empty">Loading…</div></div>
@@ -272,6 +363,41 @@
       <div class="form-error" id="aErr"></div>
       <div class="form-actions"><button class="btn btn-ghost" type="button" data-close>Cancel</button><button class="btn btn-grad" type="submit">Create user</button></div>
     </form>
+  </div>
+</div>
+
+<!-- edit user -->
+<div class="overlay" id="editDialog" role="dialog" aria-modal="true" aria-labelledby="edTitle">
+  <div class="dialog">
+    <div class="dialog-head"><h3 id="edTitle">✏️ Edit user</h3><button class="icon-btn" data-close type="button" aria-label="Close">✕</button></div>
+    <form id="editForm">
+      <div class="f2b">
+        <div><label for="eName">Full name</label><input type="text" id="eName" maxlength="60" required /></div>
+        <div><label for="eUser">Username</label><input type="text" id="eUser" maxlength="32" autocomplete="off" required /></div>
+      </div>
+      <label for="eEmail">Email <span class="lbl-note">(optional)</span></label><input type="text" id="eEmail" maxlength="160" inputmode="email" autocomplete="off" />
+      <div class="f2b">
+        <div><label for="eRole">Role</label><select id="eRole"><option value="2">👤 User</option><option value="1">👑 Admin</option></select></div>
+        <div><label for="eStatus">Status</label><select id="eStatus"><option value="on">✅ Active</option><option value="off">⛔ Disabled</option></select></div>
+      </div>
+      <p class="sub" id="eMeta"></p>
+      <div class="form-error" id="eErr"></div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" type="button" id="eReset">🔑 Reset password</button>
+        <span style="flex:1"></span>
+        <button class="btn btn-ghost" type="button" data-close>Cancel</button>
+        <button class="btn btn-grad" type="submit">💾 Save</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- a summary tile, user by user -->
+<div class="overlay" id="kpiDialog" role="dialog" aria-modal="true" aria-labelledby="kdTitle">
+  <div class="dialog wide">
+    <div class="dialog-head"><h3 id="kdTitle">Details</h3><button class="icon-btn" data-close type="button" aria-label="Close">✕</button></div>
+    <p class="sub" id="kdLead"></p>
+    <div class="tbl-wrap"><table class="tbl" id="kdTbl"></table></div>
   </div>
 </div>
 

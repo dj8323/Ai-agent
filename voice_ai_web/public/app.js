@@ -475,7 +475,6 @@ function fillForm() {
   state.playbookId = state.saved.some((p) => p.id === a.defaultPlaybookId) ? a.defaultPlaybookId : "";
   renderPlaybooks();
   setSelect($("llmSel"), SETTINGS.models.chat);
-  $("llmDefault").textContent = SETTINGS.models.chat || "Default model";
   $("calToggle").checked = !!SETTINGS.calendar?.enabled;
   $("emgToggle").checked = !!SETTINGS.emergency?.enabled;
   state.rules = structuredClone(SETTINGS.emergency?.rules || []);

@@ -126,6 +126,20 @@ public class AuthService {
       String n = J.str(ch.get("name"), 60);
       db.exec("UPDATE users SET name = ? WHERE id = ?", n.isEmpty() ? u.get("username") : n, id);
     }
+    if (ch.containsKey("username")) { // admins can rename the sign-in name (same rules as sign-up)
+      String un = J.str(ch.get("username"), 64).trim().toLowerCase();
+      if (!un.equals(u.get("username"))) {
+        if (!USERNAME_RE.matcher(un).matches()) throw ApiException.bad("Username: 3–32 letters, numbers, dot, dash or underscore.");
+        if (db.one("SELECT id FROM users WHERE username = ? AND id <> ?", un, id) != null) throw ApiException.bad("That username is already taken.");
+        db.exec("UPDATE users SET username = ? WHERE id = ?", un, id);
+      }
+    }
+    if (ch.containsKey("email")) {
+      String em = J.str(ch.get("email"), 160).trim();
+      if (!em.isEmpty() && !EMAIL_RE.matcher(em).matches()) throw ApiException.bad("That email address doesn't look right.");
+      if (!em.isEmpty() && db.one("SELECT id FROM users WHERE email = ? AND id <> ? AND deleted_at IS NULL", em, id) != null) throw ApiException.bad("That email is already used by another account.");
+      db.exec("UPDATE users SET email = ? WHERE id = ?", em.isEmpty() ? null : em, id);
+    }
     if (ch.containsKey("role")) db.exec("UPDATE users SET role_id = ? WHERE id = ?", J.num(ch.get("role")) == ROLE_ADMIN ? ROLE_ADMIN : ROLE_USER, id);
     if (ch.containsKey("disabled")) db.exec("UPDATE users SET disabled = ? WHERE id = ?", J.bool(ch.get("disabled")) ? 1 : 0, id);
     boolean reset = false;

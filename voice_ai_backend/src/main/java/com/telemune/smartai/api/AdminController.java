@@ -77,6 +77,8 @@ public class AdminController {
       card.put("tts", J.get(cfg, "models.tts"));
       card.put("stt", "openai".equals(J.get(cfg, "speechToText.engine")) ? J.get(cfg, "speechToText.model") : "browser");
       card.put("emergencyNumbers", J.list(J.get(cfg, "emergency.rules")).size());
+      card.put("llmProvider", "openai");
+      card.put("events", calendar.list(uid).stream().filter(e -> row.get("id").equals(J.obj(e).get("agentId"))).count());
       cards.add(card);
     }
     Map<String, Object> main = cards.stream().filter(c -> J.bool(c.get("isDefault"))).findFirst().orElse(cards.isEmpty() ? null : cards.get(0));

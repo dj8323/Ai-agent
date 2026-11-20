@@ -81,71 +81,144 @@ async function loadMe() {
   }
 }
 
-// ---------- overview ----------
+// ---------- menu: one section at a time ----------
+const VIEWS = ["overview", "users", "agents", "usage", "templates", "settings", "logins", "activity"];
+function route() {
+  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "overview";
+  document.querySelectorAll(".view").forEach((el) => (el.hidden = el.dataset.view !== v));
+  document.querySelectorAll("#adminNav a").forEach((a) => (a.dataset.view === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+addEventListener("hashchange", route);
+
+// ---------- overview: totals in groups; every tile opens its user-by-user details ----------
+const PROV = { openai: "OpenAI", elevenlabs: "ElevenLabs", aws: "AWS", cartesia: "Cartesia", browser: "Browser" };
+const prov = (p) => PROV[p] || p || "—";
+const who = (u) => `<div class="who"><div class="av">${esc((u.name || u.username)[0].toUpperCase())}</div><div>${esc(u.name)}<small>@${esc(u.username)}</small></div></div>`;
+const byCh = (u, ch) => Number(u.stats.byChannel?.[ch] || 0);
+
 async function loadOverview() {
   const { totals: t, users, api: apiNow } = await api("/api/admin/overview");
-  state.users = users;
-  const kpi = (k, v, s) => `<div class="kpi"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${s}</div></div>`;
+  state.users = users; state.totals = t;
+  const kpi = (key, k, v, sub) => `<button type="button" class="kpi" data-kpi="${key}"><span class="more">details ›</span><div class="k">${k}</div><div class="v">${v}</div><div class="s">${sub}</div></button>`;
+  const group = (title, tiles) => `<section class="kgroup"><h3>${title}</h3><div class="kpis">${tiles.join("")}</div></section>`;
   $("kpis").innerHTML = [
-    kpi("👥 Users", t.users, `${t.active} active · ${t.admins} admin${t.admins === 1 ? "" : "s"}`),
-    kpi("🤖 Agents", t.agents, `${(t.agents / Math.max(1, t.users)).toFixed(1)} per user`),
-    kpi("📞 Calls", fmtNum(t.calls), `${fmtNum(t.turns)} turns`),
-    kpi("⏱ Talk time", fmtDur(t.seconds), t.calls ? `avg ${fmtDur(t.seconds / t.calls)} / call` : "—"),
-    kpi("🔢 Tokens", fmtNum(t.tokens), "chat + summaries"),
-    kpi("⚡ Avg reply", fmtS(t.avgResponseMs), "time to voice"),
-    kpi("📘 Playbooks", t.playbooks, `${t.events} calendar events`),
-    kpi("🎙 Recordings", t.recordings, "saved"),
-    kpi("📨 Messages", t.messages, "new, waiting for the owner"),
-    kpi("🧩 Templates", t.templates, "agent scripts in the DB"),
+    group("👥 People", [kpi("users", "👥 Users", t.users, `${t.active} active · ${t.admins} admin${t.admins === 1 ? "" : "s"}`), kpi("agents", "🤖 Agents", t.agents, `${(t.agents / Math.max(1, t.users)).toFixed(1)} per user`)]),
+    group("📞 Conversations", [kpi("calls", "📞 Records", fmtNum(t.calls), `${fmtNum(t.turns)} turns`), kpi("time", "⏱ Talk time", fmtDur(t.seconds), t.calls ? `avg ${fmtDur(t.seconds / t.calls)}` : "—"),
+      kpi("reply", "⚡ Avg reply", fmtS(t.avgResponseMs), "time to voice"), kpi("recordings", "🎙 Recordings", t.recordings, "saved")]),
+    group("🔢 AI usage", [kpi("tokens", "🔢 Tokens", fmtNum(t.tokens), "chat + summaries")]),
+    group("📚 Content", [kpi("playbooks", "📘 Playbooks", t.playbooks, "users' own scripts"), kpi("events", "📅 Events", t.events, "booked meetings"),
+      kpi("messages", "📨 Messages", t.messages, "new, for the owner"), kpi("templates", "🧩 Templates", t.templates, "agent scripts")]),
   ].join("");
-  $("apiLine").textContent = apiNow ? `API last 24h: ${fmtNum(apiNow.requests)} requests · ${apiNow.errors} errors · avg ${apiNow.avgMs ?? "—"} ms` : "";
-  renderUsers();
+  $("kpis").querySelectorAll("[data-kpi]").forEach((b) => (b.onclick = () => openKpi(b.dataset.kpi)));
+  const line = apiNow ? `API last 24h: ${fmtNum(apiNow.requests)} requests · ${apiNow.errors} errors · avg ${apiNow.avgMs ?? "—"} ms` : "";
+  $("apiLine").textContent = line; $("apiLineU").textContent = line; $("apiLine2").textContent = line;
+  // most active users (by records)
+  const top = [...users].sort((a, b) => b.stats.calls - a.stats.calls).slice(0, 5);
+  const max = Math.max(1, ...top.map((u) => u.stats.calls));
+  $("topUsers").innerHTML = top.length ? top.map((u) => `<div class="top-row" data-u="${esc(u.id)}"><div class="av" style="width:30px;height:30px;font-size:12px">${esc((u.name || u.username)[0].toUpperCase())}</div>
+    <div class="grow"><b>${esc(u.name)}</b> <span class="sub">@${esc(u.username)} · ${fmtNum(u.stats.calls)} records · ${fmtDur(u.stats.totalSeconds)}</span><div class="bar"><i style="width:${(u.stats.calls / max) * 100}%"></i></div></div></div>`).join("")
+    : '<div class="empty">No users yet.</div>';
+  $("topUsers").querySelectorAll("[data-u]").forEach((r) => (r.onclick = () => openUser(r.dataset.u)));
+  renderUsers(); renderAgents(); renderUsage();
 }
 
+// a tile, user by user (click a row to open that user)
+function openKpi(key) {
+  const U = state.users;
+  const T = {
+    users: ["👥 Users", "Every account.", ["User", "Email", "Role", "Status", "Created", "Last sign-in"],
+      (u) => [who(u), esc(u.email || "—"), u.role === 1 ? "👑 Admin" : "👤 User", u.disabled ? "⛔ Disabled" : "✅ Active", fmtDate(u.createdAt), fmtDate(u.lastLoginAt)]],
+    agents: ["🤖 Agents", "Every user's agents.", ["User", "Agents", "Count"],
+      (u) => [who(u), u.agents.map((a) => `${esc(a.icon)} ${esc(a.name)}${a.isDefault ? " ★" : ""} <span class="muted">(${esc(a.typeName)})</span>`).join("<br>") || '<span class="muted">none</span>', `<span class="n">${u.agents.length}</span>`]],
+    calls: ["📞 Records", "Calls, live chats, voice chats and WhatsApp messages per user.", ["User", "All", "📞 Calls", "💬 Chats", "🎤 Voice", "WhatsApp", "Turns", "Last"],
+      (u) => [who(u), fmtNum(u.stats.calls), byCh(u, "call"), byCh(u, "chat"), byCh(u, "voice"), byCh(u, "whatsapp"), fmtNum(u.stats.turns), fmtDate(u.lastCallAt)]],
+    time: ["⏱ Talk time", "How long each user's conversations ran.", ["User", "Talk time", "Records", "Average"],
+      (u) => [who(u), fmtDur(u.stats.totalSeconds), fmtNum(u.stats.calls), u.stats.calls ? fmtDur(u.stats.totalSeconds / u.stats.calls) : "—"]],
+    reply: ["⚡ Avg reply", "Time from the caller's last word to the agent's voice.", ["User", "Avg reply", "Records"], (u) => [who(u), fmtS(u.stats.avgResponseMs), fmtNum(u.stats.calls)]],
+    recordings: ["🎙 Recordings", "Saved call recordings.", ["User", "Recordings", "Records"], (u) => [who(u), u.stats.recordings, fmtNum(u.stats.calls)]],
+    tokens: ["🔢 Tokens", "OpenAI tokens per user (chat + summaries).", ["User", "Total", "Input", "Output"],
+      (u) => [who(u), fmtNum(u.stats.tokens.total), fmtNum(u.stats.tokens.input || 0), fmtNum(u.stats.tokens.output || 0)]],
+    playbooks: ["📘 Playbooks", "Users' own call scripts.", ["User", "Playbooks"], (u) => [who(u), u.playbooks.map((p) => esc(p.name)).join(", ") || '<span class="muted">none</span>']],
+    events: ["📅 Events", "Meetings and reminders the agents booked.", ["User", "Events", "Calendar on"],
+      (u) => [who(u), u.events, u.agents.filter((a) => a.calendar).map((a) => esc(a.name)).join(", ") || '<span class="muted">—</span>']],
+    messages: ["📨 Messages", "New messages callers left, waiting for the owner.", ["User", "New messages"], (u) => [who(u), u.messages]],
+  };
+  let head, rows, lead, title;
+  if (key === "templates") {
+    title = "🧩 Templates"; lead = "Templates per agent type, and how many agents use them.";
+    head = ["Type", "Templates", "Agents using"];
+    rows = Object.values(state.types).map((t) => ({ cells: [`${esc(t.icon)} ${esc(t.name)}`, t.templates.map((x) => esc(x.name)).join(", ") || '<span class="muted">none</span>', t.templates.reduce((n, x) => n + (x.agents || 0), 0)] }));
+  } else {
+    const [tt, ll, hh, fn] = T[key];
+    title = tt; lead = ll + " Click a user to open everything about them."; head = hh;
+    rows = U.map((u) => ({ id: u.id, cells: fn(u) }));
+  }
+  $("kdTitle").textContent = title;
+  $("kdLead").textContent = lead;
+  $("kdTbl").innerHTML = `<thead><tr>${head.map((h, i) => `<th class="${i ? "n" : ""}">${h}</th>`).join("")}</tr></thead><tbody>${
+    rows.map((r) => `<tr class="${r.id ? "click" : ""}" ${r.id ? `data-u="${esc(r.id)}"` : ""}>${r.cells.map((c, i) => `<td class="${i && typeof c !== "string" ? "n" : i && /^[\d.,:hmsk—M ]+$/.test(String(c)) ? "n" : ""}">${c}</td>`).join("")}</tr>`).join("") || `<tr><td class="empty" colspan="${head.length}">Nothing yet.</td></tr>`}</tbody>`;
+  $("kdTbl").querySelectorAll("tr[data-u]").forEach((tr) => (tr.onclick = () => { closeD("kpiDialog"); openUser(tr.dataset.u); }));
+  openD("kpiDialog");
+}
+
+// ---------- users: table with view / edit / delete ----------
 function renderUsers() {
-  const q = $("search").value.trim().toLowerCase();
-  const list = state.users.filter((u) => !q || [u.name, u.username, u.email, ...u.agents.map((a) => `${a.name} ${a.typeName} ${a.llm} ${a.description}`)].join(" ").toLowerCase().includes(q));
+  const q = $("search").value.trim().toLowerCase(), f = $("userFilter").value;
+  const list = state.users.filter((u) => (!f || (f === "admin" && u.role === 1) || (f === "user" && u.role !== 1) || (f === "off" && u.disabled))
+    && (!q || [u.name, u.username, u.email, ...u.agents.map((a) => `${a.name} ${a.typeName}`)].join(" ").toLowerCase().includes(q)));
   const box = $("users");
-  if (!list.length) { box.innerHTML = `<div class="empty">${q ? "No users match your search." : "No users yet."}</div>`; return; }
+  if (!list.length) { box.innerHTML = `<tr><td colspan="9" class="empty">${q || f ? "No users match." : "No users yet."}</td></tr>`; return; }
   box.innerHTML = "";
   for (const u of list) {
     const me = u.id === state.me.id;
-    const el = document.createElement("article");
-    el.className = "ucard" + (u.disabled ? " off" : "");
-    el.innerHTML = `
-      <div class="u-top">
-        <div class="av">${esc((u.name || u.username)[0].toUpperCase())}</div>
-        <div><div class="u-name">${esc(u.name)}${me ? " (you)" : ""}</div><div class="u-handle">@${esc(u.username)}</div></div>
-        <span class="badge ${u.disabled ? "off" : u.role === 1 ? "" : "user"}">${u.disabled ? "⛔ Disabled" : u.role === 1 ? "👑 Admin" : "👤 User"}</span>
-      </div>
-      <div class="agent-line">
-        ${u.agents.map((a) => `<span class="chip" title="${esc(a.typeName)} · ${esc(a.llm)} · ${esc(LANG[a.language] || a.language)}">${esc(a.icon)} ${esc(a.name)}${a.isDefault ? " ★" : ""}</span>`).join("")}
-        ${u.agent ? `<span class="chip">🧠 ${esc(u.agent.llm)}</span>` : ""}
-        ${u.signupSource === "self" ? '<span class="chip">✍️ signed up</span>' : ""}
-      </div>
-      <div class="u-stats">
-        <div class="u-stat"><div class="k">Calls</div><div class="v">${fmtNum(u.stats.calls)}</div></div>
-        <div class="u-stat"><div class="k">Time</div><div class="v">${fmtDur(u.stats.totalSeconds)}</div></div>
-        <div class="u-stat"><div class="k">Tokens</div><div class="v">${fmtNum(u.stats.tokens.total)}</div></div>
-        <div class="u-stat"><div class="k">Agents</div><div class="v">${u.agents.length}</div></div>
-      </div>
-      <div class="last">Last call: ${fmtDate(u.lastCallAt)} · Last sign-in: ${fmtDate(u.lastLoginAt)}</div>
-      <div class="u-actions">
-        <button class="btn btn-ghost" data-act="view">👁 View agent &amp; calls</button>
-        <button class="btn btn-ghost" data-act="reset">🔑 Reset password</button>
-        ${me ? "" : `<button class="btn btn-ghost" data-act="role">${u.role === 1 ? "Make user" : "Make admin"}</button>
-        <button class="btn btn-ghost" data-act="toggle">${u.disabled ? "✅ Enable" : "⛔ Disable"}</button>
-        <button class="btn btn-ghost danger" data-act="delete">🗑 Delete</button>`}
-      </div>`;
-    el.querySelectorAll("[data-act]").forEach((b) => (b.onclick = () => userAction(u, b.dataset.act)));
-    box.appendChild(el);
+    const tr = document.createElement("tr");
+    tr.className = "click" + (u.disabled ? " off" : "");
+    tr.innerHTML = `<td>${who(u).replace("</small>", `${me ? " · you" : ""}</small>`)}</td>
+      <td>${u.role === 1 ? '<span class="badge">👑 Admin</span>' : '<span class="badge user">👤 User</span>'}</td>
+      <td>${u.disabled ? '<span class="badge off">⛔ Disabled</span>' : '<span class="sub">✅ Active</span>'}</td>
+      <td class="n">${u.agents.length}</td><td class="n">${fmtNum(u.stats.calls)}</td><td class="n">${fmtDur(u.stats.totalSeconds)}</td><td class="n">${fmtNum(u.stats.tokens.total)}</td>
+      <td class="muted">${fmtDate(u.lastLoginAt)}</td>
+      <td><div class="acts"><button type="button" data-act="view" title="Agents, calls and usage">👁 View</button><button type="button" data-act="edit">✏️ Edit</button>${me ? "" : '<button type="button" class="danger" data-act="delete" title="Delete">🗑</button>'}</div></td>`;
+    tr.onclick = (e) => { const b = e.target.closest("[data-act]"); userAction(u, b ? b.dataset.act : "view"); };
+    box.appendChild(tr);
   }
 }
+$("userFilter").addEventListener("change", renderUsers);
+
+// ---------- every agent across users ----------
+function renderAgents() {
+  const q = $("agentSearch").value.trim().toLowerCase();
+  const rows = state.users.flatMap((u) => u.agents.map((a) => ({ u, a })))
+    .filter(({ u, a }) => !q || [a.name, a.typeName, a.voice, a.language, u.name, u.username].join(" ").toLowerCase().includes(q));
+  $("agentsTbl").innerHTML = rows.length ? rows.map(({ u, a }) => `<tr class="click" data-u="${esc(u.id)}">
+      <td><b>${esc(a.icon)} ${esc(a.name)}</b>${a.isDefault ? " ★" : ""}${a.ownerName ? `<div class="muted" style="font-size:12px">for ${esc(a.ownerName)}</div>` : ""}</td>
+      <td>${esc(u.name)} <span class="muted">@${esc(u.username)}</span></td>
+      <td>${esc(a.typeName)}</td>
+      <td>${esc(LANG[a.language] || a.language)} · ${esc(a.voice)}</td>
+      <td>${esc(prov(a.sttProvider))} · ${esc(prov(a.ttsProvider))} · ${esc(prov(a.llmProvider))} <div class="muted" style="font-size:12px">${esc(a.llm || "")}</div></td>
+      <td>${a.calendar ? "📅 " : ""}${a.emergency ? `🚨${a.emergencyNumbers} ` : ""}${a.playbook ? "📘" : ""}${!a.calendar && !a.emergency && !a.playbook ? '<span class="muted">—</span>' : ""}</td>
+      <td class="n">${a.events ?? 0}</td></tr>`).join("") : '<tr><td colspan="7" class="empty">No agents.</td></tr>';
+  $("agentsTbl").querySelectorAll("tr[data-u]").forEach((tr) => (tr.onclick = () => openUser(tr.dataset.u)));
+}
+$("agentSearch").addEventListener("input", renderAgents);
+
+// ---------- usage per user ----------
+function renderUsage() {
+  const rows = [...state.users].sort((a, b) => b.stats.calls - a.stats.calls);
+  $("usageTbl").innerHTML = rows.map((u) => `<tr class="click" data-u="${esc(u.id)}"><td>${who(u)}</td>
+    <td class="n"><b>${fmtNum(u.stats.calls)}</b></td><td class="n">${byCh(u, "call")}</td><td class="n">${byCh(u, "chat")}</td><td class="n">${byCh(u, "voice")}</td><td class="n">${byCh(u, "whatsapp")}</td>
+    <td class="n">${fmtDur(u.stats.totalSeconds)}</td><td class="n">${fmtNum(u.stats.turns)}</td><td class="n">${fmtNum(u.stats.tokens.total)}</td><td class="n">${fmtS(u.stats.avgResponseMs)}</td>
+    <td class="n">${u.stats.recordings}</td><td class="muted">${fmtDate(u.lastCallAt)}</td></tr>`).join("") || '<tr><td colspan="12" class="empty">No users.</td></tr>';
+  $("usageTbl").querySelectorAll("tr[data-u]").forEach((tr) => (tr.onclick = () => openUser(tr.dataset.u)));
+}
+
 $("search").addEventListener("input", renderUsers);
 
 async function userAction(u, act) {
   try {
     if (act === "view") return openUser(u.id);
+    if (act === "edit") return openEdit(u);
     if (act === "reset") {
       $("resetWho").textContent = `For ${u.name} (@${u.username})`;
       $("rPass").value = genPassword(); $("rErr").textContent = "";
@@ -173,6 +246,38 @@ async function userAction(u, act) {
     alert(err.message);
   }
 }
+
+// ---------- edit any user's details ----------
+function openEdit(u) {
+  state.editing = u;
+  $("edTitle").textContent = `✏️ Edit ${u.name}`;
+  $("eName").value = u.name || ""; $("eUser").value = u.username; $("eEmail").value = u.email || "";
+  $("eRole").value = String(u.role === 1 ? 1 : 2); $("eStatus").value = u.disabled ? "off" : "on";
+  const me = u.id === state.me.id;
+  $("eRole").disabled = me; $("eStatus").disabled = me; // you can't remove your own admin access
+  $("eMeta").textContent = `Created ${fmtDate(u.createdAt)} · last sign-in ${fmtDate(u.lastLoginAt)}${u.signupSource === "self" ? " · signed up by themselves" : ""}${me ? " · this is you" : ""}`;
+  $("eErr").textContent = "";
+  openD("editDialog");
+  setTimeout(() => $("eName").focus(), 30);
+}
+$("eReset").onclick = () => { closeD("editDialog"); userAction(state.editing, "reset"); };
+$("editForm").onsubmit = async (e) => {
+  e.preventDefault();
+  const u = state.editing, ch = {};
+  if ($("eName").value.trim() !== (u.name || "")) ch.name = $("eName").value.trim();
+  if ($("eUser").value.trim().toLowerCase() !== u.username) ch.username = $("eUser").value.trim().toLowerCase();
+  if ($("eEmail").value.trim() !== (u.email || "")) ch.email = $("eEmail").value.trim();
+  if (!$("eRole").disabled && Number($("eRole").value) !== (u.role === 1 ? 1 : 2)) ch.role = Number($("eRole").value);
+  if (!$("eStatus").disabled && ($("eStatus").value === "off") !== !!u.disabled) ch.disabled = $("eStatus").value === "off";
+  if (!Object.keys(ch).length) return closeD("editDialog");
+  if (ch.disabled && !confirm(`Disable ${u.name}? They'll be signed out and can't sign in until enabled again.`)) return;
+  try {
+    await api(`/api/admin/users/${u.id}`, { method: "PATCH", body: JSON.stringify(ch) });
+    closeD("editDialog");
+    toast(`✓ ${ch.name || u.name} saved`);
+    loadOverview(); loadLog();
+  } catch (err) { $("eErr").textContent = err.message; }
+};
 
 // ---------- add user / reset password ----------
 $("addUserBtn").onclick = () => { $("addForm").reset(); $("aPass").value = genPassword(); $("aErr").textContent = ""; openD("addDialog"); setTimeout(() => $("aName").focus(), 30); };
@@ -334,6 +439,7 @@ const ACTIONS = {
 };
 async function loadLog() {
   const data = await api(`/api/admin/logs?page=${state.logPage}`);
+  if (state.logPage === 1) $("recentLog").innerHTML = data.items.slice(0, 6).map((l) => `<div class="lrow"><span class="w"><b>${esc(l.username || "—")}</b> ${esc(ACTIONS[l.action] || l.action)} <span class="muted">${esc(l.target || "")}</span></span><span class="m">${esc(fmtDate(l.at))}</span></div>`).join("") || '<div class="empty">Nothing yet.</div>';
   $("log").innerHTML = data.items.length ? data.items.map((l) => `
     <div class="log-row">
       <span class="when">${esc(fmtDate(l.at))}</span>
@@ -517,6 +623,7 @@ $("newTypeBtn").onclick = async () => {
 // ---------- start ----------
 (async () => {
   try {
+    route();
     await loadMe();
     loadSettings().catch(() => {});
     loadLog().catch(() => {});
@@ -524,6 +631,6 @@ $("newTypeBtn").onclick = async () => {
     loadTemplates().catch((err) => ($("typeList").innerHTML = `<div class="empty">${esc(err.message)}</div>`));
     await loadOverview();
   } catch (err) {
-    $("users").innerHTML = `<div class="empty">Couldn't load the dashboard: ${esc(err.message)}</div>`;
+    $("users").innerHTML = `<tr><td colspan="9" class="empty">Couldn't load the dashboard: ${esc(err.message)}</td></tr>`;
   }
 })();
