@@ -49,6 +49,9 @@ public class Db {
     addColumn("agents", "availability_plan", "JSON NULL AFTER greeting");
     addColumn("agents", "meeting_minutes", "INT NULL AFTER availability_plan");
     addColumn("agents", "calendar_app", "VARCHAR(16) NULL AFTER meeting_minutes");
+    addColumn("users", "created_by", "VARCHAR(16) NULL AFTER signup_source");
+    addColumn("users", "permissions", "JSON NULL AFTER created_by");
+    jdbc.update("INSERT IGNORE INTO roles (id, name, description) VALUES (0, 'superadmin', 'Everything an admin can do, plus server configuration, restart, creating admins and choosing what each admin sees')");
     addColumn("agents", "speech_speed", "DECIMAL(3,2) NULL AFTER meeting_minutes");
     addColumn("api_logs", "request_id", "VARCHAR(16) NULL AFTER id");
     addColumn("activity_logs", "request_id", "VARCHAR(16) NULL AFTER id");

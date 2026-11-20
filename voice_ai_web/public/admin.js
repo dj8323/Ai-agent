@@ -7,7 +7,7 @@ const _fetch = window.fetch.bind(window);
 window.fetch = async (...args) => {
   const res = await _fetch(...args);
   if (res.status === 401) location.href = "/login.html";
-  if (res.status === 403 && String(args[0]).startsWith("/api/admin")) location.href = "/";
+  if (res.status === 403 && String(args[0]).startsWith("/api/admin/overview")) location.href = "/"; // not an admin any more
   return res;
 };
 async function api(url, opts = {}) {
@@ -68,8 +68,11 @@ $("pwForm").onsubmit = async (e) => {
 };
 
 async function loadMe() {
-  const { user } = await api("/api/me");
-  state.me = user;
+  const { user, access } = await api("/api/me");
+  state.me = user; state.access = access;
+  document.body.classList.toggle("is-super", user.role === 0);
+  $("restartBtn").hidden = user.role !== 0;
+  if (!mySections().length) document.querySelector(".wrap").insertAdjacentHTML("beforeend", '<div class="card empty">No dashboard sections are open for your account. Ask the SuperAdmin.</div>');
   $("uAv").textContent = (user.name || user.username)[0].toUpperCase();
   $("uName").textContent = user.name || user.username;
   if (user.mustChangePassword) {
@@ -82,9 +85,15 @@ async function loadMe() {
 }
 
 // ---------- menu: one section at a time ----------
-const VIEWS = ["overview", "users", "agents", "usage", "templates", "settings", "logins", "activity"];
+const VIEWS = ["overview", "users", "agents", "usage", "templates", "settings", "logins", "activity", "admins", "server"];
+const isSuper = () => state.me?.role === 0;
+// sections this account may open (the SuperAdmin decides them for each admin)
+const mySections = () => (isSuper() ? VIEWS : (state.access?.admin || []));
 function route() {
-  const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "overview";
+  const open = mySections();
+  document.querySelectorAll("#adminNav a").forEach((a) => (a.hidden = !open.includes(a.dataset.view)));
+  const want = location.hash.slice(1);
+  const v = open.includes(want) ? want : open[0] || "overview";
   document.querySelectorAll(".view").forEach((el) => (el.hidden = el.dataset.view !== v));
   document.querySelectorAll("#adminNav a").forEach((a) => (a.dataset.view === v ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
   window.scrollTo({ top: 0, behavior: "smooth" });
@@ -96,10 +105,16 @@ const PROV = { openai: "OpenAI", elevenlabs: "ElevenLabs", aws: "AWS", cartesia:
 const prov = (p) => PROV[p] || p || "—";
 const who = (u) => `<div class="who"><div class="av">${esc((u.name || u.username)[0].toUpperCase())}</div><div>${esc(u.name)}<small>@${esc(u.username)}</small></div></div>`;
 const byCh = (u, ch) => Number(u.stats.byChannel?.[ch] || 0);
+const roleName = (u) => (u.role === 0 ? "🛡 SuperAdmin" : u.role === 1 ? "👑 Admin" : "👤 User");
+const roleBadge = (u) => `<span class="badge ${u.role === 0 ? "super" : u.role === 1 ? "" : "user"}">${roleName(u)}</span>`;
+const creator = (u) => {
+  if (u.createdBy) { const c = state.users.find((x) => x.id === u.createdBy); return c ? `${esc(c.name)} <span class="muted">@${esc(c.username)}</span>` : '<span class="muted">a removed admin</span>'; }
+  return `<span class="muted">${u.signupSource === "self" ? "✍️ self sign-up" : u.signupSource === "setup" ? "⚙️ setup" : "—"}</span>`;
+};
 
 async function loadOverview() {
-  const { totals: t, users, api: apiNow } = await api("/api/admin/overview");
-  state.users = users; state.totals = t;
+  const { totals: t, users, api: apiNow, sections, features } = await api("/api/admin/overview");
+  state.users = users; state.totals = t; state.sections = sections || []; state.features = features || [];
   const kpi = (key, k, v, sub) => `<button type="button" class="kpi" data-kpi="${key}"><span class="more">details ›</span><div class="k">${k}</div><div class="v">${v}</div><div class="s">${sub}</div></button>`;
   const group = (title, tiles) => `<section class="kgroup"><h3>${title}</h3><div class="kpis">${tiles.join("")}</div></section>`;
   $("kpis").innerHTML = [
@@ -120,15 +135,15 @@ async function loadOverview() {
     <div class="grow"><b>${esc(u.name)}</b> <span class="sub">@${esc(u.username)} · ${fmtNum(u.stats.calls)} records · ${fmtDur(u.stats.totalSeconds)}</span><div class="bar"><i style="width:${(u.stats.calls / max) * 100}%"></i></div></div></div>`).join("")
     : '<div class="empty">No users yet.</div>';
   $("topUsers").querySelectorAll("[data-u]").forEach((r) => (r.onclick = () => openUser(r.dataset.u)));
-  renderUsers(); renderAgents(); renderUsage();
+  renderUsers(); renderAgents(); renderUsage(); if (isSuper()) renderAdmins();
 }
 
 // a tile, user by user (click a row to open that user)
 function openKpi(key) {
   const U = state.users;
   const T = {
-    users: ["👥 Users", "Every account.", ["User", "Email", "Role", "Status", "Created", "Last sign-in"],
-      (u) => [who(u), esc(u.email || "—"), u.role === 1 ? "👑 Admin" : "👤 User", u.disabled ? "⛔ Disabled" : "✅ Active", fmtDate(u.createdAt), fmtDate(u.lastLoginAt)]],
+    users: ["👥 Users", "Every account.", ["User", "Email", "Role", "Status", "Created by", "Created", "Last sign-in"],
+      (u) => [who(u), esc(u.email || "—"), roleName(u), u.disabled ? "⛔ Disabled" : "✅ Active", creator(u), fmtDate(u.createdAt), fmtDate(u.lastLoginAt)]],
     agents: ["🤖 Agents", "Every user's agents.", ["User", "Agents", "Count"],
       (u) => [who(u), u.agents.map((a) => `${esc(a.icon)} ${esc(a.name)}${a.isDefault ? " ★" : ""} <span class="muted">(${esc(a.typeName)})</span>`).join("<br>") || '<span class="muted">none</span>', `<span class="n">${u.agents.length}</span>`]],
     calls: ["📞 Records", "Calls, live chats, voice chats and WhatsApp messages per user.", ["User", "All", "📞 Calls", "💬 Chats", "🎤 Voice", "WhatsApp", "Turns", "Last"],
@@ -165,26 +180,30 @@ function openKpi(key) {
 // ---------- users: table with view / edit / delete ----------
 function renderUsers() {
   const q = $("search").value.trim().toLowerCase(), f = $("userFilter").value;
-  const list = state.users.filter((u) => (!f || (f === "admin" && u.role === 1) || (f === "user" && u.role !== 1) || (f === "off" && u.disabled))
+  const list = state.users.filter((u) => (!f || (f === "admin" && u.role <= 1) || (f === "user" && u.role > 1) || (f === "off" && u.disabled))
     && (!q || [u.name, u.username, u.email, ...u.agents.map((a) => `${a.name} ${a.typeName}`)].join(" ").toLowerCase().includes(q)));
   const box = $("users");
-  if (!list.length) { box.innerHTML = `<tr><td colspan="9" class="empty">${q || f ? "No users match." : "No users yet."}</td></tr>`; return; }
+  if (!list.length) { box.innerHTML = `<tr><td colspan="10" class="empty">${q || f ? "No users match." : "No users yet."}</td></tr>`; return; }
   box.innerHTML = "";
   for (const u of list) {
     const me = u.id === state.me.id;
     const tr = document.createElement("tr");
     tr.className = "click" + (u.disabled ? " off" : "");
     tr.innerHTML = `<td>${who(u).replace("</small>", `${me ? " · you" : ""}</small>`)}</td>
-      <td>${u.role === 1 ? '<span class="badge">👑 Admin</span>' : '<span class="badge user">👤 User</span>'}</td>
+      <td>${roleBadge(u)}</td>
       <td>${u.disabled ? '<span class="badge off">⛔ Disabled</span>' : '<span class="sub">✅ Active</span>'}</td>
+      <td>${creator(u)}</td>
       <td class="n">${u.agents.length}</td><td class="n">${fmtNum(u.stats.calls)}</td><td class="n">${fmtDur(u.stats.totalSeconds)}</td><td class="n">${fmtNum(u.stats.tokens.total)}</td>
       <td class="muted">${fmtDate(u.lastLoginAt)}</td>
-      <td><div class="acts"><button type="button" data-act="view" title="Agents, calls and usage">👁 View</button><button type="button" data-act="edit">✏️ Edit</button>${me ? "" : '<button type="button" class="danger" data-act="delete" title="Delete">🗑</button>'}</div></td>`;
+      <td><div class="acts"><button type="button" data-act="view" title="Agents, calls and usage">👁 View</button>${canManage(u) ? '<button type="button" data-act="edit">✏️ Edit</button>' : ""}${me || !canManage(u) || u.role === 0 ? "" : '<button type="button" class="danger" data-act="delete" title="Delete">🗑</button>'}</div></td>`;
     tr.onclick = (e) => { const b = e.target.closest("[data-act]"); userAction(u, b ? b.dataset.act : "view"); };
     box.appendChild(tr);
   }
 }
 $("userFilter").addEventListener("change", renderUsers);
+
+// an admin manages users (and itself); the SuperAdmin manages admins too; nobody else edits the SuperAdmin
+const canManage = (u) => u.id === state.me.id || (u.role === 2) || (isSuper() && u.role === 1);
 
 // ---------- every agent across users ----------
 function renderAgents() {
@@ -247,6 +266,46 @@ async function userAction(u, act) {
   }
 }
 
+// ---------- access: dashboard sections (admins, set by the SuperAdmin) and app features (set by an admin for users) ----------
+const SECTION_LABELS = { overview: "📊 Overview", users: "👥 Users", agents: "🤖 Agents", usage: "📞 Calls & usage", templates: "🧩 Templates",
+  settings: "⚙️ Settings", logins: "🔐 Sign-ins", activity: "📜 Activity" };
+const FEATURE_GROUPS = [
+  ["Talk channels", { "talk.call": "📞 Web call", "talk.chat": "💬 Live chat", "talk.voice": "🎤 Voice chat", "talk.whatsapp": "WhatsApp" }],
+  ["My agents tabs", { "tab.profile": "👤 Profile", "tab.voice": "🧠 Voice & AI", "tab.availability": "🕒 Availability", "tab.tools": "🧰 Tools" }],
+  ["Inside Tools", { "tool.calendar": "📅 Calendar", "tool.emergency": "🚨 Emergency", "tool.playbook": "📘 Playbook", "tool.summaries": "📨 Call summaries delivery" }],
+  ["Other", { history: "📚 Call summaries list", "agents.create": "＋ Create agents", "agents.delete": "🗑 Delete agents" }],
+];
+const featureOn = (u, f) => !(u.permissions?.app && u.permissions.app[f] === false);
+const myFeature = (f) => isSuper() || state.access?.app?.[f] !== false;
+function renderAccess(u) {
+  const box = $("eAccess");
+  box.innerHTML = "";
+  if (u.role === 0 || u.id === state.me.id || !canManage(u)) return; // nobody sets their own access
+  const group = (title, items, cls) => `<div class="acc-group ${cls}"><h5>${title}<button type="button" data-all>all</button><button type="button" data-none>none</button></h5><div class="acc-chips">${items}</div></div>`;
+  if (u.role === 1) {
+    const secs = u.permissions?.admin || state.sections;
+    box.insertAdjacentHTML("beforeend", group("Dashboard sections this admin can open", state.sections.map((k) =>
+      `<label><input type="checkbox" data-sec="${k}" ${secs.includes(k) ? "checked" : ""} />${SECTION_LABELS[k] || k}</label>`).join(""), "secs"));
+  }
+  const who = u.role === 1 ? "this admin (and the most they can give their users)" : "this user";
+  box.insertAdjacentHTML("beforeend", FEATURE_GROUPS.map(([title, items]) => group(`${title} · for ${who}`, Object.entries(items).map(([f, label]) => {
+    const lock = !myFeature(f);
+    return `<label class="${lock ? "locked" : ""}" title="${lock ? "You don't have this yourself, so you can't give it" : ""}"><input type="checkbox" data-feat="${f}" ${featureOn(u, f) && !lock ? "checked" : ""} ${lock ? "disabled" : ""} />${label}</label>`;
+  }).join(""), "feats")).join(""));
+  box.querySelectorAll("[data-all],[data-none]").forEach((b) => (b.onclick = () => b.closest(".acc-group").querySelectorAll("input:not(:disabled)").forEach((i) => (i.checked = b.hasAttribute("data-all")))));
+  box.dataset.before = JSON.stringify(readAccess(u, true));
+}
+function readAccess(u, raw) {
+  const box = $("eAccess");
+  if (!box.children.length) return null;
+  const app = {};
+  box.querySelectorAll("[data-feat]").forEach((i) => (app[i.dataset.feat] = i.checked));
+  const out = { app };
+  if (u.role === 1) out.admin = [...box.querySelectorAll("[data-sec]:checked")].map((i) => i.dataset.sec);
+  if (raw) return out;
+  return JSON.stringify(out) === box.dataset.before ? null : out; // unchanged: don't send
+}
+
 // ---------- edit any user's details ----------
 function openEdit(u) {
   state.editing = u;
@@ -254,7 +313,9 @@ function openEdit(u) {
   $("eName").value = u.name || ""; $("eUser").value = u.username; $("eEmail").value = u.email || "";
   $("eRole").value = String(u.role === 1 ? 1 : 2); $("eStatus").value = u.disabled ? "off" : "on";
   const me = u.id === state.me.id;
-  $("eRole").disabled = me; $("eStatus").disabled = me; // you can't remove your own admin access
+  $("eRole").disabled = me || !isSuper() || u.role === 0; // only the SuperAdmin changes roles; never its own
+  $("eStatus").disabled = me;
+  renderAccess(u);
   $("eMeta").textContent = `Created ${fmtDate(u.createdAt)} · last sign-in ${fmtDate(u.lastLoginAt)}${u.signupSource === "self" ? " · signed up by themselves" : ""}${me ? " · this is you" : ""}`;
   $("eErr").textContent = "";
   openD("editDialog");
@@ -269,6 +330,8 @@ $("editForm").onsubmit = async (e) => {
   if ($("eEmail").value.trim() !== (u.email || "")) ch.email = $("eEmail").value.trim();
   if (!$("eRole").disabled && Number($("eRole").value) !== (u.role === 1 ? 1 : 2)) ch.role = Number($("eRole").value);
   if (!$("eStatus").disabled && ($("eStatus").value === "off") !== !!u.disabled) ch.disabled = $("eStatus").value === "off";
+  const acc = readAccess(u);
+  if (acc) ch.permissions = acc;
   if (!Object.keys(ch).length) return closeD("editDialog");
   if (ch.disabled && !confirm(`Disable ${u.name}? They'll be signed out and can't sign in until enabled again.`)) return;
   try {
@@ -280,7 +343,14 @@ $("editForm").onsubmit = async (e) => {
 };
 
 // ---------- add user / reset password ----------
-$("addUserBtn").onclick = () => { $("addForm").reset(); $("aPass").value = genPassword(); $("aErr").textContent = ""; openD("addDialog"); setTimeout(() => $("aName").focus(), 30); };
+$("addUserBtn").onclick = () => openAdd(2);
+function openAdd(role) {
+  $("addForm").reset();
+  $("aRole").querySelector('[value="1"]').hidden = !isSuper();
+  $("aRole").value = String(isSuper() ? role : 2);
+  $("addTitle").textContent = role === 1 ? "＋ Add admin" : "＋ Add user";
+  $("aPass").value = genPassword(); $("aErr").textContent = ""; openD("addDialog"); setTimeout(() => $("aName").focus(), 30);
+}
 $("aGen").onclick = () => ($("aPass").value = genPassword());
 $("rGen").onclick = () => ($("rPass").value = genPassword());
 $("aName").addEventListener("input", () => {
@@ -291,7 +361,7 @@ $("aUser").addEventListener("input", () => ($("aUser").dataset.touched = "1"));
 $("addForm").onsubmit = async (e) => {
   e.preventDefault();
   try {
-    const u = await api("/api/admin/users", { method: "POST", body: JSON.stringify({ name: $("aName").value, username: $("aUser").value, password: $("aPass").value, role: Number($("aRole").value) }) });
+    const u = await api("/api/admin/users", { method: "POST", body: JSON.stringify({ name: $("aName").value, username: $("aUser").value, email: $("aEmail").value.trim(), password: $("aPass").value, role: Number($("aRole").value) }) });
     closeD("addDialog");
     await navigator.clipboard?.writeText(`Username: ${u.username}\nPassword: ${$("aPass").value}`).catch(() => {});
     toast(`✓ ${u.name} added. Sign-in details copied; share them privately.`);
@@ -395,6 +465,91 @@ async function openCall(callId) {
   openD("callDialog");
 }
 
+// ---------- 🛡 Admins (SuperAdmin) ----------
+$("addAdminBtn").onclick = () => openAdd(1);
+function renderAdmins() {
+  const admins = state.users.filter((u) => u.role <= 1);
+  $("adminCards").innerHTML = admins.map((a) => {
+    const made = state.users.filter((u) => u.createdBy === a.id);
+    const secs = a.role === 0 ? ["everything"] : (a.permissions?.admin || state.sections).map((k) => SECTION_LABELS[k] || k);
+    const offFeats = a.role === 0 ? [] : Object.entries(a.permissions?.app || {}).filter(([, v]) => v === false).map(([k]) => k);
+    return `<article class="acard">
+      <div class="top">${who(a)}<span style="margin-left:auto">${roleBadge(a)}</span></div>
+      <div class="sub">${esc(a.email || "no email")} · ${a.disabled ? "⛔ disabled" : "✅ active"} · last sign-in ${fmtDate(a.lastLoginAt)} · created by ${creator(a)}</div>
+      <div><div class="sub" style="margin-bottom:4px">Dashboard sections</div><div class="chips">${secs.map((x) => `<span class="chip on">${esc(x)}</span>`).join("") || '<span class="chip">none</span>'}</div></div>
+      ${offFeats.length ? `<div class="sub">Switched off in the app: ${offFeats.map(esc).join(", ")}</div>` : ""}
+      <details class="made"><summary>👥 Users created: ${made.length}</summary>${made.length ? `<ul>${made.map((u) => `<li>${esc(u.name)} @${esc(u.username)} · ${roleName(u)}${u.disabled ? " · disabled" : ""}</li>`).join("")}</ul>` : '<div class="sub">None yet.</div>'}</details>
+      <div class="u-actions">${a.role === 0 ? "" : `<button class="btn btn-ghost" data-edit="${esc(a.id)}">✏️ Edit &amp; access</button>`}<button class="btn btn-ghost" data-view="${esc(a.id)}">👁 View</button></div>
+    </article>`;
+  }).join("") || '<div class="empty">No admins yet.</div>';
+  $("adminCards").querySelectorAll("[data-edit]").forEach((b) => (b.onclick = () => openEdit(state.users.find((u) => u.id === b.dataset.edit))));
+  $("adminCards").querySelectorAll("[data-view]").forEach((b) => (b.onclick = () => openUser(b.dataset.view)));
+}
+
+// ---------- 🗄 Server configuration (SuperAdmin): .env / keys.env and app_config ----------
+async function loadServer() {
+  const { files } = await api("/api/super/server-config");
+  $("serverFiles").innerHTML = "";
+  for (const f of files) {
+    const el = document.createElement("div");
+    el.className = "cfg-file";
+    el.innerHTML = `<h3>📄 ${esc(f.file)} <span class="sub">${f.exists ? `${f.entries.length} settings` : "not created yet"}</span><button class="btn btn-grad" type="button" data-save>💾 Save ${esc(f.file)}</button></h3>
+      ${f.entries.map((e) => `<div class="cfg-row"><div><code>${esc(e.key)}</code>${e.comment ? `<small>${esc(e.comment)}</small>` : ""}</div>
+        <input type="${e.secret ? "password" : "text"}" data-key="${esc(e.key)}" data-orig="${e.secret ? "" : esc(e.value)}" value="${e.secret ? "" : esc(e.value)}"
+          placeholder="${e.secret ? (e.set ? "•••••••• (set) · type to replace" : "(empty) · type a value") : ""}" autocomplete="off" spellcheck="false" /></div>`).join("")}
+      <div class="cfg-add"><input type="text" data-newkey placeholder="New setting name (e.g. LOG_LEVEL)" /><input type="text" data-newval placeholder="Value" /></div>`;
+    el.querySelectorAll("input[data-key]").forEach((i) => i.addEventListener("input", () => i.classList.toggle("changed", i.value !== i.dataset.orig)));
+    el.querySelector("[data-save]").onclick = async () => {
+      const changes = {};
+      el.querySelectorAll("input[data-key]").forEach((i) => { if (i.value !== i.dataset.orig && !(i.type === "password" && i.value === "")) changes[i.dataset.key] = i.value; });
+      const nk = el.querySelector("[data-newkey]").value.trim();
+      if (nk) changes[nk] = el.querySelector("[data-newval]").value;
+      if (!Object.keys(changes).length) return toast("Nothing changed");
+      if (!confirm(`Save ${Object.keys(changes).length} change(s) to ${f.file}?\n\n${Object.keys(changes).join(", ")}\n\nThey apply after Restart.`)) return;
+      try {
+        await api("/api/super/server-config", { method: "PUT", body: JSON.stringify({ file: f.file, changes }) });
+        toast(`✓ ${f.file} saved · restart to apply`);
+        loadServer(); loadLog();
+      } catch (err) { toast("⚠ " + err.message); }
+    };
+    $("serverFiles").appendChild(el);
+  }
+  // app_config (database): one JSON editor per section
+  const { config, sections } = await api("/api/admin/config");
+  $("dbConfig").innerHTML = "";
+  for (const sec of Object.keys(config)) {
+    const d = document.createElement("details");
+    d.className = "tpl dbsec";
+    d.innerHTML = `<summary>🗃 ${esc(sec)} <span class="s">${esc((sections && sections[sec]) || "")}</span></summary><textarea spellcheck="false"></textarea>
+      <div class="form-actions"><span class="form-error"></span><button class="btn btn-grad" type="button">💾 Save ${esc(sec)}</button></div>`;
+    d.querySelector("textarea").value = JSON.stringify(config[sec], null, 2);
+    d.querySelector("button").onclick = async () => {
+      let v;
+      try { v = JSON.parse(d.querySelector("textarea").value); } catch (e) { d.querySelector(".form-error").textContent = "Not valid JSON: " + e.message; return; }
+      d.querySelector(".form-error").textContent = "";
+      try { await api(`/api/admin/config/${encodeURIComponent(sec)}`, { method: "PUT", body: JSON.stringify(v) }); toast(`✓ ${sec} saved`); loadLog(); loadSettings(); }
+      catch (err) { d.querySelector(".form-error").textContent = err.message; }
+    };
+    $("dbConfig").appendChild(d);
+  }
+}
+async function restartBackend() {
+  if (!confirm("Restart the backend now? Calls in progress are cut off. It takes about 10–20 seconds.")) return;
+  try {
+    await api("/api/super/restart", { method: "POST" });
+    toast("🔄 Restarting… this page reloads when it's back");
+    await new Promise((r) => setTimeout(r, 4000));
+    for (let i = 0; i < 90; i++) {
+      if (await _fetch("/api/health").then((x) => x.ok).catch(() => false)) return location.reload();
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    alert("The backend didn't come back. Check voice_ai_backend/logs/restart.log and error.log.");
+  } catch (err) { alert("Couldn't restart: " + err.message); }
+}
+$("restartBtn").onclick = restartBackend;
+$("restartBtn2").onclick = restartBackend;
+addEventListener("hashchange", () => { if (location.hash === "#server" && isSuper()) loadServer().catch((e) => ($("serverFiles").innerHTML = `<div class="empty">${esc(e.message)}</div>`)); });
+
 // ---------- app settings (MySQL app_config) ----------
 async function loadSettings() {
   const { config } = await api("/api/admin/config");
@@ -438,6 +593,7 @@ const ACTIONS = {
   "template.delete": "🗑 removed template",
 };
 async function loadLog() {
+  if (!mySections().includes("activity")) return;
   const data = await api(`/api/admin/logs?page=${state.logPage}`);
   if (state.logPage === 1) $("recentLog").innerHTML = data.items.slice(0, 6).map((l) => `<div class="lrow"><span class="w"><b>${esc(l.username || "—")}</b> ${esc(ACTIONS[l.action] || l.action)} <span class="muted">${esc(l.target || "")}</span></span><span class="m">${esc(fmtDate(l.at))}</span></div>`).join("") || '<div class="empty">Nothing yet.</div>';
   $("log").innerHTML = data.items.length ? data.items.map((l) => `
@@ -623,14 +779,16 @@ $("newTypeBtn").onclick = async () => {
 // ---------- start ----------
 (async () => {
   try {
-    route();
     await loadMe();
-    loadSettings().catch(() => {});
-    loadLog().catch(() => {});
-    loadLogins().catch(() => {});
-    loadTemplates().catch((err) => ($("typeList").innerHTML = `<div class="empty">${esc(err.message)}</div>`));
+    route();
+    const can = (v) => mySections().includes(v);
+    if (can("settings")) loadSettings().catch(() => {});
+    if (can("activity")) loadLog().catch(() => {});
+    if (can("logins")) loadLogins().catch(() => {});
+    if (can("templates")) loadTemplates().catch((err) => ($("typeList").innerHTML = `<div class="empty">${esc(err.message)}</div>`));
+    if (isSuper() && location.hash === "#server") loadServer().catch(() => {});
     await loadOverview();
   } catch (err) {
-    $("users").innerHTML = `<tr><td colspan="9" class="empty">Couldn't load the dashboard: ${esc(err.message)}</td></tr>`;
+    $("users").innerHTML = `<tr><td colspan="10" class="empty">Couldn't load the dashboard: ${esc(err.message)}</td></tr>`;
   }
 })();

@@ -218,6 +218,39 @@
   @keyframes bar-in { from { width: 0 !important; } }
   @media (prefers-reduced-motion: reduce) { .view, .top-row .bar i { animation: none; } }
   .muted { color: var(--muted); }
+  .super-only[hidden] { display: none !important; }
+  .badge.super { background: linear-gradient(135deg, color-mix(in srgb, var(--amber) 30%, transparent), color-mix(in srgb, var(--c2) 22%, transparent)); color: var(--text); }
+  .access-box { margin-top: 12px; display: flex; flex-direction: column; gap: 10px; }
+  .access-box:empty { display: none; }
+  .acc-group { border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; background: var(--panel-2); }
+  .acc-group h5 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); display: flex; gap: 8px; align-items: center; }
+  .acc-group h5 button { margin-left: auto; border: 0; background: none; color: var(--c1); font: inherit; font-size: 11px; cursor: pointer; text-transform: none; letter-spacing: 0; }
+  .acc-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .acc-chips label { display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--border); background: var(--panel);
+    text-transform: none; letter-spacing: 0; font-size: 12.5px; font-weight: 600; color: var(--text); cursor: pointer; transition: all .15s ease; }
+  .acc-chips label:has(input:checked) { background: color-mix(in srgb, var(--c1) 14%, var(--panel)); border-color: var(--c1); }
+  .acc-chips label.locked { opacity: .45; cursor: not-allowed; }
+  .acc-chips input { accent-color: var(--c1); margin: 0; }
+  .admin-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 12px; }
+  .acard { border: 1px solid var(--border); border-radius: 16px; background: var(--panel-2); padding: 14px; display: flex; flex-direction: column; gap: 10px; animation: view-in .3s ease-out both; }
+  .acard .top { display: flex; align-items: center; gap: 10px; }
+  .acard .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .acard .made { font-size: 13px; }
+  .acard .made summary { cursor: pointer; font-weight: 650; }
+  .acard .made ul { margin: 6px 0 0; padding-left: 18px; color: var(--muted); }
+  .cfg-file { border: 1px solid var(--border); border-radius: 14px; margin-top: 12px; overflow: hidden; }
+  .cfg-file > h3 { margin: 0; padding: 10px 14px; font-size: 14px; background: var(--panel-2); display: flex; align-items: center; gap: 10px; }
+  .cfg-file > h3 .btn { margin-left: auto; }
+  .cfg-row { display: grid; grid-template-columns: minmax(180px, 280px) minmax(0, 1fr); gap: 10px; padding: 8px 14px; border-top: 1px solid var(--border); align-items: center; }
+  .cfg-row code { font-size: 12.5px; overflow-wrap: anywhere; }
+  .cfg-row small { display: block; color: var(--muted); font-size: 11.5px; margin-top: 2px; }
+  .cfg-row input { padding: 7px 10px; font-size: 13px; }
+  .cfg-row input.changed { border-color: var(--amber); }
+  .cfg-add { display: flex; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--border); }
+  .cfg-add input { flex: 1; }
+  .dbsec { margin-top: 10px; }
+  .dbsec textarea { font-family: ui-monospace, Menlo, monospace; font-size: 12.5px; min-height: 140px; }
+  .who { display: flex; align-items: center; gap: 10px; } .who small { display: block; color: var(--muted); font-size: 12px; }
 </style>
 <link rel="stylesheet" href="motion.css" />
 <script src="motion.js" defer></script>
@@ -230,6 +263,7 @@
       <div><h1>Admin dashboard</h1><div class="sub">TelemuneSmartAi · every user, agent and call in one place</div></div>
     </div>
     <div class="head-right">
+      <button class="btn btn-ghost" id="restartBtn" type="button" hidden title="Restart the backend (SuperAdmin)">🔄 Restart backend</button>
       <a class="btn btn-grad" href="/">🎙 Open my agent</a>
       <button class="icon-btn" id="themeBtn" type="button" aria-label="Switch theme">🌙</button>
       <div class="user-menu">
@@ -252,6 +286,8 @@
     <a href="#settings" data-view="settings">⚙️ Settings</a>
     <a href="#logins" data-view="logins">🔐 Sign-ins</a>
     <a href="#activity" data-view="activity">📜 Activity</a>
+    <a href="#admins" data-view="admins" class="super-only" hidden>🛡 Admins</a>
+    <a href="#server" data-view="server" class="super-only" hidden>🗄 Server</a>
   </nav>
 
   <div class="view" data-view="overview">
@@ -273,7 +309,7 @@
           <button class="btn btn-grad" id="addUserBtn" type="button">＋ Add user</button>
         </div>
       </div>
-      <div class="tbl-wrap"><table class="tbl" id="usersTbl"><thead><tr><th>User</th><th>Role</th><th>Status</th><th class="n">Agents</th><th class="n">Calls</th><th class="n">Talk time</th><th class="n">Tokens</th><th>Last sign-in</th><th></th></tr></thead><tbody id="users"><tr><td colspan="9" class="empty">Loading…</td></tr></tbody></table></div>
+      <div class="tbl-wrap"><table class="tbl" id="usersTbl"><thead><tr><th>User</th><th>Role</th><th>Status</th><th>Created by</th><th class="n">Agents</th><th class="n">Calls</th><th class="n">Talk time</th><th class="n">Tokens</th><th>Last sign-in</th><th></th></tr></thead><tbody id="users"><tr><td colspan="10" class="empty">Loading…</td></tr></tbody></table></div>
     </section>
   </div>
 
@@ -346,6 +382,27 @@
     </section>
   </div>
 
+  <!-- SuperAdmin only -->
+  <div class="view" data-view="admins" hidden>
+    <section class="card">
+      <div class="toolbar"><h2>🛡 Admins</h2><button class="btn btn-grad" id="addAdminBtn" type="button">＋ Add admin</button></div>
+      <p class="sub">Every admin, what they can open in this dashboard, what they may give their users, and the users they created.</p>
+      <div class="admin-cards" id="adminCards"></div>
+    </section>
+  </div>
+
+  <div class="view" data-view="server" hidden>
+    <section class="card">
+      <div class="toolbar"><h2>🗄 Server configuration</h2><button class="btn btn-grad" id="restartBtn2" type="button">🔄 Restart backend</button></div>
+      <p class="sub">The backend's files (<code>voice_ai_backend/.env</code>: MySQL, ports, logging; <code>keys.env</code>: provider keys). Passwords and keys show as •••• and change only when you type a new value. A copy of the old file is kept in <code>config-backups/</code>. <b>Changes apply after Restart.</b></p>
+      <div id="serverFiles"><div class="empty">Loading…</div></div>
+    </section>
+    <section class="card">
+      <div class="toolbar"><h2>🗃 App configuration (database)</h2><span class="sub">table <code>app_config</code>, one JSON per section · applies straight away</span></div>
+      <div id="dbConfig"><div class="empty">Loading…</div></div>
+    </section>
+  </div>
+
   <footer>Powered by <b>Telemune</b> © 2027 · Designed by <b>DJ</b></footer>
 </div>
 
@@ -358,6 +415,7 @@
       <label for="aUser">Username</label><input type="text" id="aUser" maxlength="32" autocomplete="off" required placeholder="letters, numbers, . - _" />
       <label for="aPass">Temporary password</label>
       <div class="pw-row"><input type="text" id="aPass" minlength="6" required autocomplete="off" /><button class="btn btn-ghost" type="button" id="aGen">Generate</button></div>
+      <label for="aEmail">Email <span class="lbl-note">(optional)</span></label><input type="text" id="aEmail" maxlength="160" inputmode="email" autocomplete="off" />
       <label for="aRole">Role</label>
       <select id="aRole"><option value="2">👤 User: own agents &amp; calls</option><option value="1">👑 Admin: this dashboard + everything</option></select>
       <div class="form-error" id="aErr"></div>
@@ -380,6 +438,7 @@
         <div><label for="eRole">Role</label><select id="eRole"><option value="2">👤 User</option><option value="1">👑 Admin</option></select></div>
         <div><label for="eStatus">Status</label><select id="eStatus"><option value="on">✅ Active</option><option value="off">⛔ Disabled</option></select></div>
       </div>
+      <div id="eAccess" class="access-box"></div>
       <p class="sub" id="eMeta"></p>
       <div class="form-error" id="eErr"></div>
       <div class="form-actions">

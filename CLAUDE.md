@@ -30,7 +30,7 @@ Split on 2026-11-19 into two self-contained apps (own settings, run script, logs
   `voice_ai_backend/db/schema.sql` = all tables (IF NOT EXISTS); `db/seed.sql` = ready-made agent types + templates (INSERT IGNORE, so
   admin edits are kept). Both are copied into the backend jar and run on every backend start (`db/Db.java`), which
   also adds missing columns to old tables (`Db.migrate()`). Connections use UTC: every DATETIME is UTC.
-- Tables: `roles` (1 admin, 2 user) · `users` · `sessions` · `login_attempts` (every sign-in, drives the lockout) ·
+- Tables: `roles` (0 superadmin, 1 admin, 2 user) · `users` · `sessions` · `login_attempts` (every sign-in, drives the lockout) ·
   `app_config` (shared settings, one JSON per section) · `agent_types` + `agent_templates` (personas, greetings, scripts) ·
   `agents` + `emergency_rules` (each agent's own setup) · `playbooks` · `calls` + `call_summaries` · `calendar_events` ·
   `messages` (messages callers left) · `activity_logs` (who did what) · `api_logs` (every API request) ·
@@ -39,6 +39,15 @@ Split on 2026-11-19 into two self-contained apps (own settings, run script, logs
 - Backups of the pre-MySQL JSON data: `backups/pre-mysql-2026-11-17/`, `backups/pre-login-2026-11-17/`.
 
 ## Accounts & roles
+
+- **SuperAdmin (role 0, 2026-11-20)**: made on the server only: `SUPERADMIN_USERNAME` + `SUPERADMIN_PASSWORD` in backend `.env` →
+  `Bootstrap` → `AuthService.ensureSuperAdmin` (creates it, must change password; or promotes an existing username). Steps in
+  `voice_ai_backend/README.md` → SuperAdmin. Only it: creates/edits/deletes admins, sets `users.permissions` for admins
+  ({admin:[sections], app:{feature:bool}}), `/api/super/server-config` (.env/keys.env, secrets masked, backups in `config-backups/`),
+  `/api/super/restart` (runs `./run.sh` detached; `logs/restart.log`). `users.created_by` = who created the account.
+  Admins create users only and set users' `permissions.app`, clipped to their own (`setPermissions`). `AuthService.effective(user)`
+  → `/api/me` `access`; `ApiFilter.adminSectionAllowed` guards `/api/admin/*` per section; `AuthService.can()` guards agent
+  create/delete and WhatsApp. Web: `applyAccess()` → `body.no-<feature>` classes; `isStaff` (role ≤ 1) in server.js.
 
 - `/login.html` → POST `/api/login` → HttpOnly `tsa_session` cookie (`app_config.auth.sessionHours`, or `rememberDays`
   with "Keep me signed in"). The sessions table stores only the SHA-256 of the token.

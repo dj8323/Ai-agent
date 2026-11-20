@@ -1,5 +1,7 @@
 package com.telemune.smartai.api;
 
+import com.telemune.smartai.web.ApiException;
+import com.telemune.smartai.service.AuthService;
 import com.telemune.smartai.service.AgentService;
 import com.telemune.smartai.service.LogService;
 import com.telemune.smartai.service.TemplateService;
@@ -43,6 +45,7 @@ public class AgentController {
 
   @PostMapping("/api/agents")
   ResponseEntity<Map<String, Object>> create(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    if (!AuthService.can(ctx.user, "agents.create")) throw ApiException.forbidden("Creating agents is switched off for your account.");
     Map<String, Object> a = agents.create(body, ctx.dataUserId);
     logs.activity(ctx, "agent.create", (String) a.get("name"), J.map("id", a.get("id"), "type", a.get("agent_type"), "template", a.get("template_id"),
         "for", J.blank(a.get("owner_name")) ? null : a.get("owner_name")));
@@ -58,6 +61,7 @@ public class AgentController {
 
   @DeleteMapping("/api/agents/{id}")
   Map<String, Object> delete(@PathVariable String id, @RequestAttribute("ctx") Ctx ctx) {
+    if (!AuthService.can(ctx.user, "agents.delete")) throw ApiException.forbidden("Deleting agents is switched off for your account.");
     Map<String, Object> a = agents.delete(id, ctx.dataUserId);
     logs.activity(ctx, "agent.delete", (String) a.get("name"), J.map("id", id));
     return J.map("ok", true);

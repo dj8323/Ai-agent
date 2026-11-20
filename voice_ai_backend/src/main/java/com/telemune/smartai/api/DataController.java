@@ -101,6 +101,7 @@ public class DataController {
   /** 🟢 WhatsApp on the call page: send a typed message to a number. Body {to, message}. */
   @PostMapping("/api/whatsapp/send")
   ResponseEntity<Map<String, Object>> whatsappSend(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    if (!com.telemune.smartai.service.AuthService.can(ctx.user, "talk.whatsapp")) throw com.telemune.smartai.web.ApiException.forbidden("WhatsApp is switched off for your account.");
     Map<String, Object> r = notify.sendText(J.str(body.get("to"), 30), J.str(body.get("message"), 4000), ctx.agent);
     String number = J.str(body.get("to"), 30).replaceAll("[^\\d]", "");
     if (!number.isEmpty() && !J.blank(body.get("message")))

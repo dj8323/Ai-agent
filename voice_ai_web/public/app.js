@@ -2710,6 +2710,21 @@ async function saveCallerMessage(raw, turn) {
   }
 }
 
+// ---------- access: what this account may see (set by its admin, or by the SuperAdmin for admins) ----------
+const ACCESS_CLASSES = { "talk.call": "no-talk-call", "talk.chat": "no-talk-chat", "talk.voice": "no-talk-voice", "talk.whatsapp": "no-talk-whatsapp",
+  "tab.profile": "no-tab-profile", "tab.voice": "no-tab-voice", "tab.availability": "no-tab-availability", "tab.tools": "no-tab-tools",
+  "tool.calendar": "no-tool-calendar", "tool.emergency": "no-tool-emergency", "tool.playbook": "no-tool-playbook", "tool.summaries": "no-tool-summaries",
+  "history": "no-history", "agents.create": "no-agents-create", "agents.delete": "no-agents-delete" };
+function applyAccess(access) {
+  const app = access?.app || {};
+  state.access = app;
+  for (const [f, cls] of Object.entries(ACCESS_CLASSES)) document.body.classList.toggle(cls, app[f] === false);
+  // the first talk channel that is allowed
+  const ch = ["call", "chat", "voice", "whatsapp"].find((m) => app[`talk.${m}`] !== false);
+  if (ch && app[`talk.${state.mode}`] === false) setTalkMode(ch);
+}
+const allowed = (f) => state.access?.[f] !== false;
+
 // ---------- signed-in user ----------
 function setupUserMenu(me) {
   if (!me) return;
@@ -2717,9 +2732,11 @@ function setupUserMenu(me) {
   $("userMenu").hidden = false;
   $("uAv").textContent = (me.name || me.username)[0].toUpperCase();
   $("uName").textContent = me.name || me.username;
-  $("uRole").textContent = me.role === 1 ? "👑 Admin" : "👤 User";
-  $("mDash").hidden = me.role !== 1;
-  document.body.classList.toggle("is-admin", me.role === 1); // AI model pickers are for admins; users run on the defaults
+  const staff = typeof me.role === "number" && me.role <= 1; // 0 = SuperAdmin, 1 = admin
+  $("uRole").textContent = me.role === 0 ? "🛡 SuperAdmin" : me.role === 1 ? "👑 Admin" : "👤 User";
+  $("mDash").hidden = !staff;
+  $("mRestart").hidden = me.role !== 0;
+  document.body.classList.toggle("is-admin", staff); // AI model pickers are for admins; users run on the defaults
   if (me.mustChangePassword && !$("pwBanner")) {
     const b = document.createElement("div");
     b.id = "pwBanner"; b.className = "note-banner"; b.setAttribute("role", "status");
@@ -2890,8 +2907,8 @@ const TOURS = [
       { target: "#voice", before: goTab("voice"), title: "Voice", text: "The voices of the chosen text-to-speech provider. The cartoon agent on the call page follows: a man for male voices, a woman for the others.", next: true },
       { target: "#previewBtn", before: goTab("voice"), title: "Hear it", text: "👉 Click **▶** to hear a sample.", clickIn: "#previewBtn", next: true, nextLabel: "Skip" },
       { target: ".tab-panel[data-panel=voice] .speed-bar", before: goTab("voice"), title: "Speaking speed", text: "Drag the **⏩ Speed** bar, then **▶ Play** to hear it.", next: true },
-      { target: () => (state.me?.role === 1 ? "#llmSel" : ".tab-panel[data-panel=voice] .speed-bar"), before: goTab("voice"), title: "AI model",
-        text: () => (state.me?.role === 1 ? "The LLM thinks and writes the replies. **gpt-4.1-mini** answers fastest. Only admins see this; users' agents use the default model." : "Your agent uses the default AI model, set by the admin."), next: true },
+      { target: () => (state.me?.role <= 1 ? "#llmSel" : ".tab-panel[data-panel=voice] .speed-bar"), before: goTab("voice"), title: "AI model",
+        text: () => (state.me?.role <= 1 ? "The LLM thinks and writes the replies. **gpt-4.1-mini** answers fastest. Only admins see this; users' agents use the default model." : "Your agent uses the default AI model, set by the admin."), next: true },
     ] },
   { id: "emergency", icon: "🚨", title: "Emergency contact", needsAgent: true, desc: "Give callers the right number, WhatsApp or email in an emergency.",
     steps: [
@@ -3079,7 +3096,7 @@ function showTutorial() {
     el.appendChild(b);
     grid.appendChild(el);
   }
-  if (state.me?.role === 1) {
+  if (state.me?.role <= 1) {
     const el = document.createElement("div");
     el.className = "tour-tile";
     el.innerHTML = `<div class="tt-top"><span class="tt-icon" aria-hidden="true">👑</span><div><b>Admin dashboard</b><div class="tt-meta">for admins</div></div></div>
@@ -3100,6 +3117,27 @@ document.addEventListener("keydown", (e) => {
 });
 document.querySelectorAll("[data-tour]").forEach((b) => (b.onclick = () => startTour(b.dataset.tour)));
 $("firstAgentBtn").addEventListener("click", () => openAgentDialog());
+// 🔄 Restart backend (SuperAdmin): POST /api/super/restart, then wait until the API answers again
+async function restartBackend() {
+  if (!confirm("Restart the backend now? Calls in progress are cut off. It takes about 10–20 seconds.")) return;
+  const veil = Object.assign(document.createElement("div"), { className: "restart-veil" });
+  veil.innerHTML = "🔄 Restarting the backend…<small>This page reloads when it's back.</small>";
+  document.body.appendChild(veil);
+  try {
+    const r = await fetch("/api/super/restart", { method: "POST" });
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || `HTTP ${r.status}`);
+    await new Promise((res) => setTimeout(res, 4000));
+    for (let i = 0; i < 90; i++) {
+      if (await fetch("/api/health").then((x) => x.ok).catch(() => false)) return location.reload();
+      await new Promise((res) => setTimeout(res, 1000));
+    }
+    veil.innerHTML = "⚠ The backend didn't come back.<small>Check voice_ai_backend/logs/restart.log and error.log.</small>";
+  } catch (e) {
+    veil.remove();
+    alert("Couldn't restart: " + e.message);
+  }
+}
+$("mRestart").addEventListener("click", restartBackend);
 $("firstAgentLearn").addEventListener("click", () => startTour("first-agent"));
 
 // ---------- menu: 🎙 Call (main page) · 🤖 My agents (editor, in tabs) · 📚 Tutorials ----------
@@ -3109,6 +3147,7 @@ const TOOL_SECTIONS = { calendar: "toolCalendar", emergency: "toolEmergency", pl
 function showTab(tab) {
   const section = TOOL_SECTIONS[tab];
   state.tab = section ? "tools" : TABS.includes(tab) ? tab : "profile";
+  if (!allowed(`tab.${state.tab}`)) state.tab = TABS.find((t) => allowed(`tab.${t}`)) || state.tab; // a tab switched off for this account
   document.querySelectorAll(".tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === state.tab)));
   document.querySelectorAll(".tab-panel").forEach((p) => (p.hidden = p.dataset.panel !== state.tab));
   if (section) requestAnimationFrame(() => { const el = $(section); el.scrollIntoView({ block: "start", behavior: "smooth" }); el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); });
@@ -3611,7 +3650,9 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAgent
 // ---------- start-up ----------
 (async () => {
   try {
-    state.me = (await fetch("/api/me").then((r) => r.json())).user;
+    const meRes = await fetch("/api/me").then((r) => r.json());
+    state.me = meRes.user;
+    applyAccess(meRes.access);
     state.agentId = store.get(agentKey()) || ""; // the agent this user had open last time
     await loadAgents();
     if (location.hash.startsWith("#learn")) route(); // now we know if the admin topic should show
@@ -3623,7 +3664,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAgent
     loadModels().then(() => { state.savedSnapshot = formSnapshot(); renderSummary(); }).catch(() => {});
     loadCalendar().catch(() => {});
     // No agents yet (new account): show how to create one instead of making one for them.
-    if (!state.agents.length && !location.hash.replace("#", "")) startTour("first-agent");
+    if (!state.agents.length && !location.hash.replace("#", "") && allowed("agents.create")) startTour("first-agent");
     } catch (e) {
     addMsg("error", "Couldn't load settings: " + e.message);
   }

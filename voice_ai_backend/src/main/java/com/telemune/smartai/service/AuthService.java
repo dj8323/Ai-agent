@@ -25,10 +25,11 @@ import java.util.regex.Pattern;
 @Service
 public class AuthService {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AuthService.class);
+  public static final int ROLE_SUPER = 0;
   public static final int ROLE_ADMIN = 1;
   public static final int ROLE_USER = 2;
   public static final String COOKIE = "tsa_session";
-  private static final String USER_COLS = "id, username, name, email, role_id, password_hash, must_change_password, disabled, signup_source, created_at, last_login_at";
+  private static final String USER_COLS = "id, username, name, email, role_id, password_hash, must_change_password, disabled, signup_source, created_by, permissions, created_at, last_login_at";
   private static final Pattern USERNAME_RE = Pattern.compile("^[a-z0-9._-]{3,32}$");
   private static final Pattern EMAIL_RE = Pattern.compile("^[^\\s@]{1,64}@[^\\s@]{1,100}\\.[^\\s@]{2,}$");
   private static final SecureRandom RNG = new SecureRandom();
@@ -80,7 +81,35 @@ public class AuthService {
     return J.map("id", u.get("id"), "username", u.get("username"), "name", u.get("name"), "email", u.get("email") == null ? "" : u.get("email"),
         "role", J.num(u.get("role_id")), "disabled", J.bool(u.get("disabled")), "createdAt", J.iso(u.get("created_at")),
         "lastLoginAt", J.iso(u.get("last_login_at")), "mustChangePassword", J.bool(u.get("must_change_password")),
-        "signupSource", u.get("signup_source"));
+        "signupSource", u.get("signup_source"), "createdBy", u.get("created_by"), "permissions", J.parse(u.get("permissions")));
+  }
+
+  // ---------- permissions ----------
+  /** Admin dashboard sections an admin can be given (the SuperAdmin always has all, plus Admins and Server). */
+  public static final List<String> ADMIN_SECTIONS = List.of("overview", "users", "agents", "usage", "templates", "settings", "logins", "activity");
+  /** Main-app features an admin can show or hide for users (the SuperAdmin decides them for admins). */
+  public static final List<String> APP_FEATURES = List.of("talk.call", "talk.chat", "talk.voice", "talk.whatsapp",
+      "tab.profile", "tab.voice", "tab.availability", "tab.tools", "tool.calendar", "tool.emergency", "tool.playbook", "tool.summaries",
+      "history", "agents.create", "agents.delete");
+
+  public static boolean isStaff(Object role) { return role != null && J.num(role) <= ROLE_ADMIN; }
+  /** The role of a public user map; anything missing counts as a plain user (never as the SuperAdmin). */
+  public static long roleOf(Map<String, Object> u) { return u == null || u.get("role") == null ? ROLE_USER : J.num(u.get("role")); }
+
+  /** What this account may see: {admin:[sections], app:{feature:bool}}. Missing = allowed; the SuperAdmin has everything. */
+  public static Map<String, Object> effective(Map<String, Object> user) {
+    Map<String, Object> app = new java.util.LinkedHashMap<>();
+    boolean superAdmin = roleOf(user) == ROLE_SUPER;
+    Map<String, Object> p = user == null || superAdmin ? Map.of() : J.obj(user.get("permissions"));
+    Map<String, Object> given = J.obj(p.get("app"));
+    for (String f : APP_FEATURES) app.put(f, !given.containsKey(f) || J.bool(given.get(f)));
+    List<String> sections = superAdmin || !p.containsKey("admin") ? ADMIN_SECTIONS
+        : J.list(p.get("admin")).stream().map(String::valueOf).filter(ADMIN_SECTIONS::contains).toList();
+    return J.map("admin", user != null && isStaff(user.get("role")) ? sections : List.of(), "app", app);
+  }
+
+  public static boolean can(Map<String, Object> user, String feature) {
+    return J.bool(J.obj(effective(user).get("app")).get(feature));
   }
 
   public List<Map<String, Object>> listUsers() {
@@ -93,6 +122,11 @@ public class AuthService {
 
   /** Create an account. source: "admin" (temporary password, must change it), "self" (sign-up), "setup". */
   public Map<String, Object> createUser(Map<String, Object> in, String source) {
+    return createUser(in, source, null);
+  }
+
+  /** creator = the signed-in admin (public shape) or null. Only the SuperAdmin can create admins. */
+  public Map<String, Object> createUser(Map<String, Object> in, String source, Map<String, Object> creator) {
     String username = J.str(in.get("username")).toLowerCase();
     if (!USERNAME_RE.matcher(username).matches()) throw ApiException.bad("Username: 3–32 letters, numbers, dot, dash or underscore.");
     String weak = checkPasswordStrength(in.get("password"));
@@ -105,20 +139,39 @@ public class AuthService {
     }
     String id = J.newId();
     String name = J.str(in.get("name"), 60);
+    boolean bySuper = roleOf(creator) == ROLE_SUPER;
+    if (!"self".equals(source) && J.num(in.get("role")) == ROLE_ADMIN && !bySuper) throw ApiException.forbidden("Only the SuperAdmin can create admins.");
     int role = "self".equals(source) ? ROLE_USER : J.num(in.get("role")) == ROLE_ADMIN ? ROLE_ADMIN : ROLE_USER;
-    db.exec("INSERT INTO users (id, username, name, email, role_id, password_hash, must_change_password, signup_source) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+    db.exec("INSERT INTO users (id, username, name, email, role_id, password_hash, must_change_password, signup_source, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         id, username, name.isEmpty() ? username : name, email.isEmpty() ? null : email, role,
-        hashPassword(String.valueOf(in.get("password"))), "self".equals(source) ? 0 : 1, source);
+        hashPassword(String.valueOf(in.get("password"))), "self".equals(source) ? 0 : 1, source, creator == null ? null : creator.get("id"));
+    if (in.get("permissions") instanceof Map<?, ?>) setPermissions(id, J.obj(in.get("permissions")), creator);
     return publicUser(getUser(id));
   }
 
   private long activeAdmins() {
-    return db.count("SELECT COUNT(*) FROM users WHERE role_id = 1 AND disabled = 0 AND deleted_at IS NULL");
+    return db.count("SELECT COUNT(*) FROM users WHERE role_id IN (0, 1) AND disabled = 0 AND deleted_at IS NULL");
   }
 
   public Map<String, Object> updateUser(String id, Map<String, Object> ch, String actingUserId) {
+    return updateUser(id, ch, publicUser(getUser(actingUserId)));
+  }
+
+  public Map<String, Object> updateUser(String id, Map<String, Object> ch, Map<String, Object> actor) {
+    String actingUserId = actor == null ? "" : (String) actor.get("id");
+    boolean bySuper = roleOf(actor) == ROLE_SUPER;
     Map<String, Object> u = getUser(id);
     if (u == null) throw ApiException.notFound("User not found.");
+    long targetRole = J.num(u.get("role_id"));
+    // Admins manage users (and their own name/email/password); only the SuperAdmin manages admins. Nobody changes the SuperAdmin here.
+    if (targetRole == ROLE_SUPER && !id.equals(actingUserId)) throw ApiException.forbidden("The SuperAdmin can only be changed by itself.");
+    if (targetRole == ROLE_ADMIN && !bySuper && !id.equals(actingUserId)) throw ApiException.forbidden("Only the SuperAdmin can change admins.");
+    if (ch.containsKey("role") && !bySuper) throw ApiException.forbidden("Only the SuperAdmin can change roles.");
+    if (ch.containsKey("role") && (targetRole == ROLE_SUPER || J.num(ch.get("role")) == ROLE_SUPER)) throw ApiException.bad("The SuperAdmin role is set on the server only.");
+    if (ch.get("permissions") instanceof Map<?, ?>) {
+      if (id.equals(actingUserId) && !bySuper) throw ApiException.forbidden("You can't change your own access.");
+      setPermissions(id, J.obj(ch.get("permissions")), actor);
+    }
     boolean losingAdmin = (ch.containsKey("role") && J.num(ch.get("role")) != ROLE_ADMIN) || Boolean.TRUE.equals(ch.get("disabled"));
     if (J.num(u.get("role_id")) == ROLE_ADMIN && losingAdmin && activeAdmins() <= 1) throw ApiException.bad("There must always be at least one active admin.");
     if (id.equals(actingUserId) && losingAdmin) throw ApiException.bad("You can't remove your own admin access.");
@@ -154,12 +207,34 @@ public class AuthService {
     return publicUser(getUser(id));
   }
 
+  /**
+   * Access settings. For an admin (SuperAdmin only): {admin:[sections], app:{…}}. For a user (any admin): {app:{…}}, and an
+   * admin can only switch on what it has itself.
+   */
+  private void setPermissions(String id, Map<String, Object> in, Map<String, Object> actor) {
+    Map<String, Object> u = getUser(id);
+    boolean bySuper = roleOf(actor) == ROLE_SUPER;
+    if (u == null || J.num(u.get("role_id")) == ROLE_SUPER) return;
+    boolean targetAdmin = J.num(u.get("role_id")) == ROLE_ADMIN;
+    if (targetAdmin && !bySuper) throw ApiException.forbidden("Only the SuperAdmin can set what an admin sees.");
+    Map<String, Object> mine = J.obj(effective(actor).get("app"));
+    Map<String, Object> app = new java.util.LinkedHashMap<>();
+    Map<String, Object> want = J.obj(in.get("app"));
+    for (String f : APP_FEATURES) app.put(f, (!want.containsKey(f) || J.bool(want.get(f))) && (bySuper || J.bool(mine.get(f))));
+    Map<String, Object> out = J.map("app", app);
+    if (targetAdmin) out.put("admin", J.list(in.get("admin")).stream().map(String::valueOf).filter(ADMIN_SECTIONS::contains).distinct().toList());
+    db.exec("UPDATE users SET permissions = ? WHERE id = ?", J.json(out), id);
+  }
+
   /** Soft delete: can't sign in and is hidden, but agents, calls and recordings stay. */
   public Map<String, Object> deleteUser(String id, String actingUserId) {
     if (id.equals(actingUserId)) throw ApiException.bad("You can't delete your own account.");
     Map<String, Object> u = getUser(id);
     if (u == null) throw ApiException.notFound("User not found.");
-    if (J.num(u.get("role_id")) == ROLE_ADMIN && db.count("SELECT COUNT(*) FROM users WHERE role_id = 1 AND deleted_at IS NULL") <= 1) {
+    if (J.num(u.get("role_id")) == ROLE_SUPER) throw ApiException.bad("The SuperAdmin can't be deleted.");
+    Map<String, Object> actor = getUser(actingUserId);
+    if (J.num(u.get("role_id")) == ROLE_ADMIN && (actor == null || J.num(actor.get("role_id")) != ROLE_SUPER)) throw ApiException.forbidden("Only the SuperAdmin can delete admins.");
+    if (J.num(u.get("role_id")) == ROLE_ADMIN && db.count("SELECT COUNT(*) FROM users WHERE role_id IN (0, 1) AND deleted_at IS NULL") <= 1) {
       throw ApiException.bad("You can't delete the last admin.");
     }
     String freed = (u.get("username") + "~deleted-" + id);
@@ -251,7 +326,7 @@ public class AuthService {
   /** The signed-in user (public shape) for a session token, or null. */
   public Map<String, Object> userForToken(String token) {
     if (token == null || token.isEmpty()) return null;
-    Map<String, Object> u = db.one("SELECT u.id, u.username, u.name, u.email, u.role_id, u.must_change_password, u.disabled, u.signup_source, u.created_at, u.last_login_at "
+    Map<String, Object> u = db.one("SELECT u.id, u.username, u.name, u.email, u.role_id, u.must_change_password, u.disabled, u.signup_source, u.created_by, u.permissions, u.created_at, u.last_login_at "
         + "FROM sessions s JOIN users u ON u.id = s.user_id "
         + "WHERE s.token_hash = ? AND s.expires_at > UTC_TIMESTAMP(3) AND u.disabled = 0 AND u.deleted_at IS NULL", sha(token));
     return publicUser(u);
@@ -268,6 +343,27 @@ public class AuthService {
   /** Sign-ups from one IP in the last hour (from the activity log). */
   public long recentSignups(String ip) {
     return db.count("SELECT COUNT(*) FROM activity_logs WHERE action = 'auth.signup' AND ip = ? AND created_at > UTC_TIMESTAMP(3) - INTERVAL 1 HOUR", ip);
+  }
+
+  /**
+   * The SuperAdmin from the backend's .env (SUPERADMIN_USERNAME + SUPERADMIN_PASSWORD): created when that username doesn't
+   * exist yet (must change the password on first sign-in), or an existing account is promoted. Returns what happened, or null.
+   */
+  public String ensureSuperAdmin(String username, String password) {
+    if (username == null || username.isBlank()) return null;
+    String un = username.trim().toLowerCase();
+    if (!USERNAME_RE.matcher(un).matches()) return "SUPERADMIN_USERNAME is not a valid username";
+    Map<String, Object> u = db.one("SELECT id, role_id FROM users WHERE username = ? AND deleted_at IS NULL", un);
+    if (u != null) {
+      if (J.num(u.get("role_id")) == ROLE_SUPER) return null;
+      db.exec("UPDATE users SET role_id = 0, permissions = NULL WHERE id = ?", u.get("id"));
+      return "promoted " + un + " to SuperAdmin";
+    }
+    String weak = checkPasswordStrength(password);
+    if (weak != null) return "SUPERADMIN_PASSWORD: " + weak;
+    db.exec("INSERT INTO users (id, username, name, role_id, password_hash, must_change_password, signup_source) VALUES (?, ?, 'SuperAdmin', 0, ?, 1, 'setup')",
+        J.newId(), un, hashPassword(password));
+    return "created SuperAdmin " + un;
   }
 
   /** First start with an empty users table: admin / admin@123 (must change it). Returns the new user or null. */

@@ -115,13 +115,13 @@ public class AdminController {
       if (st.get("avgResponseMs") != null) replies.add(J.num(st.get("avgResponseMs")));
     }
     return J.map("totals", J.map("users", users.size(),
-            "admins", users.stream().filter(u -> J.num(u.get("role")) == AuthService.ROLE_ADMIN).count(),
+            "admins", users.stream().filter(u -> AuthService.isStaff(u.get("role"))).count(),
             "active", users.stream().filter(u -> !J.bool(u.get("disabled"))).count(),
             "agents", agentsN, "calls", calls, "seconds", seconds, "turns", turns, "tokens", tokens, "recordings", recordings,
             "playbooks", pbs, "events", events, "messages", msgs,
             "templates", templates.catalog(true).values().stream().mapToInt(t -> ((List<?>) J.obj(t).get("templates")).size()).sum(),
             "avgResponseMs", replies.isEmpty() ? null : Math.round(replies.stream().mapToLong(Long::longValue).average().orElse(0))),
-        "api", logs.apiStats(), "users", users);
+        "api", logs.apiStats(), "users", users, "sections", AuthService.ADMIN_SECTIONS, "features", AuthService.APP_FEATURES);
   }
 
   @GetMapping("/logs")
@@ -150,7 +150,7 @@ public class AdminController {
   // ---------- users ----------
   @PostMapping("/users")
   ResponseEntity<Map<String, Object>> createUser(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
-    Map<String, Object> u = auth.createUser(body, "admin");
+    Map<String, Object> u = auth.createUser(body, "admin", ctx.user);
     logs.activity(ctx, "user.create", (String) u.get("username"), J.map("role", u.get("role")));
     return ResponseEntity.status(201).body(u);
   }
@@ -164,7 +164,7 @@ public class AdminController {
 
   @PatchMapping("/users/{id}")
   Map<String, Object> updateUser(@PathVariable String id, @RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
-    Map<String, Object> u = auth.updateUser(id, body, ctx.userId());
+    Map<String, Object> u = auth.updateUser(id, body, ctx.user);
     Map<String, Object> details = new LinkedHashMap<>(body);
     if (details.containsKey("password")) details.put("password", "(reset)");
     logs.activity(ctx, "user.update", (String) u.get("username"), details);

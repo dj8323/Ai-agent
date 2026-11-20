@@ -37,6 +37,8 @@ public class Bootstrap {
   void init() {
     config.seed();
     Map<String, Object> admin = auth.ensureAdmin();
+    String sup = auth.ensureSuperAdmin(env.getProperty("SUPERADMIN_USERNAME"), env.getProperty("SUPERADMIN_PASSWORD"));
+    if (sup != null) log.info("SuperAdmin: {} (from SUPERADMIN_USERNAME in .env; remove SUPERADMIN_PASSWORD from .env now)", sup);
     if (admin != null) {
       log.info("Created admin account \"admin\" (password admin@123, change it after signing in).");
     }

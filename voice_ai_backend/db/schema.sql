@@ -6,13 +6,14 @@
 CREATE DATABASE IF NOT EXISTS `ai-agent` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 USE `ai-agent`;
 
--- Roles: 1 = admin (dashboard over every user), 2 = user (own agents and data only).
+-- Roles: 0 = superadmin (server configuration, restart, admins and their permissions), 1 = admin (dashboard over every user), 2 = user (own agents and data only).
 CREATE TABLE IF NOT EXISTS roles (
   id          TINYINT      NOT NULL PRIMARY KEY,
   name        VARCHAR(30)  NOT NULL UNIQUE,
   description VARCHAR(200) NOT NULL DEFAULT ''
 );
 INSERT IGNORE INTO roles (id, name, description) VALUES
+  (0, 'superadmin', 'Everything an admin can do, plus server configuration, restart, creating admins and choosing what each admin sees'),
   (1, 'admin', 'Sees every user, agent, call and log; manages accounts and app settings'),
   (2, 'user',  'Uses and manages only their own agents, playbooks, calls and calendar');
 
@@ -27,6 +28,8 @@ CREATE TABLE IF NOT EXISTS users (
   must_change_password TINYINT(1)   NOT NULL DEFAULT 0,
   disabled             TINYINT(1)   NOT NULL DEFAULT 0,
   signup_source        VARCHAR(10)  NOT NULL DEFAULT 'admin',   -- setup | admin | self | import
+  created_by           VARCHAR(16)  NULL,                       -- the admin / superadmin who created the account (NULL = self sign-up or setup)
+  permissions          JSON         NULL,                       -- {admin:[dashboard sections], app:{feature:true|false}}; NULL = everything
   created_at           DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   updated_at           DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
   last_login_at        DATETIME(3)  NULL,

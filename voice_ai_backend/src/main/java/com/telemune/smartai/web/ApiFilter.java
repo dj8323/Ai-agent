@@ -1,5 +1,6 @@
 package com.telemune.smartai.web;
 
+import java.util.List;
 import com.telemune.smartai.service.AgentService;
 import com.telemune.smartai.service.AuthService;
 import com.telemune.smartai.service.LogService;
@@ -132,6 +133,14 @@ public class ApiFilter extends OncePerRequestFilter {
         json(res, 403, "Admins only.");
         return;
       }
+      if (path.startsWith("/api/super/") && !ctx.isSuper()) {
+        json(res, 403, "SuperAdmin only.");
+        return;
+      }
+      if (path.startsWith("/api/admin/") && !ctx.isSuper() && !adminSectionAllowed(path, method, user)) {
+        json(res, 403, "This section isn't open for your account.");
+        return;
+      }
       if (!path.equals("/api/me") && !path.startsWith("/api/me/") && !path.startsWith("/api/admin/")) {
         // Admin may read (GET only) another user's data with ?as=<userId>.
         String as = req.getParameter("as");
@@ -162,5 +171,16 @@ public class ApiFilter extends OncePerRequestFilter {
       logs.request(ctx, method, path, status, ms);
       MDC.clear();
     }
+  }
+
+  /** Which dashboard section an /api/admin/ path belongs to; an admin needs that section (the SuperAdmin decides). */
+  private static boolean adminSectionAllowed(String path, String method, Map<String, Object> user) {
+    List<?> mine = (List<?>) AuthService.effective(user).get("admin");
+    String p = path.substring("/api/admin/".length());
+    // the overview data, and opening one user (👁 View), serve Overview, Users, Agents and Calls & usage
+    if (p.startsWith("overview") || ("GET".equals(method) && p.matches("users/[A-Za-z0-9]+"))) return mine.stream().anyMatch(x -> List.of("overview", "users", "agents", "usage").contains(String.valueOf(x)));
+    String section = p.startsWith("users") ? "users" : p.startsWith("logs") ? "activity" : p.startsWith("logins") ? "logins"
+        : p.startsWith("config") || p.startsWith("log-level") ? "settings" : p.startsWith("templates") || p.startsWith("types") ? "templates" : "overview";
+    return mine.contains(section);
   }
 }

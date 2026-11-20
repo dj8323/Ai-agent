@@ -57,6 +57,37 @@ Spring property names (`aws.access-key`, `elevenlabs.api-key`, `cartesia.api-key
 models, speech-to-text, conversation timing, history, calendar, emergency, auth. After that, change them in the admin
 dashboard (App settings) or with `PUT /api/admin/config/<section>`. Bottom layer: `src/main/resources/defaults.json`.
 
+## SuperAdmin (role 0)
+
+Roles: **0 SuperAdmin** · 1 admin · 2 user. The SuperAdmin is created on the server only, never from the browser:
+
+1. In `voice_ai_backend/.env` add two lines (any username; the password needs at least 6 characters):
+   ```
+   SUPERADMIN_USERNAME=superadmin
+   SUPERADMIN_PASSWORD=<a temporary password>
+   ```
+   If that username already exists (for example `admin`), it is **promoted** to SuperAdmin and its password stays the same.
+2. Restart the backend (`./run.sh`, or `./runScript.sh` from the project folder). `logs/backend.log` says
+   `SuperAdmin: created SuperAdmin superadmin` (or `promoted …`).
+3. Sign in at `/login.html` with that username and password. You're asked to set your own password; do it.
+4. **Delete the `SUPERADMIN_PASSWORD` line from `.env`** (the username line can stay; it does nothing once the account exists).
+
+Alternative with SQL (an existing account): `UPDATE users SET role_id = 0, permissions = NULL WHERE username = 'admin';`
+
+What only the SuperAdmin can do (admin dashboard → **🛡 Admins** and **🗄 Server**, plus **🔄 Restart backend** in the header and in the
+main page's user menu):
+
+- create admins, edit or delete them, and choose per admin the **dashboard sections** they can open and the **app features** they
+  (and, at most, their users) get;
+- see every admin with the users they created (`users.created_by`);
+- edit `.env` and `keys.env` (secrets are never sent to the browser: they show as •••• and change only when a new value is typed;
+  each save keeps the old file in `config-backups/`, gitignored) and every `app_config` section as JSON;
+- restart the backend: `POST /api/super/restart` starts `./run.sh` in the background, which stops this copy and starts a new one
+  (output in `logs/restart.log`). The web app keeps running.
+
+Admins create users (not admins) and choose which app features each user sees, never more than they have themselves. Enforced on
+the server: dashboard sections (`ApiFilter`), creating/deleting agents, WhatsApp sending; the rest is hidden in the page.
+
 ## Logs
 
 | File | Contents |
@@ -74,6 +105,8 @@ Files rotate daily into `logs/archive/`. Full guide with all tables and ready SQ
 - Call recordings only on disk: `data/users/<userId>/recordings/<file>`. Back this folder up; never wipe it.
 
 ## API
+
+SuperAdmin only: `GET/PUT /api/super/server-config` (.env / keys.env, secrets masked) · `POST /api/super/restart`.
 
 All routes are under `/api`, JSON in and out (errors are `{"error": "…"}`). Signed-in requests carry the HttpOnly cookie
 `tsa_session`; non-GET requests whose `Origin` host differs from `Host` are refused. The web app sends `X-Agent-Id`

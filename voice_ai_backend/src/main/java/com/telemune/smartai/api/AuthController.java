@@ -52,7 +52,7 @@ public class AuthController {
       AuthService.Session s = auth.login(b.get("username"), b.get("password"), J.bool(b.get("remember")), ctx.ip, req.getHeader("User-Agent"));
       logs.activity(ctx, "auth.login", username, J.map("remember", J.bool(b.get("remember"))), (String) s.user().get("id"), username);
       return ResponseEntity.ok().header(HttpHeaders.SET_COOKIE, AuthService.sessionCookie(s.token(), s.maxAge()))
-          .body(J.map("ok", true, "user", s.user(), "next", J.num(s.user().get("role")) == AuthService.ROLE_ADMIN ? "/admin.html" : "/"));
+          .body(J.map("ok", true, "user", s.user(), "next", AuthService.isStaff(s.user().get("role")) ? "/admin.html" : "/"));
     } catch (ApiException e) {
       logs.activity(ctx, "auth.login_failed", username, J.map("reason", e.getMessage()), null, username);
       throw e;
@@ -87,7 +87,7 @@ public class AuthController {
 
   @GetMapping("/api/me")
   Map<String, Object> me(@RequestAttribute("ctx") Ctx ctx) {
-    return J.map("user", ctx.user);
+    return J.map("user", ctx.user, "access", AuthService.effective(ctx.user)); // what this account may see
   }
 
   @PostMapping("/api/me/password")

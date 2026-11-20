@@ -44,6 +44,7 @@ fsSync.mkdirSync(LOG_DIR, { recursive: true });
 const webLog = fsSync.createWriteStream(path.join(LOG_DIR, "web.log"), { flags: "a" });
 const errLog = fsSync.createWriteStream(path.join(LOG_DIR, "error.log"), { flags: "a" });
 const stamp = () => new Date().toISOString().replace("T", " ").replace("Z", "Z");
+const isStaff = (u) => typeof u?.role === "number" && u.role <= 1; // SuperAdmin (0) or admin (1)
 function logLine(level, msg) {
   const line = `${stamp()} ${level.padEnd(5)} ${msg}\n`;
   webLog.write(line);
@@ -160,10 +161,10 @@ async function handle(req, res) {
           <h2>The backend isn't running yet</h2><p>Start voice_ai_backend (<code>./run.sh</code> in its folder), then reload this page.</p>`);
       }
       if (p === "/login.html") {
-        if (user) return redirect(res, user.role === 1 ? "/admin.html" : "/");
+        if (user) return redirect(res, isStaff(user) ? "/admin.html" : "/"); // 0 = SuperAdmin, 1 = admin
       } else if (!user) {
         return redirect(res, "/login.html");
-      } else if (p === "/admin.html" && user.role !== 1) {
+      } else if (p === "/admin.html" && !isStaff(user)) {
         return redirect(res, "/");
       }
     }

@@ -29,8 +29,14 @@ public class Ctx {
     return user == null ? "" : (String) user.get("username");
   }
 
+  /** Admin or SuperAdmin (role 1 or 0). */
   public boolean isAdmin() {
-    return user != null && ((Number) user.get("role")).intValue() == 1;
+    return user != null && user.get("role") != null && ((Number) user.get("role")).intValue() <= 1;
+  }
+
+  /** The SuperAdmin (role 0): server configuration, restart, admins and their permissions. */
+  public boolean isSuper() {
+    return user != null && user.get("role") != null && ((Number) user.get("role")).intValue() == 0;
   }
 
   public String agentId() {

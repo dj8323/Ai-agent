@@ -366,6 +366,20 @@ The ● button records both sides of the call (your microphone and the agent's v
 
 Token totals count the chat replies and the summary. Text-to-speech audio is not included because OpenAI doesn't report it as tokens.
 
+## SuperAdmin
+
+Above the admins there is one **SuperAdmin** (role 0). It is set up on the server, not in the browser (steps in `voice_ai_backend/README.md` → SuperAdmin: two lines in `.env`, restart, sign in, change the password, remove the password line).
+
+The SuperAdmin sees everything an admin sees, plus:
+
+| Where | What |
+| --- | --- |
+| 🛡 Admins | Every admin with email, status, last sign-in, who created them, the dashboard sections they can open, what is switched off for them, and **the users each admin created**. **＋ Add admin**; **✏️ Edit & access** changes their details and ticks which **dashboard sections** they see (Overview, Users, Agents, Calls & usage, Templates, Settings, Sign-ins, Activity) and which **app features** they get |
+| 🗄 Server | The backend's `.env` (MySQL, ports, logging) and `keys.env` (provider keys), one box per setting. Passwords and keys show as •••• and only change when you type a new value; a copy of the old file is kept. Below: every **app configuration** section from the database as JSON. Server file changes apply after a restart |
+| 🔄 Restart backend | In the dashboard header, on the Server page and in the main page's user menu. The page waits and reloads when the backend is back (about 10 seconds) |
+
+**Who sees what.** Admins create users (only the SuperAdmin creates admins). In **✏️ Edit** an admin ticks what each user can see in the app: the talk channels (Web call, Live chat, Voice chat, WhatsApp), the My agents tabs (Profile, Voice & AI, Availability, Tools) and the tools inside (Calendar, Emergency, Playbook, Call summaries delivery), the Call summaries list, and whether they may create or delete agents. An admin can only give what it has itself; the SuperAdmin sets that for each admin. The **Created by** column in Users shows who made each account.
+
 ## Admin dashboard
 
 Admins land on `/admin.html`, a single page that shows every user, every agent and every call, with tools to manage accounts and app settings. **Open my agent** at the top takes the admin to their own agents.

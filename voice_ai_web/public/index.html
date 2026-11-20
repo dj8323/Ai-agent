@@ -827,6 +827,19 @@
   @media (prefers-reduced-motion: reduce) {
     .va-card, .nf-card, .nf-card::before, .nf-card .nf-ico, .emg-card, .emg-grid, .cd-app, #toolPlaybooks .pb-item, .av-hol-country { animation: none !important; transition: none !important; }
   }
+
+  /* Access: an admin (or the SuperAdmin, for admins) can switch parts of the app off per account (body.no-<feature>) */
+  body.no-talk-call [data-talk="call"], body.no-talk-call #callBtn,
+  body.no-talk-chat [data-talk="chat"], body.no-talk-voice [data-talk="voice"], body.no-talk-whatsapp [data-talk="whatsapp"],
+  body.no-tab-profile .tabs [data-tab="profile"], body.no-tab-voice .tabs [data-tab="voice"],
+  body.no-tab-availability .tabs [data-tab="availability"], body.no-tab-tools .tabs [data-tab="tools"],
+  body.no-tool-calendar #toolCalendar, body.no-tool-emergency #toolEmergency, body.no-tool-playbook #toolPlaybooks, body.no-tool-summaries #toolSummaries,
+  body.no-history .card.history,
+  body.no-agents-create #sumNew, body.no-agents-create #mgNew, body.no-agents-create #firstAgentBtn,
+  body.no-agents-delete #agentDelete { display: none !important; }
+  .restart-veil { position: fixed; inset: 0; z-index: 200; display: grid; place-items: center; background: var(--overlay, #0008); color: #fff; font-size: 18px; font-weight: 700; text-align: center; }
+  .restart-veil small { display: block; font-weight: 400; font-size: 13px; opacity: .8; margin-top: 6px; }
+  body.no-agents-create #firstAgentLearn { display: none !important; }
 </style>
 <link rel="stylesheet" href="motion.css" />
 <script src="motion.js" defer></script>
@@ -855,6 +868,7 @@
         </button>
         <div class="menu" id="userDrop" role="menu" hidden>
           <a href="/admin.html" id="mDash" role="menuitem" hidden>📊 Admin dashboard</a>
+          <button type="button" id="mRestart" role="menuitem" hidden>🔄 Restart backend</button>
           <button id="mPw" type="button" role="menuitem">🔑 Change password</button>
           <button id="mOut" type="button" role="menuitem">↪ Sign out</button>
         </div>

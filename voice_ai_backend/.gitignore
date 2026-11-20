@@ -4,3 +4,6 @@ data/
 logs/
 target/
 keys.env
+
+# copies of .env / keys.env kept by the SuperAdmin server-config editor
+config-backups/
