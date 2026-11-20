@@ -366,6 +366,12 @@ The ● button records both sides of the call (your microphone and the agent's v
 
 Token totals count the chat replies and the summary. Text-to-speech audio is not included because OpenAI doesn't report it as tokens.
 
+## The agent card on Conversations
+
+Under the call card, the agent card shows who the agent works for, its availability, language and voice, and **AI models** as three tags: **STT** (who hears), **TTS** (who speaks) and **LLM** (who thinks), each with its provider. **Tools** shows three chips: 📅 Calendar, 🚨 Emergency and 📘 Playbook. Click one to open Agent studio → Tools right at that section, where you can switch it on, add contacts, or pick or add a playbook.
+
+Before the first call or chat, the conversation area plays a short looping chat. It clears as soon as a conversation starts.
+
 ## 📊 Insights
 
 The **📊 Insights** is the first page after you sign in (users with at least one agent). Pick **7, 30 or 90 days** and **all agents or one**; everything on the page follows that choice.

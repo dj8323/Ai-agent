@@ -299,7 +299,8 @@
   .na-type-desc:empty { display: none; }
   .tools-panel { display: grid; gap: 12px; }
   .tool-sec { border: 1px solid var(--border); border-radius: 14px; padding: 12px; background: color-mix(in srgb, var(--panel-2) 50%, transparent); scroll-margin-top: 12px; }
-  .tool-sec.flash { animation: tsa-pop .5s ease-out; border-color: var(--c1); }
+  .tool-sec.flash { animation: tsa-pop .5s ease-out, tool-focus 2.2s ease-out; border-color: var(--c1); }
+  @keyframes tool-focus { 0%, 60% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c1) 30%, transparent); } 100% { box-shadow: 0 0 0 0 transparent; } }
   .tool-head { margin: 0 0 6px; font-size: 14px; display: flex; align-items: center; gap: 8px; }
   .tool-head .btn { margin-left: auto; }
   .nf-to { width: 100%; margin: 2px 0 6px; }
@@ -540,6 +541,24 @@
   .feat { border: 1px solid var(--border); background: var(--panel-2); color: var(--muted); font: inherit; font-size: 12px; font-weight: 600; padding: 5px 10px; border-radius: 999px; cursor: pointer; }
   .feat:hover { border-color: var(--c1); }
   .feat.on { color: var(--green); border-color: color-mix(in srgb, var(--green) 45%, var(--border)); }
+  .feat.add { color: var(--accent); border-style: dashed; }
+  /* AI models on the agent card: STT / TTS / LLM with the provider */
+  .mtags { display: inline-flex; flex-wrap: wrap; gap: 5px; }
+  .mtag { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 2px 8px 2px 3px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--border); white-space: nowrap; }
+  .mtag b { font-size: 10px; letter-spacing: .05em; padding: 1px 6px; border-radius: 999px; background: color-mix(in srgb, var(--c1) 16%, transparent); color: var(--accent); }
+  /* empty conversation: a small looping chat until the first call or chat */
+  .chat-demo { display: grid; gap: 14px; justify-items: center; width: min(340px, 100%); }
+  .cd-stage { display: grid; gap: 8px; width: 100%; }
+  .cd-b { max-width: 80%; padding: 8px 12px; border-radius: 14px; font-size: 13px; opacity: 0; animation: cd-show 7s ease-in-out infinite both; text-align: left; }
+  .cd-a1, .cd-a2 { justify-self: start; background: var(--agent-bubble, var(--panel-2)); border: 1px solid var(--border); border-bottom-left-radius: 4px; color: var(--text); }
+  .cd-u { justify-self: end; background: var(--user-bubble, var(--grad)); color: var(--user-ink, #fff); border-bottom-right-radius: 4px; animation-delay: 1.2s; }
+  .cd-a2 { animation-delay: 2.4s; }
+  .cd-typing { display: inline-flex; gap: 4px; padding: 11px 13px; }
+  .cd-typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: tsa-dot 1.2s infinite; }
+  .cd-typing i:nth-child(2) { animation-delay: .2s; } .cd-typing i:nth-child(3) { animation-delay: .4s; }
+  .cd-cap { color: var(--muted); font-size: 13px; }
+  @keyframes cd-show { 0% { opacity: 0; transform: translateY(8px) scale(.97); } 8%, 82% { opacity: .9; transform: none; } 92%, 100% { opacity: 0; transform: translateY(-4px); } }
+  @media (prefers-reduced-motion: reduce) { .cd-b { animation: none; opacity: .9; } .cd-typing i { animation: none; } }
   .feat.alert { color: #fff; background: var(--red); border-color: transparent; }
 
   /* My agents: list on the left, the selected agent's settings in tabs on the right */
@@ -1091,8 +1110,9 @@
       <div><dt>Language · voice</dt><dd id="sLang"></dd></div>
       <div><dt>AI models</dt><dd id="sModels"></dd></div>
     </dl>
-    <label class="sum-label" for="pbPick">Playbook</label>
-    <div class="pb-pick-row"><select id="pbPick"></select><button class="icon-mini" id="pbClear" type="button" title="Remove the playbook from this agent" aria-label="Remove the playbook from this agent" hidden>✕</button></div>
+    <!-- the playbook is picked in Agent studio → Tools (the select stays for app.js, hidden) -->
+    <div class="pb-pick-row" hidden><select id="pbPick" aria-label="Playbook"></select><button class="icon-mini" id="pbClear" type="button" aria-label="Remove the playbook from this agent" hidden>✕</button></div>
+    <div class="sum-label">Tools</div>
     <div class="sum-feats" id="sFeats"></div>
   </section>
 
@@ -1118,7 +1138,7 @@
         <button class="link cs-more" id="convSumMore" type="button" aria-expanded="false" hidden>More ▾</button></div>
       <div class="cs-full" id="convSumFull" hidden><div class="cs-stats" id="convSumStats"></div><pre id="convSumPre"></pre><div class="cs-actions" id="convSumActions"></div></div>
     </div>
-    <div class="msgs" id="msgs"><div class="empty" id="empty">Your conversation will appear here.</div></div>
+    <div class="msgs" id="msgs"><div class="empty chat-demo" id="empty" aria-label="No conversation yet"><div class="cd-stage" aria-hidden="true"><div class="cd-b cd-a1">Hello! How can I help you today?</div><div class="cd-b cd-u">I'd like to book a meeting.</div><div class="cd-b cd-a2 cd-typing"><i></i><i></i><i></i></div></div><div class="cd-cap">Start a call or a chat. Your conversation shows up here.</div></div></div>
     <!-- Talk by: Web call (default) · Live chat · Voice chat · WhatsApp, at the bottom of the conversation.
          Choosing another one ends what's running (a call or a chat is saved first). -->
     <div class="talk-dock" id="talkDock">

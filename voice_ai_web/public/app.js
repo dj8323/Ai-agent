@@ -164,7 +164,12 @@ function renderSummary() {
   setDd("sAvail", availabilityText());
   const voice = ($("voice").selectedOptions[0]?.text || $("voice").value || "").split(" — ")[0];
   setDd("sLang", [$("lang").selectedOptions[0]?.text, voice, speed() !== 1 ? `${speed().toFixed(2)}× speed` : ""].filter(Boolean).join(" · "));
-  setDd("sModels", [$("llmSel").value || SETTINGS.models?.chat, $("sttSel").value === "browser" ? "browser captions" : $("sttSel").value || SETTINGS.models?.stt, $("ttsSel").value || SETTINGS.models?.tts].filter(Boolean).join(" · "));
+  // STT / TTS / LLM with the provider (admins also see the model on hover)
+  const prov = (id) => $(id).selectedOptions[0]?.text?.replace(/\s*\(.*\)\s*$/, "") || "OpenAI";
+  const mods = [["STT", $("sttSel").value === "browser" ? "Browser" : prov("sttProv"), $("sttSel").value || SETTINGS.models?.stt],
+    ["TTS", prov("ttsProv"), $("ttsSel").value || SETTINGS.models?.tts], ["LLM", prov("llmProv"), $("llmSel").value || SETTINGS.models?.chat]];
+  const isAdm = document.body.classList.contains("is-admin");
+  $("sModels").innerHTML = `<span class="mtags">${mods.map(([k, p, m]) => `<span class="mtag"${isAdm && m ? ` title="${String(m).replace(/"/g, "&quot;")}"` : ""}><b>${k}</b>${p.replace(/</g, "&lt;")}</span>`).join("")}</span>`;
   const feats = $("sFeats");
   feats.innerHTML = "";
   const feat = (text, cls, tab) => {
@@ -173,8 +178,13 @@ function renderSummary() {
     b.onclick = () => (location.hash = `agents/${tab}`);
     feats.appendChild(b);
   };
-  feat($("calToggle").checked ? "📅 Calendar on" : "📅 Calendar off", $("calToggle").checked ? "on" : "", "calendar");
-  feat($("emgToggle").checked ? `🚨 Emergency on · ${state.rules.length}` : "🚨 Emergency off", $("emgToggle").checked ? "on" : "", "emergency");
+  if (allowed("tool.calendar")) feat($("calToggle").checked ? "📅 Calendar on" : "📅 Calendar off", $("calToggle").checked ? "on" : "", "calendar");
+  if (allowed("tool.emergency")) feat($("emgToggle").checked ? `🚨 Emergency on · ${state.rules.length}` : "🚨 Emergency off", $("emgToggle").checked ? "on" : "", "emergency");
+  // playbook: the same kind of chip; it opens Agent studio → Tools → Playbook (pick or ＋ Add one there)
+  if (allowed("tool.playbook")) {
+    const pb = (state.saved || []).find((p) => p.id === state.playbookId);
+    feat(pb ? `📘 Playbook · ${pb.name}` : "📘 ＋ Add a playbook", pb ? "on" : "add", "playbooks");
+  }
 }
 $("nameInput").addEventListener("input", () => { refreshName(); markDirty(); });
 refreshName();
@@ -526,6 +536,7 @@ async function loadPlaybooks() {
 const activePlaybook = () => state.saved.find((p) => p.id === state.playbookId) || null;
 
 function renderPlaybooks() {
+  queueMicrotask(() => renderSummary()); // the 📘 chip on the agent card follows the chosen playbook
   const pick = $("pbPick");
   pick.innerHTML = "";
   pick.add(new Option("Default: the agent's template", ""));
@@ -1997,13 +2008,15 @@ $("waSend").addEventListener("click", async () => {
   }
 });
 
+// shown until the first call or chat: a small looping chat (CSS .chat-demo); removed by the first message
+const EMPTY_CHAT = $("msgs").innerHTML.includes("chat-demo") ? $("msgs").innerHTML : '<div class="empty" id="empty">Start a call or a chat. Your conversation shows up here.</div>';
 function clearChat() {
   if (state.abort) state.abort.abort();
   stopSpeaking();
   state.history = [];
   state.turns = [];
   updateInsights();
-  $("msgs").innerHTML = '<div class="empty" id="empty">Your conversation will appear here.</div>';
+  $("msgs").innerHTML = EMPTY_CHAT;
 }
 $("clearBtn").addEventListener("click", clearChat);
 
@@ -2953,7 +2966,7 @@ const TOURS = [
       { target: "#addPbBtn", before: goTab("playbooks"), title: "New playbook", text: "👉 Click **＋ Add**.", done: () => isOpen("pbDialog") },
       { target: "#pbDialog .dialog", title: "Build the script", text: "👉 Pick a type, then a ready-made script or **Custom**, edit it and save.", done: () => !isOpen("pbDialog") && state.saved.length > tourCtx.playbooks },
       { target: "#pbList", before: goTab("playbooks"), title: "Use it", text: "Click a playbook to use it for this agent (✓ shows the chosen one).", next: true },
-      { target: ".pb-pick-row", before: goCall, title: "On the Conversations page too", text: "The **Playbook** dropdown on the Conversations page picks one; **✕** removes it (back to the agent's template).", next: true },
+      { target: "#sFeats", before: goCall, title: "On the Conversations page too", text: "The **📘 Playbook** chip on the agent card shows the playbook in use; click it to come back here and change it.", next: true },
     ] },
   { id: "delivery", icon: "📨", needs: ["tab.tools", "tool.summaries"], title: "Summaries by WhatsApp & email", needsAgent: true, desc: "Get the AI summary of every call on WhatsApp or by email.",
     steps: [
@@ -3189,7 +3202,13 @@ function showTab(tab) {
   if (!allowed(`tab.${state.tab}`)) state.tab = TABS.find((t) => allowed(`tab.${t}`)) || state.tab; // a tab switched off for this account
   document.querySelectorAll(".tabs [data-tab]").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === state.tab)));
   document.querySelectorAll(".tab-panel").forEach((p) => (p.hidden = p.dataset.panel !== state.tab));
-  if (section) requestAnimationFrame(() => { const el = $(section); el.scrollIntoView({ block: "start", behavior: "smooth" }); el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash"); });
+  if (section) requestAnimationFrame(() => {
+    const el = $(section);
+    el.scrollIntoView({ block: "start", behavior: "smooth" });
+    el.classList.remove("flash"); void el.offsetWidth; el.classList.add("flash");
+    // put the keyboard on that section's first control (＋ Add, the switch…) without jumping
+    el.querySelector("button:not([hidden]):not(:disabled), input:not([type=hidden]):not(:disabled), select:not(:disabled)")?.focus({ preventScroll: true });
+  });
 }
 // 📊 Dashboard is the start page (no hash) when it's open for this account and the user has an agent; else 🎙 Call.
 const backPage = () => state.lastPage || startView();

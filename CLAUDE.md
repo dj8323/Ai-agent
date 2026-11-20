@@ -325,6 +325,10 @@ voice_ai_web/          ── frontend team ──
 - Top menu buttons (`.topnav`): **💬 Conversations** (`#call`), **🤖 Agent studio** (`#agents/<tab>`, hash routing,
   `route()` in app.js). Agent studio (`#manageView`) is a pop-up window (`#agentsModal`) over the call page; ✕, Escape or a
   click outside closes it (back to `#call`). Dialogs opened from it (New agent, type change, playbook) sit on top.
+- **Agent card on Conversations (2026-11-20):** AI models = `.mtag` STT / TTS / LLM with the provider (admins see the model on
+  hover); **Tools** chips in `#sFeats`: 📅 Calendar, 🚨 Emergency, 📘 Playbook (name, or "＋ Add a playbook"), each opening
+  Agent studio → Tools at that section (`showTab` scrolls, flashes `tool-focus` and focuses its first control). `#pbPick` stays
+  hidden in the DOM for app.js. Empty conversation = `.chat-demo` looping bubbles (`EMPTY_CHAT`), removed by the first message.
 - Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,
   organization, availability, language · voice, AI models, playbook picker `#pbPick` + ✕ `#pbClear` (removes it from the agent), feature chips). ✎ Edit agent →
   `#agents/profile`. Keep it simple: anything that edits an agent belongs in Agent studio.
