@@ -1,4 +1,4 @@
-// 📊 Dashboard: the user's start page (#dashboard; the page with no hash when it's open for the account).
+// 📊 Insights (#dashboard): the user's start page (#dashboard; the page with no hash when it's open for the account).
 // Data: GET /api/dashboard?days=7|30|90&agent=all|<id>&tz=<minutes east of UTC> (DashboardController). Loaded after app.js and
 // uses its helpers ($, state, allowed, route, openCall). Charts are plain SVG; colours come from the theme (--c1) and the
 // channel colours (--ch-call/-chat/-voice/-wa, validated categorical slots 1-4). Every chart has a hover tooltip.
@@ -78,7 +78,7 @@
     const t = d.totals, who = D.agent === "all" ? "Your agents" : (state.agents || []).find((a) => a.id === D.agent)?.name || "This agent";
     $("dbHeadline").innerHTML = t.conversations
       ? `${e(who)} handled <b>${fmt(t.conversations)}</b> conversation${t.conversations === 1 ? "" : "s"} in the last ${d.days} days`
-      : d.agentCount ? `No conversations in the last ${d.days} days yet. Start one from 🎙 Call.` : "Create your first agent on 🎙 Call to see your numbers here.";
+      : d.agentCount ? `No conversations in the last ${d.days} days yet. Start one from 💬 Conversations.` : "Create your first agent on 💬 Conversations to see your numbers here.";
     D.w = $("dbActivity").clientWidth;
     tiles(d); activity(d.daily); mix(d.daily); reply(d.daily, t); heat(d.heat);
     hbars("dbTopics", d.intents.map((x) => [cap(x.label), x.count]), "No intents yet: they come from new conversations.");
@@ -240,7 +240,7 @@
 
   function agents(d) {
     $("dbAgentsSub").textContent = `${d.agentCount} agent${d.agentCount === 1 ? "" : "s"}`;
-    if (!d.agents.length) { $("dbAgents").innerHTML = '<tbody><tr><td class="db-empty">No agents yet. Create one on 🎙 Call.</td></tr></tbody>'; return; }
+    if (!d.agents.length) { $("dbAgents").innerHTML = '<tbody><tr><td class="db-empty">No agents yet. Create one on 💬 Conversations.</td></tr></tbody>'; return; }
     $("dbAgents").innerHTML = `<thead><tr><th>Agent</th><th>Type</th><th class="r">Conversations</th><th>Last ${d.days} days</th><th class="r">Avg reply</th><th class="r">Meetings</th><th>Last conversation</th></tr></thead><tbody>` +
       d.agents.map((a) => {
         const p = a.spark.some((v) => v) ? spark(a.spark, 110, 26) : "";

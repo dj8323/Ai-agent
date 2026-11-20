@@ -2847,11 +2847,11 @@ const goCall = () => { if (state.view !== "call" || location.hash !== "#call") l
 const isOpen = (id) => $(id).classList.contains("open");
 
 const TOURS = [
-  { id: "first-agent", icon: "＋", needs: ["agents.create"], title: "Create your first agent", desc: "Step by step, like the My agents tabs: profile, voice & AI, availability, tools, then create.",
+  { id: "first-agent", icon: "＋", needs: ["agents.create"], title: "Create your first agent", desc: "Step by step, like the Agent studio tabs: profile, voice & AI, availability, tools, then create.",
     steps: [
       { target: () => (state.agents.length ? "#sumNew" : "#firstAgentBtn"), before: goCall, title: "Open the new agent form",
         text: () => (state.agents.length ? "👉 Click **＋** next to \"Agent for this call\"." : "👉 Click **＋ Create my first agent**."), done: () => isOpen("agentDialog") },
-      { target: "#naSteps", title: "Five short steps", text: "Creating an agent follows the same tabs as **🤖 My agents**: **Profile → Voice & AI → Availability → Tools → Review**. The bar shows how far you are.", next: true },
+      { target: "#naSteps", title: "Five short steps", text: "Creating an agent follows the same tabs as **🤖 Agent studio**: **Profile → Voice & AI → Availability → Tools → Review**. The bar shows how far you are.", next: true },
       { target: "#naType", title: "1 · What is it for?", text: "👉 Pick the **Agent type**. To answer calls for someone who is busy, choose **Call Assistant (for a person)**. The list shows the types your admin has opened for you.",
         next: true },
       { target: "#naTemplate", title: "Its script", text: "The template the agent follows: what it asks and in which order. Keep the suggested one or pick another.", next: true },
@@ -2872,11 +2872,11 @@ const TOURS = [
       { target: "#naReview", title: "5 · Review", text: "Everything in one place. **Edit** jumps back to that step.", next: true },
       { target: "#naCreate", title: "Create it", text: "👉 Click **✨ Create agent** and watch the progress bar.", done: () => !isOpen("agentDialog") && state.agents.length > tourCtx.agents,
         warn: () => $("naErr").textContent },
-      { target: ".phone .stage", before: goCall, title: "🎉 Your agent is ready", text: "It's set up and selected for calls. Fine-tune it any time in **🤖 My agents**. Next, try a call!", next: true },
+      { target: ".phone .stage", before: goCall, title: "🎉 Your agent is ready", text: "It's set up and selected for calls. Fine-tune it any time in **🤖 Agent studio**. Next, try a call!", next: true },
     ], then: "call" },
-  { id: "dashboard", icon: "📊", needs: ["dashboard"], title: "Your dashboard", needsAgent: true, desc: "Your start page: conversations, channels, reply speed, busy hours, agents, meetings and messages.",
+  { id: "dashboard", icon: "📊", needs: ["dashboard"], title: "Your insights", needsAgent: true, desc: "Your start page: conversations, channels, reply speed, busy hours, agents, meetings and messages.",
     steps: [
-      { target: "#navDash", before: goDash, title: "📊 Dashboard", text: "Your start page. It opens after you sign in.", next: true },
+      { target: "#navDash", before: goDash, title: "📊 Insights", text: "Your start page. It opens after you sign in.", next: true },
       { target: ".db-filters", title: "Pick a period", text: "7, 30 or 90 days, for all agents or one. Everything below follows it.", next: true },
       { target: "#dbTiles", title: "The totals", text: "Conversations, talk time, reply speed, meetings, messages and AI tokens, with the change against the period before.", next: true },
       { target: "#dbActivity", title: "Every day", text: "Conversations per day by channel. Hover a day for the numbers, or use **Show as table**.", next: true },
@@ -2919,7 +2919,7 @@ const TOURS = [
       { target: () => (state.me?.role <= 1 ? "#llmSel" : "#llmProv"), before: goTab("voice"), title: "Models",
         text: () => (state.me?.role <= 1 ? "As an admin you also pick the models. **gpt-4.1-mini** answers fastest. Users' agents always use the default models." : "You pick the providers; the models are the defaults your admin set."), next: true },
       { target: "#lang", before: goTab("voice"), title: "Language", text: "Only languages both providers support are listed, the most spoken first. It also follows callers who mix languages.", next: true },
-      { target: "#voice", before: goTab("voice"), title: "Voice", text: "The chosen provider's voices. The cartoon agent on the call page follows: a man for male voices, a woman for the others.", next: true },
+      { target: "#voice", before: goTab("voice"), title: "Voice", text: "The chosen provider's voices. The cartoon agent on the Conversations page follows: a man for male voices, a woman for the others.", next: true },
       { target: ".tab-panel[data-panel=voice] .speed-bar", before: goTab("voice"), title: "Speaking speed", text: "Drag the **⏩ Speed** bar (0.5× to 2×).", next: true },
       { target: "#previewBtn", before: goTab("voice"), title: "Hear it", text: "👉 Click **▶ Play** to hear the voice at that speed.", clickIn: "#previewBtn", next: true, nextLabel: "Skip" },
     ] },
@@ -2953,7 +2953,7 @@ const TOURS = [
       { target: "#addPbBtn", before: goTab("playbooks"), title: "New playbook", text: "👉 Click **＋ Add**.", done: () => isOpen("pbDialog") },
       { target: "#pbDialog .dialog", title: "Build the script", text: "👉 Pick a type, then a ready-made script or **Custom**, edit it and save.", done: () => !isOpen("pbDialog") && state.saved.length > tourCtx.playbooks },
       { target: "#pbList", before: goTab("playbooks"), title: "Use it", text: "Click a playbook to use it for this agent (✓ shows the chosen one).", next: true },
-      { target: ".pb-pick-row", before: goCall, title: "On the call page too", text: "The **Playbook** dropdown on the call page picks one; **✕** removes it (back to the agent's template).", next: true },
+      { target: ".pb-pick-row", before: goCall, title: "On the Conversations page too", text: "The **Playbook** dropdown on the Conversations page picks one; **✕** removes it (back to the agent's template).", next: true },
     ] },
   { id: "delivery", icon: "📨", needs: ["tab.tools", "tool.summaries"], title: "Summaries by WhatsApp & email", needsAgent: true, desc: "Get the AI summary of every call on WhatsApp or by email.",
     steps: [
@@ -3432,8 +3432,8 @@ function renderNaPlaybooks() {
     row.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
     list.appendChild(row);
   }
-  $("naPbHint").textContent = !state.saved.length ? "You have no saved playbooks yet. Add them later in My agents → Playbooks."
-    : !free.length ? "All your playbooks are already used by your other agents. Add a new one later in My agents → Playbooks."
+  $("naPbHint").textContent = !state.saved.length ? "You have no saved playbooks yet. Add them later in Agent studio → Tools → Playbook."
+    : !free.length ? "All your playbooks are already used by your other agents. Add a new one later in Agent studio → Tools → Playbook."
     : inUse.size ? `${state.saved.length - free.length} playbook(s) already used by your other agents are hidden.` : "";
 }
 
@@ -3671,7 +3671,7 @@ $("naForm").addEventListener("submit", async (e) => {
     renderRules(); renderNotes();
     clearTimeout(state.saveTimer);
     await autoSave();
-    if (formSnapshot() !== state.savedSnapshot) throw new Error("Couldn't save the agent's settings. Open My agents to check them.");
+    if (formSnapshot() !== state.savedSnapshot) throw new Error("Couldn't save the agent's settings. Open Agent studio to check them.");
 
     naProgress(90, "Preparing its greeting…");
     await Promise.race([Promise.resolve(prepareGreeting()), new Promise((r) => setTimeout(r, 4000))]);

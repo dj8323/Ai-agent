@@ -1,6 +1,6 @@
 # TelemuneSmartAi — Product & Technical Guide
 
-18 Nov 2026 · Dhananjay · Version 2.1: Spring Boot backend + web frontend, clean main page with a My agents menu, agent templates, availability, caller messages
+18 Nov 2026 · Dhananjay · Version 2.1: Spring Boot backend + web frontend, clean main page with a Agent studio menu, agent templates, availability, caller messages
 
 ## Contents
 
@@ -8,7 +8,7 @@
 2. [Getting started](#getting-started)
 3. [Accounts, roles and sign-up](#accounts-roles-and-sign-up)
 4. [Agents](#agents)
-5. [Main page and the My agents menu](#main-page-and-the-my-agents-menu)
+5. [Main page and the Agent studio menu](#main-page-and-the-my-agents-menu)
 6. [Making a call](#making-a-call)
 7. [After the call: summaries, recordings and history](#after-the-call-summaries-recordings-and-history)
 8. [Admin dashboard](#admin-dashboard)
@@ -192,17 +192,17 @@ Safety rules travel with the types: the hospital agent never diagnoses and sends
 
 ### Creating and switching agents
 
-1. On the main page, the **Agent for this call** dropdown switches agents. **🤖 My agents** in the menu lists them all; ★ marks the one that opens first.
-2. **＋ New agent** (on the main page or in My agents) opens a step-by-step window. The numbered steps and a bar at the top show where you are; **Next →** / **← Back** move between steps, and you can click an earlier step to go back to it:
+1. On the main page, the **Agent for this call** dropdown switches agents. **🤖 Agent studio** in the menu lists them all; ★ marks the one that opens first.
+2. **＋ New agent** (on the main page or in Agent studio) opens a step-by-step window. The numbered steps and a bar at the top show where you are; **Next →** / **← Back** move between steps, and you can click an earlier step to go back to it:
     1. **Profile**: the **Agent type** dropdown (for example Call Assistant; its description shows underneath) and **template** (the type's usual one is pre-selected, or "No template: free conversation"), a **name** (for example "Brown"), **Works for** (required for the Call Assistant), **Organization** and what it's for. A preview shows the first line the agent will say.
     2. **Voice & AI**: speech providers, language, voice, and the **⏩ Speed** bar beside **▶ Play** (plays a short hello in that voice at that speed).
     3. **Availability** (optional): days, hours and time zone when the person can take meetings.
-    4. **Tools** (all optional), the same as My agents → Tools: **📅 Calendar** on/off · **🚨 Emergency contacts** (name, 📞 phone / 💬 WhatsApp / ✉️ email, the country code and number or the email, and the trigger words) · **📘 Playbook** (one of your saved playbooks, or none; playbooks your other agents use aren't listed) · **📨 Call summaries** by WhatsApp and/or email.
+    4. **Tools** (all optional), the same as Agent studio → Tools: **📅 Calendar** on/off · **🚨 Emergency contacts** (name, 📞 phone / 💬 WhatsApp / ✉️ email, the country code and number or the email, and the trigger words) · **📘 Playbook** (one of your saved playbooks, or none; playbooks your other agents use aren't listed) · **📨 Call summaries** by WhatsApp and/or email.
     5. **Review**: everything in one list, each with **Edit**. **✨ Create agent** then makes the agent with a progress bar (creating → opening → saving the settings → preparing its greeting → ready) and takes you to the call page with it selected.
-   📚 Tutorials → **Create your first agent** walks through all five steps. The steps are the same as the My agents tabs.
+   🧭 Guides → **Create your first agent** walks through all five steps. The steps are the same as the Agent studio tabs.
 3. Switching loads that agent's settings everywhere. Switching is locked during a call.
-4. In My agents, **☆ Default** makes the agent open first next time and **🗑** deletes it (its past calls stay in Call summaries).
-5. To change what an agent is, pick a new **Agent type** in **My agents → 👤 Profile**. A new type is a new job, so a dialog first shows what will be reset and asks for approval; **Cancel** changes nothing. After **Change type and reset**, the database is updated in one step: template, greeting and description go to the new type's defaults; works for, organization and availability are cleared; the playbook is removed; the calendar and emergency settings go back to the defaults. Name, language, voice, AI models and past calls are kept. If the new type works for a person, fill in **Works for**.
+4. In Agent studio, **☆ Default** makes the agent open first next time and **🗑** deletes it (its past calls stay in Call summaries).
+5. To change what an agent is, pick a new **Agent type** in **Agent studio → 👤 Profile**. A new type is a new job, so a dialog first shows what will be reset and asks for approval; **Cancel** changes nothing. After **Change type and reset**, the database is updated in one step: template, greeting and description go to the new type's defaults; works for, organization and availability are cleared; the playbook is removed; the calendar and emergency settings go back to the defaults. Name, language, voice, AI models and past calls are kept. If the new type works for a person, fill in **Works for**.
 
 The app remembers the last agent each user had open. A new account starts with no agents; nothing is created for it automatically.
 
@@ -216,17 +216,17 @@ The app remembers the last agent each user had open. A new account starts with n
 | Calendar on/off, emergency on/off and contacts (phone or email) | Account and password |
 | Messages callers left with it | |
 
-## Main page and the My agents menu
+## Main page and the Agent studio menu
 
-The menu at the top right has three buttons: **🎙 Call** (the main page), **🤖 My agents**, which opens a pop-up window over the call page to create and edit agents, and **📚 Tutorials**.
+The menu at the top right has three buttons: **💬 Conversations** (the main page), **🤖 Agent studio**, which opens a pop-up window over the call page to create and edit agents, and **🧭 Guides**.
 
-### 📚 Tutorials
+### 🧭 Guides
 
-**📚 Tutorials** are **guided tours**: you do each step yourself on the real page while the tour shows you where. The thing to click or fill in is highlighted, a small card says what to do, and the tour **waits for you**, moving on by itself once you've done it (for steps that only explain, press **Next**). **Back** goes one step back, **Skip tour** stops, and **Show me again** brings back a highlight you've scrolled or clicked away from. When a tour ends, the card suggests the next one.
+**🧭 Guides** are **guided tours**: you do each step yourself on the real page while the tour shows you where. The thing to click or fill in is highlighted, a small card says what to do, and the tour **waits for you**, moving on by itself once you've done it (for steps that only explain, press **Next**). **Back** goes one step back, **Skip tour** stops, and **Show me again** brings back a highlight you've scrolled or clicked away from. When a tour ends, the card suggests the next one.
 
-Tours: Create your first agent, Make a web call, Live chat / voice chat / WhatsApp, Profile & greeting, Voice & AI, Availability, Calendar, Emergency contacts, Playbooks, Summaries by WhatsApp & email, Call summaries and Your account. Each tour shows only when the account can use that part of the app. Open **📚 Tutorials** to pick one; tours you've finished get a ✓. A user with no agents gets "Create your first agent" automatically the first time they sign in.
+Tours: Create your first agent, Make a web call, Live chat / voice chat / WhatsApp, Profile & greeting, Voice & AI, Availability, Calendar, Emergency contacts, Playbooks, Summaries by WhatsApp & email, Call summaries and Your account. Each tour shows only when the account can use that part of the app. Open **🧭 Guides** to pick one; tours you've finished get a ✓. A user with no agents gets "Create your first agent" automatically the first time they sign in.
 
-### The main page (🎙 Call)
+### The main page (💬 Conversations)
 
 The main page only has what you need to make a call:
 
@@ -235,13 +235,13 @@ The main page only has what you need to make a call:
 3. **About this agent**: a short card under it shows the basics: works for, organization, availability, language and voice, and the AI models.
 4. **Playbook**: pick a script for this agent, or keep "Default: the agent's template". **✕** next to it removes the selected playbook (back to the template).
 5. Small chips show whether the calendar and emergency detection are on; tap one to open that setting.
-6. **✎ Edit agent** opens the agent in My agents.
+6. **✎ Edit agent** opens the agent in Agent studio.
 
 On the right are the conversation and the call summaries.
 
-### My agents (create and edit)
+### Agent studio (create and edit)
 
-**🤖 My agents** opens as a pop-up window over the call page (close it with ✕, Escape or a click outside). Your agents are listed on the left (★ = the one that opens first) with **＋ New agent** below them. The selected agent's settings are on the right, under its name. The header holds **🎙 Call** (back to the main page with this agent), **☆ Default** and **🗑 Delete**.
+**🤖 Agent studio** opens as a pop-up window over the call page (close it with ✕, Escape or a click outside). Your agents are listed on the left (★ = the one that opens first) with **＋ New agent** below them. The selected agent's settings are on the right, under its name. The header holds **💬 Conversations** (back to the main page with this agent), **☆ Default** and **🗑 Delete**.
 
 Every change saves itself within a second: there is no Save button. A small pill in the header shows **Saving…**, then **✓ Saved**. The next reply already uses the new setup.
 
@@ -366,9 +366,9 @@ The ● button records both sides of the call (your microphone and the agent's v
 
 Token totals count the chat replies and the summary. Text-to-speech audio is not included because OpenAI doesn't report it as tokens.
 
-## 📊 Dashboard
+## 📊 Insights
 
-The **📊 Dashboard** is the first page after you sign in (users with at least one agent). Pick **7, 30 or 90 days** and **all agents or one**; everything on the page follows that choice.
+The **📊 Insights** is the first page after you sign in (users with at least one agent). Pick **7, 30 or 90 days** and **all agents or one**; everything on the page follows that choice.
 
 - **Totals:** conversations, talk time, average reply, meetings booked, messages taken and AI tokens, each with the change against the period before and a small trend line.
 - **Conversations per day**, coloured by channel (web call, live chat, voice chat, WhatsApp). Hover a day for the numbers, or press **Show as table**.
@@ -378,7 +378,7 @@ The **📊 Dashboard** is the first page after you sign in (users with at least 
 - **Your agents:** conversations, trend, average reply, meetings and the last conversation for each agent.
 - **Upcoming meetings**, **messages for you** (urgent ones marked) and **recent conversations** (click one to open its summary).
 
-An admin can switch the Dashboard off for a user in ✏️ Edit → access (📊 Dashboard); the user then starts on 🎙 Call. The tutorial "Your dashboard" walks through the page.
+An admin can switch the Dashboard off for a user in ✏️ Edit → access (📊 Insights); the user then starts on 💬 Conversations. The tutorial "Your dashboard" walks through the page.
 
 ## Site theme
 
@@ -411,7 +411,7 @@ The SuperAdmin sees everything an admin sees, plus:
 | 🗄 Server | The backend's `.env` (MySQL, ports, logging) and `keys.env` (provider keys), one box per setting. Passwords and keys show as •••• and only change when you type a new value; a copy of the old file is kept. Below: every **app configuration** section from the database as JSON. Server file changes apply after a restart |
 | 🔄 Restart backend | In the dashboard header, on the Server page and in the main page's user menu. The page waits and reloads when the backend is back (about 10 seconds) |
 
-**Who sees what.** Admins create users (only the SuperAdmin creates admins). In **✏️ Edit** an admin ticks what each user can see in the app: the talk channels (Web call, Live chat, Voice chat, WhatsApp), the My agents tabs (Profile, Voice & AI, Availability, Tools) and the tools inside (Calendar, Emergency, Playbook, Call summaries delivery), the Call summaries list, and whether they may create or delete agents. An admin can only give what it has itself; the SuperAdmin sets that for each admin. The same window also limits **which agent types** a user (or admin) can pick and **which playbook types** they can add, with a count such as *3 of 15*; ticking every box means all types, including ones added later. A user made by an admin never gets more types or features than that admin has, even if its access was never edited or the admin was limited later. The 🛡 Admins cards show each admin's counts. The **Created by** column in Users shows who made each account.
+**Who sees what.** Admins create users (only the SuperAdmin creates admins). In **✏️ Edit** an admin ticks what each user can see in the app: the talk channels (Web call, Live chat, Voice chat, WhatsApp), the Agent studio tabs (Profile, Voice & AI, Availability, Tools) and the tools inside (Calendar, Emergency, Playbook, Call summaries delivery), the Call summaries list, and whether they may create or delete agents. An admin can only give what it has itself; the SuperAdmin sets that for each admin. The same window also limits **which agent types** a user (or admin) can pick and **which playbook types** they can add, with a count such as *3 of 15*; ticking every box means all types, including ones added later. A user made by an admin never gets more types or features than that admin has, even if its access was never edited or the admin was limited later. The 🛡 Admins cards show each admin's counts. The **Created by** column in Users shows who made each account.
 
 ## Admin dashboard
 
@@ -419,7 +419,7 @@ Admins land on `/admin.html`, a single page that shows every user, every agent a
 
 ### Menu
 
-A pill menu at the top (it stays in view while scrolling) opens one section at a time: **📊 Overview · 👥 Users · 🤖 Agents · 📞 Calls & usage · 🧩 Templates · ⚙️ Settings · 🔐 Sign-ins · 📜 Activity**. Each section has its own link (for example `/admin.html#users`).
+A pill menu at the top (it stays in view while scrolling) opens one section at a time: **📊 Overview · 👥 Users · 🤖 Agents · 📈 Usage · 🧩 Agent types · ⚙️ Settings · 🔐 Sign-ins · 📜 Activity**. Each section has its own link (for example `/admin.html#users`).
 
 ### 📊 Overview
 
@@ -440,7 +440,7 @@ A table with each user's role, status, agents, records, talk time, tokens and la
 
 Opens on **👤 User activity**: what people did in the app (agents created and set up, calls and chats saved, playbooks, messages taken, WhatsApp sent, emergency alerts). The other filters are **🛡 Admin & settings** (accounts, access, templates, app and server settings, restarts), **🔐 Sign-ins** and **All**, plus a user picker. The Overview's *Latest activity* shows user activity too.
 
-### 🤖 Agents and 📞 Calls & usage
+### 🤖 Agents and 📈 Usage
 
 **Agents** lists every agent of every user: owner, type, language and voice, providers (speech-to-text · text-to-speech · LLM, with the model), tools (📅 calendar, 🚨 emergency contacts, 📘 playbook) and booked events. **Calls & usage** shows per user: records split into 📞 calls, 💬 chats, 🎤 voice chats and WhatsApp, talk time, turns, tokens, average reply, recordings and the last call. Click a row to open that user.
 
@@ -448,7 +448,7 @@ Admins can read other users' agents and calls; they edit accounts, not another u
 
 ### Agent types & templates
 
-**🧩 Templates** in the menu lists every type on the left. Pick one to edit:
+**🧩 Agent types** in the menu lists every type on the left. Pick one to edit:
 
 - **The type**: name, icon, description, the persona used when an agent has no template, the greeting, and three switches: *Ask "works for whom?"* (makes it required), *Calendar on for new agents*, and *Available to users*.
 - **Its templates**, one panel each: name, persona, greeting, goal, steps and rules (one per line), what the summary should cover, *Pre-selected for new agents* and *Available to users*. Each shows how many agents use it. Save or 🗑 delete (agents using a deleted template go back to free conversation).

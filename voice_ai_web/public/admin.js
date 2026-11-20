@@ -267,13 +267,13 @@ async function userAction(u, act) {
 }
 
 // ---------- access: dashboard sections (admins, set by the SuperAdmin) and app features (set by an admin for users) ----------
-const SECTION_LABELS = { overview: "📊 Overview", users: "👥 Users", agents: "🤖 Agents", usage: "📞 Calls & usage", templates: "🧩 Templates",
-  settings: "⚙️ Settings", logins: "🔐 Sign-ins", activity: "📜 Activity" };
+const SECTION_LABELS = { overview: "📊 Overview", users: "👥 Users", agents: "🤖 Agents", usage: "📈 Usage", templates: "🧩 Agent types",
+  settings: "⚙️ Settings", logins: "🔐 Sign-ins", activity: "📜 Activity log" };
 const FEATURE_GROUPS = [
   ["Talk channels", { "talk.call": "📞 Web call", "talk.chat": "💬 Live chat", "talk.voice": "🎤 Voice chat", "talk.whatsapp": "WhatsApp" }],
-  ["My agents tabs", { "tab.profile": "👤 Profile", "tab.voice": "🧠 Voice & AI", "tab.availability": "🕒 Availability", "tab.tools": "🧰 Tools" }],
+  ["Agent studio tabs", { "tab.profile": "👤 Profile", "tab.voice": "🧠 Voice & AI", "tab.availability": "🕒 Availability", "tab.tools": "🧰 Tools" }],
   ["Inside Tools", { "tool.calendar": "📅 Calendar", "tool.emergency": "🚨 Emergency", "tool.playbook": "📘 Playbook", "tool.summaries": "📨 Call summaries delivery" }],
-  ["Other", { dashboard: "📊 Dashboard", history: "📚 Call summaries list", "agents.create": "＋ Create agents", "agents.delete": "🗑 Delete agents" }],
+  ["Other", { dashboard: "📊 Insights page", history: "📚 Call summaries list", "agents.create": "＋ Create agents", "agents.delete": "🗑 Delete agents" }],
 ];
 const featureOn = (u, f) => !(u.permissions?.app && u.permissions.app[f] === false);
 const myFeature = (f) => isSuper() || state.access?.app?.[f] !== false;

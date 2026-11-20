@@ -955,10 +955,10 @@
     </div>
     <div class="head-right">
       <nav class="topnav" aria-label="Main menu">
-        <button type="button" data-go="dashboard" id="navDash">📊 Dashboard</button>
-        <button type="button" data-go="call" id="navCall">🎙 Call</button>
-        <button type="button" data-go="agents" id="navAgents">🤖 My agents</button>
-        <button type="button" data-go="learn" id="navLearn">📚 Tutorials</button>
+        <button type="button" data-go="dashboard" id="navDash">📊 Insights</button>
+        <button type="button" data-go="call" id="navCall">💬 Conversations</button>
+        <button type="button" data-go="agents" id="navAgents">🤖 Agent studio</button>
+        <button type="button" data-go="learn" id="navLearn">🧭 Guides</button>
       </nav>
       <div class="sub" id="modelInfo" hidden></div>
       <button class="icon-btn" id="themeBtn" title="Switch light / dark theme" aria-label="Switch theme">🌙</button>
@@ -976,7 +976,7 @@
     </div>
   </header>
 
-  <!-- 📊 Dashboard: the start page (dashboard.js, data from GET /api/dashboard) -->
+  <!-- 📊 Insights (#dashboard): the start page (dashboard.js, data from GET /api/dashboard) -->
   <section class="db" id="dashView" aria-labelledby="dbHello">
     <div class="db-incall" id="dbInCall" hidden>📞 A conversation is still going on. <button type="button" class="db-link" data-go-call>Back to it</button></div>
     <div class="db-head">
@@ -1191,10 +1191,10 @@
 <div class="overlay agents-overlay" id="agentsModal" role="dialog" aria-modal="true" aria-labelledby="mgTitle">
   <div class="dialog agents-dialog">
     <div class="dialog-head">
-      <h3 id="mgTitle">🤖 My agents</h3>
+      <h3 id="mgTitle">🤖 Agent studio</h3>
       <button class="icon-btn" id="mgClose" type="button" title="Close" aria-label="Close">✕</button>
     </div>
-    <section class="manage" id="manageView" aria-label="My agents">
+    <section class="manage" id="manageView" aria-label="Agent studio">
       <aside class="card mg-side">
         <div class="mg-side-head"><span class="sub">Your agents</span><span class="sub" id="agentCount"></span></div>
         <div class="agent-list" id="agentChips" role="list"></div>
@@ -1389,7 +1389,7 @@
 <div class="overlay agents-overlay" id="learnModal" role="dialog" aria-modal="true" aria-labelledby="lrTitle">
   <div class="dialog learn-dialog">
     <div class="dialog-head">
-      <h3 id="lrTitle">📚 Tutorials</h3>
+      <h3 id="lrTitle">🧭 Guides</h3>
       <button class="icon-btn" id="lrClose" type="button" title="Close" aria-label="Close">✕</button>
     </div>
     <p class="tour-lead">Pick a guided tour. It shows you where to click and waits while you do each step yourself, on the real page.</p>
@@ -1512,7 +1512,7 @@
       </section>
 
       <section class="na-step" data-step="voice" hidden>
-        <p class="lead">How the agent sounds. You can change this any time in My agents → Voice &amp; AI.</p>
+        <p class="lead">How the agent sounds. You can change this any time in Agent studio → Voice &amp; AI.</p>
         <div class="na-fields">
           <div><label for="naSttProv">Speech-to-text (hears the caller)</label><select id="naSttProv"></select></div>
           <div><label for="naTtsProv">Text-to-speech (its voice)</label><select id="naTtsProv"></select></div>
@@ -1544,11 +1544,11 @@
       
 
       <section class="na-step na-tools" data-step="tools" hidden>
-        <p class="lead">The same tools as My agents → Tools. All optional: you can change them any time.</p>
+        <p class="lead">The same tools as Agent studio → Tools. All optional: you can change them any time.</p>
         <h4 class="tool-head">📅 Calendar</h4>
         <p class="lead">Let the agent book confirmed meetings, bookings and reminders into its calendar.</p>
         <label class="switch-row" for="naCal">
-          <span><b>Book into the calendar</b><br /><span class="sub">You'll see the events in My agents → Calendar and can export them (.ics).</span></span>
+          <span><b>Book into the calendar</b><br /><span class="sub">You'll see the events in Agent studio → Tools → Calendar and can export them (.ics).</span></span>
           <input type="checkbox" id="naCal" class="switch" />
         </label>
         <h4 class="tool-head">🚨 Emergency contacts</h4>
@@ -1568,7 +1568,7 @@
           <div class="na-list" id="naEmgList"></div>
         </div>
         <h4 class="tool-head">📘 Playbook</h4>
-        <p class="lead">A playbook is a ready script for one job (goal, steps, rules). Pick one, or keep the agent's own template. Playbooks another agent already uses aren't shown. You can change or remove it later on the call page or in My agents → Tools → Playbooks.</p>
+        <p class="lead">A playbook is a ready script for one job (goal, steps, rules). Pick one, or keep the agent's own template. Playbooks another agent already uses aren't shown. You can change or remove it later on the call page or in Agent studio → Tools → Playbook.</p>
         <div class="pb-list na-pbs" id="naPbs"></div>
         <p class="hint-line" id="naPbHint"></p>
         <h4 class="tool-head">📨 Call summaries</h4>
@@ -1580,7 +1580,7 @@
       </section>
 
       <section class="na-step" data-step="review" hidden>
-        <p class="lead">Check everything, then create your agent. You can change any of it later in My agents.</p>
+        <p class="lead">Check everything, then create your agent. You can change any of it later in Agent studio.</p>
         <dl class="na-review" id="naReview"></dl>
         <div class="na-progress" id="naProgress" hidden>
           <div class="na-bar"><div class="na-bar-fill" id="naBar"></div></div>

@@ -160,8 +160,8 @@ voice_ai_web/          ── frontend team ──
                        grouped KPI tiles → `openKpi(key)` per-user table (#kpiDialog), users table + ✏️ `openEdit()`
                        (#editDialog), all-agents table, usage per user, 🧩 types & templates, ⚙️ settings, 🔐 sign-ins, 📜 log.
   public/index.html    Layout + CSS (light/dark tokens): top menu, Call view (call card + summary card,
-                       conversation, call summaries), My agents view (list + tabbed editor), dialogs.
-  public/dashboard.js  📊 Dashboard page (tiles, charts, agents table, lists) from GET /api/dashboard.
+                       conversation, call summaries), Agent studio view (list + tabbed editor), dialogs.
+  public/dashboard.js  📊 Insights page (tiles, charts, agents table, lists) from GET /api/dashboard.
   public/app.js        Menu/tab routing, agent picker + summary, persona/availability/emergency editors, call flow,
                        speech in/out, tag parsing, messages, calendar, playbooks, call summaries.
   public/agent-face.js The cartoon agent on the call card: female or male by voice; states, 20 emotions, lip-sync.
@@ -308,40 +308,40 @@ voice_ai_web/          ── frontend team ──
   (`showLive()`) / fallback. Caller's live bubble: `liveBubble()` (made when speech starts: 🎙 `.live-mic` ripples scaled
   by `--lv` from `vadTick`, "Listening…"), `setLiveWords()` writes captions word by word, `finalizeBubble()` in
   `commitUtterance()` puts the accurate text in place, `.fix` flashes changed words. No "corrected" chip. The agent replies after `conversation.responseDelayMs` of silence.
-- **📚 Tutorials = guided tours** (`#learn` opens the launcher pop-up `#learnModal` / `#tourGrid`): the `TOURS` array in
+- **🧭 Guides = guided tours** (`#learn` opens the launcher pop-up `#learnModal` / `#tourGrid`): the `TOURS` array in
   app.js; each step has `target` (selector/array/fn), `title`, `text`, and `done()` (auto-advance when the user did it) or
   Next; also `ready`, `clickIn`, `before` (goTab/goCall), `warn`. Engine: `startTour` → `tourGo` → `tourTick` (200 ms:
   ring `.tour-ring` + card `.tour-card` placement, "Show me again") → `finishTour` (done ids in localStorage
   `tsa-tours-<userId>`, offers the next tour). Users with no agents get `startTour("first-agent")` on load. Keep the
   tours in step when element ids or flows change.
-- **📊 Dashboard** (2026-11-20, `#dashboard`, `voice_ai_web/public/dashboard.js`, `#dashView` / `.db-*` CSS in index.html): the
+- **📊 Insights** (2026-11-20, `#dashboard`, `voice_ai_web/public/dashboard.js`, `#dashView` / `.db-*` CSS in index.html): the
   start page after sign-in (no hash → `startView()`: dashboard if `allowed("dashboard")` and the user has agents, else call).
   One request: GET `/api/dashboard?days=7|30|90&agent=all|<id>&tz=<min>` (`api/DashboardController`): totals + previous
   period, daily per channel (+ seconds, tokens, avg reply), weekday×hour heat (browser time zone), top intents (from
   `calls.stats.intents`), how conversations ended, agents (spark, avg reply, meetings, last), upcoming events, messages,
   recent calls. Charts are plain SVG with hover tooltips; channel colours `--ch-call/-chat/-voice/-wa`. Feature
-  `dashboard` in APP_FEATURES (admins can switch it off → `body.no-dashboard`). ✕ on My agents / Tutorials returns to
+  `dashboard` in APP_FEATURES (admins can switch it off → `body.no-dashboard`). ✕ on Agent studio / Tutorials returns to
   `backPage()` (the last of dashboard/call). Tour "dashboard".
-- Top menu buttons (`.topnav`): **🎙 Call** (`#call`), **🤖 My agents** (`#agents/<tab>`, hash routing,
-  `route()` in app.js). My agents (`#manageView`) is a pop-up window (`#agentsModal`) over the call page; ✕, Escape or a
+- Top menu buttons (`.topnav`): **💬 Conversations** (`#call`), **🤖 Agent studio** (`#agents/<tab>`, hash routing,
+  `route()` in app.js). Agent studio (`#manageView`) is a pop-up window (`#agentsModal`) over the call page; ✕, Escape or a
   click outside closes it (back to `#call`). Dialogs opened from it (New agent, type change, playbook) sit on top.
 - Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,
   organization, availability, language · voice, AI models, playbook picker `#pbPick` + ✕ `#pbClear` (removes it from the agent), feature chips). ✎ Edit agent →
-  `#agents/profile`. Keep it simple: anything that edits an agent belongs in My agents.
-- **New agent wizard** (`#agentDialog`, `openAgentDialog()`): steps `NA_STEPS` = the My agents tabs: profile → voice ("Voice & AI";
+  `#agents/profile`. Keep it simple: anything that edits an agent belongs in Agent studio.
+- **New agent wizard** (`#agentDialog`, `openAgentDialog()`): steps `NA_STEPS` = the Agent studio tabs: profile → voice ("Voice & AI";
   ▶ Play `#naListen`: `fetchSpeech(text, emotion, {voice, language})`, works before the agent exists, beside the `#naSpeed` bar) →
   availability → tools (`.na-tools`: calendar on/off, emergency with `#naEmgCc`, playbook `#naPbs` / `na.playbookId` hiding playbooks
   another agent already uses, call summaries `#naNfWa`/`#naNfMail` → copied into `#nfWa…` on create) → review. Profile's agent type is a dropdown `#naType`
   (+ `#naTypeDesc`) (`naGo(n)`, `naCheck(step)`, step list `#naSteps` + bar `#naFill`, review `#naReview` with Edit links).
   Create: POST `/api/agents` (profile; `na.created` stops a duplicate on retry) → `switchAgent()` → copy the wizard's
-  voice/speed/availability/calendar/emergency into the My agents controls → `autoSave()` → `prepareGreeting()`, with the
-  progress bar `#naProgress`; then `#call`. Tour "first-agent" walks every step. Keep it in step with the My agents tabs.
-- My agents = agent list (`#agentChips`, ＋ New agent) + the setup card with tabs: Profile (agent type `#pType` →
+  voice/speed/availability/calendar/emergency into the Agent studio controls → `autoSave()` → `prepareGreeting()`, with the
+  progress bar `#naProgress`; then `#call`. Tour "first-agent" walks every step. Keep it in step with the Agent studio tabs.
+- Agent studio = agent list (`#agentChips`, ＋ New agent) + the setup card with tabs: Profile (agent type `#pType` →
   approval dialog `#typeDialog` → PATCH `/api/agents/:id {type}`, which resets template, greeting, description,
   playbook, works for, organization, availability, calendar and emergency to defaults in one transaction (keeps name,
   language, voice, models), then the form reloads; template, works for,
   organization, what it's for, greeting + preview) · Voice & AI · Availability (day buttons, from/to, time zone, note) ·
-  Tools (calendar switch + events, emergency, playbook, call summaries). No meeting-length picker any more (app default). Hero: name, 🎙 Call, ☆ Default, 🗑.
+  Tools (calendar switch + events, emergency, playbook, call summaries). No meeting-length picker any more (app default). Hero: name, 💬 Conversations, ☆ Default, 🗑.
 - Everything auto-saves (no Save button; `markDirty()` → `autoSave()` → POST `/api/settings`; persona payload carries
   description, availability text + availabilityPlan; calendar carries defaultDurationMin).
 - Emergency contacts `{label, type: phone|email, number, keywords[]}` per agent (`emergency_rules.contact_type`);
@@ -370,6 +370,11 @@ Sections/keys: `branding.*` (appName, tagline, footer, logo, favicon, theme.prim
 `calendar.enabled/defaultDurationMin` · `emergency.enabled/rules[]` · `auth.allowSignup/sessionHours/rememberDays`.
 Env overrides (backend .env): `OPENAI_MODEL`, `OPENAI_TTS_MODEL`, `OPENAI_REASONING_EFFORT`, `BACKEND_PORT`, `BACKEND_HOST`. Web: `PORT`, `HTTPS_PORT`, `BACKEND_URL` (voice_ai_web/.env or config.json).
 New tunables: `defaults.json` (+ `publicConfig()` in AppConfigService if the browser needs it).
+
+## Menu names (2026-11-20)
+
+Shown names ≠ hash routes: 📊 Insights = `#dashboard`, 💬 Conversations = `#call`, 🤖 Agent studio = `#agents/<tab>`,
+🧭 Guides = `#learn`. Admin menu: 📈 Usage = `#usage`, 🧩 Agent types = `#templates`, 📜 Activity log = `#activity`.
 
 ## Conventions & preferences (from the project owner)
 
