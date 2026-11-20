@@ -166,7 +166,7 @@ public class AdminController {
   @GetMapping("/users/{id}")
   Map<String, Object> user(@PathVariable String id, @RequestAttribute("ctx") Ctx ctx) {
     Map<String, Object> u = auth.getUser(id);
-    Map<String, Object> pub = u == null ? null : AuthService.visibleTo(AuthService.publicUser(u), ctx.isSuper(), ctx.isSuper() ? java.util.Set.of() : auth.superIds());
+    Map<String, Object> pub = u == null ? null : AuthService.visibleTo(auth.withCreatorLimits(AuthService.publicUser(u)), ctx.isSuper(), ctx.isSuper() ? java.util.Set.of() : auth.superIds());
     if (pub == null) throw ApiException.notFound("User not found.");
     return snapshot(pub);
   }

@@ -135,7 +135,11 @@ public class AuthService {
   }
 
   public List<Map<String, Object>> listUsers() {
-    return db.query("SELECT " + USER_COLS + " FROM users WHERE deleted_at IS NULL ORDER BY created_at").stream().map(AuthService::publicUser).toList();
+    List<Map<String, Object>> all = db.query("SELECT " + USER_COLS + " FROM users WHERE deleted_at IS NULL ORDER BY created_at").stream().map(AuthService::publicUser).toList();
+    Map<Object, Map<String, Object>> admins = new java.util.HashMap<>();
+    for (Map<String, Object> u : all) if (roleOf(u) == ROLE_ADMIN) admins.put(u.get("id"), effective(u));
+    // users show what they really get: never more than the admin who made them
+    return all.stream().map(u -> roleOf(u) == ROLE_USER && admins.containsKey(u.get("createdBy")) ? clipTo(u, admins.get(u.get("createdBy"))) : u).toList();
   }
 
   /**
@@ -383,7 +387,35 @@ public class AuthService {
     Map<String, Object> u = db.one("SELECT u.id, u.username, u.name, u.email, u.role_id, u.must_change_password, u.disabled, u.signup_source, u.created_by, u.permissions, u.created_at, u.last_login_at "
         + "FROM sessions s JOIN users u ON u.id = s.user_id "
         + "WHERE s.token_hash = ? AND s.expires_at > UTC_TIMESTAMP(3) AND u.disabled = 0 AND u.deleted_at IS NULL", sha(token));
-    return publicUser(u);
+    return withCreatorLimits(publicUser(u));
+  }
+
+  /**
+   * A user made by an admin never gets more than that admin has, even when its own access was never saved (no list = all)
+   * or the admin was limited later: agent types and playbook types are cut to the admin's, and features the admin lacks are off.
+   */
+  public Map<String, Object> withCreatorLimits(Map<String, Object> pub) {
+    if (pub == null || roleOf(pub) != ROLE_USER || pub.get("createdBy") == null) return pub;
+    Map<String, Object> c = getUser(String.valueOf(pub.get("createdBy")));
+    if (c == null || J.num(c.get("role_id")) != ROLE_ADMIN) return pub;
+    return clipTo(pub, effective(publicUser(c)));
+  }
+
+  private static Map<String, Object> clipTo(Map<String, Object> pub, Map<String, Object> giver) {
+    Map<String, Object> own = effective(pub);
+    Map<String, Object> perms = new java.util.LinkedHashMap<>(J.obj(pub.get("permissions")));
+    Map<String, Object> app = new java.util.LinkedHashMap<>();
+    Map<String, Object> ownApp = J.obj(own.get("app")), giverApp = J.obj(giver.get("app"));
+    for (String f : APP_FEATURES) app.put(f, J.bool(ownApp.get(f)) && J.bool(giverApp.get(f)));
+    perms.put("app", app);
+    for (String which : List.of("agentTypes", "playbookTypes")) {
+      @SuppressWarnings("unchecked") List<String> mine = (List<String>) own.get(which), his = (List<String>) giver.get(which);
+      List<String> out = his == null ? mine : mine == null ? his : mine.stream().filter(his::contains).toList();
+      if (out == null) perms.remove(which); else perms.put(which, out);
+    }
+    Map<String, Object> copy = new java.util.LinkedHashMap<>(pub);
+    copy.put("permissions", perms);
+    return copy;
   }
 
   public static String sessionCookie(String token, Long maxAge) {
