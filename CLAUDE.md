@@ -44,7 +44,8 @@ Split on 2026-11-19 into two self-contained apps (own settings, run script, logs
   `Bootstrap` → `AuthService.ensureSuperAdmin` (creates it, must change password; or promotes an existing username). Steps in
   `voice_ai_backend/README.md` → SuperAdmin. Only it: creates/edits/deletes admins, sets `users.permissions` for admins
   ({admin:[sections], app:{feature:bool}}), `/api/super/server-config` (.env/keys.env, secrets masked, backups in `config-backups/`),
-  `/api/super/restart` (runs `./run.sh` detached; `logs/restart.log`). `users.created_by` = who created the account.
+  `/api/super/restart` (runs `./run.sh` detached; `logs/restart.log`). **Hidden from admins** (2026-11-20): `AuthService.superIds/superNames/visibleTo` filter it out of
+  /api/admin/overview, users/:id (404), logs, logins, apiStats, template agent counts, `?as=`, `createdBy` and /api/me; `/api/super/*` → 404 for others; no error message names it. `users.created_by` = who created the account.
   Admins create users only and set users' `permissions.app`, clipped to their own (`setPermissions`). `AuthService.effective(user)`
   → `/api/me` `access`; `ApiFilter.adminSectionAllowed` guards `/api/admin/*` per section; `AuthService.can()` guards agent
   create/delete and WhatsApp. Web: `applyAccess()` → `body.no-<feature>` classes; `isStaff` (role ≤ 1) in server.js.

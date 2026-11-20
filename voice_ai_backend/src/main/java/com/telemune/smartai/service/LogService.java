@@ -48,16 +48,23 @@ public class LogService {
 
   /** Paginated activity log for the admin dashboard (optionally for one user). */
   public Map<String, Object> listActivity(int page, int pageSize, String userId) {
-    return listActivity(page, pageSize, userId, null);
+    return listActivity(page, pageSize, userId, null, null);
   }
+
+  /** "?, ?, ?" for an IN list. */
+  private static String marks(int n) { return String.join(", ", java.util.Collections.nCopies(n, "?")); }
 
   /**
    * kind: "user" = what people did in the app (agents, calls, chats, messages, playbooks, WhatsApp…), "auth" = sign-ins and
    * passwords, "admin" = accounts, settings, templates and server changes; null = everything.
    */
-  public Map<String, Object> listActivity(int page, int pageSize, String userId, String kind) {
+  public Map<String, Object> listActivity(int page, int pageSize, String userId, String kind, java.util.Set<String> hiddenUsers) {
     List<String> conds = new java.util.ArrayList<>();
     List<Object> argList = new java.util.ArrayList<>();
+    if (hiddenUsers != null && !hiddenUsers.isEmpty()) { // what the SuperAdmin did stays out of an admin's view
+      conds.add("(user_id IS NULL OR user_id NOT IN (" + marks(hiddenUsers.size()) + "))");
+      argList.addAll(hiddenUsers);
+    }
     if (userId != null) { conds.add("user_id = ?"); argList.add(userId); }
     String adminActs = "(action LIKE 'user.%' OR action LIKE 'type.%' OR action LIKE 'template.%' OR action LIKE 'server.%' OR action = 'config.update')";
     if ("auth".equals(kind)) conds.add("action LIKE 'auth.%'");
@@ -79,21 +86,34 @@ public class LogService {
 
   /** Sign-in attempts (ok and failed), newest first. */
   public Map<String, Object> listLogins(int page, int pageSize) {
-    long total = db.count("SELECT COUNT(*) FROM login_attempts");
+    return listLogins(page, pageSize, null, null);
+  }
+
+  /** hiddenUsers / hiddenNames: the SuperAdmin's sign-ins (also failed ones, by username) stay out of an admin's view. */
+  public Map<String, Object> listLogins(int page, int pageSize, java.util.Set<String> hiddenUsers, java.util.Set<String> hiddenNames) {
+    List<String> conds = new java.util.ArrayList<>();
+    List<Object> argList = new java.util.ArrayList<>();
+    if (hiddenUsers != null && !hiddenUsers.isEmpty()) { conds.add("(user_id IS NULL OR user_id NOT IN (" + marks(hiddenUsers.size()) + "))"); argList.addAll(hiddenUsers); }
+    if (hiddenNames != null && !hiddenNames.isEmpty()) { conds.add("LOWER(username) NOT IN (" + marks(hiddenNames.size()) + ")"); argList.addAll(hiddenNames); }
+    String where = conds.isEmpty() ? "" : "WHERE " + String.join(" AND ", conds) + " ";
+    long total = db.count("SELECT COUNT(*) FROM login_attempts " + where, argList.toArray());
     int pages = (int) Math.max(1, Math.ceil(total / (double) pageSize));
     int p = Math.min(Math.max(1, page), pages);
+    argList.add(pageSize); argList.add((p - 1) * pageSize);
     List<Map<String, Object>> rows = db.query(
-        "SELECT id, username, user_id, ip, user_agent, success, reason, created_at FROM login_attempts ORDER BY id DESC LIMIT ? OFFSET ?",
-        pageSize, (p - 1) * pageSize);
+        "SELECT id, username, user_id, ip, user_agent, success, reason, created_at FROM login_attempts " + where + "ORDER BY id DESC LIMIT ? OFFSET ?",
+        argList.toArray());
     return J.map("items", rows.stream().map(r -> J.map("id", r.get("id"), "username", r.get("username"), "userId", r.get("user_id"),
         "ip", r.get("ip"), "userAgent", r.get("user_agent"), "success", J.bool(r.get("success")), "reason", r.get("reason"),
         "at", J.iso(r.get("created_at")))).toList(), "page", p, "pages", pages, "total", total, "pageSize", pageSize);
   }
 
   /** Quick API numbers for the admin dashboard (last 24 hours). */
-  public Map<String, Object> apiStats() {
+  public Map<String, Object> apiStats(java.util.Set<String> hiddenUsers) {
+    boolean hide = hiddenUsers != null && !hiddenUsers.isEmpty();
     Map<String, Object> r = db.one("SELECT COUNT(*) AS requests, SUM(status >= 400) AS errors, ROUND(AVG(duration_ms)) AS avgMs "
-        + "FROM api_logs WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 1 DAY");
+        + "FROM api_logs WHERE created_at > UTC_TIMESTAMP(3) - INTERVAL 1 DAY"
+        + (hide ? " AND (user_id IS NULL OR user_id NOT IN (" + marks(hiddenUsers.size()) + "))" : ""), hide ? hiddenUsers.toArray() : new Object[0]);
     return J.map("requests", J.num(r.get("requests")), "errors", J.num(r.get("errors")), "avgMs", J.numOrNull(r.get("avgMs")));
   }
 }

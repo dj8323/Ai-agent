@@ -87,7 +87,8 @@ public class AuthController {
 
   @GetMapping("/api/me")
   Map<String, Object> me(@RequestAttribute("ctx") Ctx ctx) {
-    return J.map("user", ctx.user, "access", AuthService.effective(ctx.user)); // what this account may see
+    Map<String, Object> me = ctx.isSuper() ? ctx.user : AuthService.visibleTo(ctx.user, false, auth.superIds()); // no SuperAdmin traces
+    return J.map("user", me, "access", AuthService.effective(ctx.user)); // what this account may see
   }
 
   @PostMapping("/api/me/password")

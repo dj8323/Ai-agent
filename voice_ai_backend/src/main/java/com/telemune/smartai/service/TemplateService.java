@@ -303,6 +303,14 @@ public class TemplateService {
     return db.count("SELECT COUNT(*) FROM agents WHERE template_id = ?", id);
   }
 
+  /** Same, leaving out the agents of the given users (the SuperAdmin's, when an admin asks). */
+  public long agentsUsingTemplate(String id, java.util.Set<String> hiddenUsers) {
+    if (hiddenUsers == null || hiddenUsers.isEmpty()) return agentsUsingTemplate(id);
+    List<Object> args = new java.util.ArrayList<>(List.of(id));
+    args.addAll(hiddenUsers);
+    return db.count("SELECT COUNT(*) FROM agents WHERE template_id = ? AND user_id NOT IN (" + String.join(",", java.util.Collections.nCopies(hiddenUsers.size(), "?")) + ")", args.toArray());
+  }
+
   private static String pick(Map<String, Object> in, Map<String, Object> cur, String k, int max) {
     return in.containsKey(k) ? J.str(in.get(k), max) : J.str(cur.get(k), max);
   }

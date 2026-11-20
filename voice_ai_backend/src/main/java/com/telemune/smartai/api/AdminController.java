@@ -32,7 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Admin dashboard (role 1 only; ApiFilter checks the role): users, totals, logs, app settings, agent types & templates. */
+/** Admin dashboard (roles 0 and 1; ApiFilter checks the role and sections; the SuperAdmin is left out of everything an admin sees): users, totals, logs, app settings, agent types & templates. */
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
@@ -96,9 +96,15 @@ public class AdminController {
     return out;
   }
 
+  /** Users this viewer may see: everyone for the SuperAdmin; for an admin, never the SuperAdmin (nor "created by" it). */
+  private List<Map<String, Object>> visibleUsers(Ctx ctx) {
+    java.util.Set<String> hidden = ctx.isSuper() ? java.util.Set.of() : auth.superIds();
+    return auth.listUsers().stream().map(u -> AuthService.visibleTo(u, ctx.isSuper(), hidden)).filter(java.util.Objects::nonNull).toList();
+  }
+
   @GetMapping("/overview")
-  Map<String, Object> overview() {
-    List<Map<String, Object>> users = auth.listUsers().stream().map(this::snapshot).toList();
+  Map<String, Object> overview(@RequestAttribute("ctx") Ctx ctx) {
+    List<Map<String, Object>> users = visibleUsers(ctx).stream().map(this::snapshot).toList();
     long agentsN = 0, calls = 0, seconds = 0, turns = 0, tokens = 0, recordings = 0, pbs = 0, events = 0, msgs = 0;
     List<Long> replies = new ArrayList<>();
     for (Map<String, Object> u : users) {
@@ -121,18 +127,19 @@ public class AdminController {
             "playbooks", pbs, "events", events, "messages", msgs,
             "templates", templates.catalog(true).values().stream().mapToInt(t -> ((List<?>) J.obj(t).get("templates")).size()).sum(),
             "avgResponseMs", replies.isEmpty() ? null : Math.round(replies.stream().mapToLong(Long::longValue).average().orElse(0))),
-        "api", logs.apiStats(), "users", users, "sections", AuthService.ADMIN_SECTIONS, "features", AuthService.APP_FEATURES);
+        "api", logs.apiStats(ctx.isSuper() ? null : auth.superIds()), "users", users, "sections", AuthService.ADMIN_SECTIONS, "features", AuthService.APP_FEATURES);
   }
 
   @GetMapping("/logs")
   Map<String, Object> activity(@RequestParam(defaultValue = "1") int page, @RequestParam(required = false) String user,
-                               @RequestParam(required = false) String kind) {
-    return logs.listActivity(page, 15, J.blank(user) ? null : user, List.of("user", "auth", "admin").contains(kind) ? kind : null);
+                               @RequestParam(required = false) String kind, @RequestAttribute("ctx") Ctx ctx) {
+    return logs.listActivity(page, 15, J.blank(user) ? null : user, List.of("user", "auth", "admin").contains(kind) ? kind : null,
+        ctx.isSuper() ? null : auth.superIds());
   }
 
   @GetMapping("/logins")
-  Map<String, Object> logins(@RequestParam(defaultValue = "1") int page) {
-    return logs.listLogins(page, 15);
+  Map<String, Object> logins(@RequestParam(defaultValue = "1") int page, @RequestAttribute("ctx") Ctx ctx) {
+    return logs.listLogins(page, 15, ctx.isSuper() ? null : auth.superIds(), ctx.isSuper() ? null : auth.superNames());
   }
 
   // ---------- app settings ----------
@@ -157,10 +164,11 @@ public class AdminController {
   }
 
   @GetMapping("/users/{id}")
-  Map<String, Object> user(@PathVariable String id) {
+  Map<String, Object> user(@PathVariable String id, @RequestAttribute("ctx") Ctx ctx) {
     Map<String, Object> u = auth.getUser(id);
-    if (u == null) throw ApiException.notFound("User not found.");
-    return snapshot(AuthService.publicUser(u));
+    Map<String, Object> pub = u == null ? null : AuthService.visibleTo(AuthService.publicUser(u), ctx.isSuper(), ctx.isSuper() ? java.util.Set.of() : auth.superIds());
+    if (pub == null) throw ApiException.notFound("User not found.");
+    return snapshot(pub);
   }
 
   @PatchMapping("/users/{id}")
@@ -181,12 +189,13 @@ public class AdminController {
 
   // ---------- agent types & templates (stored in agent_types / agent_templates) ----------
   @GetMapping("/templates")
-  Map<String, Object> templates() {
+  Map<String, Object> templates(@RequestAttribute("ctx") Ctx ctx) {
+    java.util.Set<String> hidden = ctx.isSuper() ? java.util.Set.of() : auth.superIds();
     Map<String, Object> types = templates.catalog(true);
     for (Object t : types.values()) {
       for (Object tp : (List<?>) J.obj(t).get("templates")) {
         Map<String, Object> m = J.obj(tp);
-        m.put("agents", templates.agentsUsingTemplate((String) m.get("id")));
+        m.put("agents", templates.agentsUsingTemplate((String) m.get("id"), hidden));
       }
     }
     return J.map("types", types);

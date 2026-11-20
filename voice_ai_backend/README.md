@@ -106,7 +106,7 @@ Files rotate daily into `logs/archive/`. Full guide with all tables and ready SQ
 
 ## API
 
-SuperAdmin only: `GET/PUT /api/super/server-config` (.env / keys.env, secrets masked) · `POST /api/super/restart`.
+The SuperAdmin is hidden from admins (lists, totals, created by, activity, sign-ins, API stats, template counts; by id → 404 "User not found", `/api/super/*` → 404). SuperAdmin only: `GET/PUT /api/super/server-config` (.env / keys.env, secrets masked) · `POST /api/super/restart`.
 
 All routes are under `/api`, JSON in and out (errors are `{"error": "…"}`). Signed-in requests carry the HttpOnly cookie
 `tsa_session`; non-GET requests whose `Origin` host differs from `Host` are refused. The web app sends `X-Agent-Id`

@@ -370,6 +370,8 @@ Token totals count the chat replies and the summary. Text-to-speech audio is not
 
 Above the admins there is one **SuperAdmin** (role 0). It is set up on the server, not in the browser (steps in `voice_ai_backend/README.md` → SuperAdmin: two lines in `.env`, restart, sign in, change the password, remove the password line).
 
+**Hidden from everyone else.** Admins and users never see the SuperAdmin: it is left out of the users list, the totals, Created by, Calls & usage, template counts, the activity log and the sign-in list. Opening it by id answers "User not found", and the SuperAdmin pages answer "Not found". Messages to admins never name it.
+
 The SuperAdmin sees everything an admin sees, plus:
 
 | Where | What |

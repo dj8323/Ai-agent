@@ -138,6 +138,30 @@ public class AuthService {
     return db.query("SELECT " + USER_COLS + " FROM users WHERE deleted_at IS NULL ORDER BY created_at").stream().map(AuthService::publicUser).toList();
   }
 
+  /**
+   * The SuperAdmin is hidden from everyone else: admins never see it in user lists, totals, activity, sign-ins or "created by",
+   * and asking for it by id answers "User not found." These are the SuperAdmin ids and usernames to leave out.
+   */
+  public java.util.Set<String> superIds() {
+    return new java.util.HashSet<>(db.query("SELECT id FROM users WHERE role_id = 0").stream().map(r -> (String) r.get("id")).toList());
+  }
+
+  public java.util.Set<String> superNames() {
+    return new java.util.HashSet<>(db.query("SELECT username FROM users WHERE role_id = 0").stream().map(r -> String.valueOf(r.get("username")).toLowerCase()).toList());
+  }
+
+  /** A user as a non-SuperAdmin may see it: null for a SuperAdmin, and "created by" cleared when the SuperAdmin made it. */
+  public static Map<String, Object> visibleTo(Map<String, Object> pub, boolean viewerIsSuper, java.util.Set<String> hidden) {
+    if (pub == null || viewerIsSuper) return pub;
+    if (J.num(pub.get("role")) == ROLE_SUPER && pub.get("role") != null) return null;
+    if (pub.get("createdBy") != null && hidden.contains(String.valueOf(pub.get("createdBy")))) {
+      Map<String, Object> out = new java.util.LinkedHashMap<>(pub);
+      out.put("createdBy", null);
+      return out;
+    }
+    return pub;
+  }
+
   public Map<String, Object> getUser(String id) {
     return db.one("SELECT " + USER_COLS + " FROM users WHERE id = ? AND deleted_at IS NULL", id);
   }
@@ -162,7 +186,7 @@ public class AuthService {
     String id = J.newId();
     String name = J.str(in.get("name"), 60);
     boolean bySuper = roleOf(creator) == ROLE_SUPER;
-    if (!"self".equals(source) && J.num(in.get("role")) == ROLE_ADMIN && !bySuper) throw ApiException.forbidden("Only the SuperAdmin can create admins.");
+    if (!"self".equals(source) && J.num(in.get("role")) == ROLE_ADMIN && !bySuper) throw ApiException.forbidden("You can't create admins.");
     int role = "self".equals(source) ? ROLE_USER : J.num(in.get("role")) == ROLE_ADMIN ? ROLE_ADMIN : ROLE_USER;
     db.exec("INSERT INTO users (id, username, name, email, role_id, password_hash, must_change_password, signup_source, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
         id, username, name.isEmpty() ? username : name, email.isEmpty() ? null : email, role,
@@ -186,10 +210,10 @@ public class AuthService {
     if (u == null) throw ApiException.notFound("User not found.");
     long targetRole = J.num(u.get("role_id"));
     // Admins manage users (and their own name/email/password); only the SuperAdmin manages admins. Nobody changes the SuperAdmin here.
-    if (targetRole == ROLE_SUPER && !id.equals(actingUserId)) throw ApiException.forbidden("The SuperAdmin can only be changed by itself.");
-    if (targetRole == ROLE_ADMIN && !bySuper && !id.equals(actingUserId)) throw ApiException.forbidden("Only the SuperAdmin can change admins.");
-    if (ch.containsKey("role") && !bySuper) throw ApiException.forbidden("Only the SuperAdmin can change roles.");
-    if (ch.containsKey("role") && (targetRole == ROLE_SUPER || J.num(ch.get("role")) == ROLE_SUPER)) throw ApiException.bad("The SuperAdmin role is set on the server only.");
+    if (targetRole == ROLE_SUPER && !id.equals(actingUserId)) throw ApiException.notFound("User not found."); // hidden from everyone else
+    if (targetRole == ROLE_ADMIN && !bySuper && !id.equals(actingUserId)) throw ApiException.forbidden("You can't change other admins.");
+    if (ch.containsKey("role") && !bySuper) throw ApiException.forbidden("You can't change roles.");
+    if (ch.containsKey("role") && (targetRole == ROLE_SUPER || J.num(ch.get("role")) == ROLE_SUPER)) throw ApiException.bad("That role can't be given here.");
     if (ch.get("permissions") instanceof Map<?, ?>) {
       if (id.equals(actingUserId) && !bySuper) throw ApiException.forbidden("You can't change your own access.");
       setPermissions(id, J.obj(ch.get("permissions")), actor);
@@ -238,7 +262,7 @@ public class AuthService {
     boolean bySuper = roleOf(actor) == ROLE_SUPER;
     if (u == null || J.num(u.get("role_id")) == ROLE_SUPER) return;
     boolean targetAdmin = J.num(u.get("role_id")) == ROLE_ADMIN;
-    if (targetAdmin && !bySuper) throw ApiException.forbidden("Only the SuperAdmin can set what an admin sees.");
+    if (targetAdmin && !bySuper) throw ApiException.forbidden("You can't change what an admin sees.");
     Map<String, Object> mine = J.obj(effective(actor).get("app"));
     Map<String, Object> app = new java.util.LinkedHashMap<>();
     Map<String, Object> want = J.obj(in.get("app"));
@@ -261,9 +285,9 @@ public class AuthService {
     if (id.equals(actingUserId)) throw ApiException.bad("You can't delete your own account.");
     Map<String, Object> u = getUser(id);
     if (u == null) throw ApiException.notFound("User not found.");
-    if (J.num(u.get("role_id")) == ROLE_SUPER) throw ApiException.bad("The SuperAdmin can't be deleted.");
+    if (J.num(u.get("role_id")) == ROLE_SUPER) throw ApiException.notFound("User not found.");
     Map<String, Object> actor = getUser(actingUserId);
-    if (J.num(u.get("role_id")) == ROLE_ADMIN && (actor == null || J.num(actor.get("role_id")) != ROLE_SUPER)) throw ApiException.forbidden("Only the SuperAdmin can delete admins.");
+    if (J.num(u.get("role_id")) == ROLE_ADMIN && (actor == null || J.num(actor.get("role_id")) != ROLE_SUPER)) throw ApiException.forbidden("You can't delete admins.");
     if (J.num(u.get("role_id")) == ROLE_ADMIN && db.count("SELECT COUNT(*) FROM users WHERE role_id IN (0, 1) AND deleted_at IS NULL") <= 1) {
       throw ApiException.bad("You can't delete the last admin.");
     }

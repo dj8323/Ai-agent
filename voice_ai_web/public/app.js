@@ -3125,7 +3125,7 @@ function showTutorial() {
     const el = document.createElement("div");
     el.className = "tour-tile";
     el.innerHTML = `<div class="tt-top"><span class="tt-icon" aria-hidden="true">👑</span><div><b>Admin dashboard</b><div class="tt-meta">${state.me?.role === 0 ? "for the SuperAdmin" : "for admins"}</div></div></div>
-      <p>${state.me?.role === 0 ? "Everything below, plus 🛡 Admins (create admins, choose what each sees) and 🗄 Server (server settings, restart)." : "The sections the SuperAdmin opened for you:"} overview with clickable totals, users (edit, access), all agents, calls &amp; usage, templates, settings, sign-ins and activity.</p>`;
+      <p>${state.me?.role === 0 ? "Everything below, plus 🛡 Admins (create admins, choose what each sees) and 🗄 Server (server settings, restart)." : "The sections opened for you:"} overview with clickable totals, users (edit, access), all agents, calls &amp; usage, templates, settings, sign-ins and activity.</p>`;
     const b = document.createElement("button");
     b.type = "button"; b.className = "btn btn-small"; b.textContent = "Open the dashboard";
     b.onclick = () => (location.href = "/admin.html");

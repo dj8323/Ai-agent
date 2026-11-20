@@ -134,7 +134,7 @@ public class ApiFilter extends OncePerRequestFilter {
         return;
       }
       if (path.startsWith("/api/super/") && !ctx.isSuper()) {
-        json(res, 403, "SuperAdmin only.");
+        json(res, 404, "Not found."); // the SuperAdmin area doesn't exist for anyone else
         return;
       }
       if (path.startsWith("/api/admin/") && !ctx.isSuper() && !adminSectionAllowed(path, method, user)) {
@@ -145,7 +145,8 @@ public class ApiFilter extends OncePerRequestFilter {
         // Admin may read (GET only) another user's data with ?as=<userId>.
         String as = req.getParameter("as");
         if (as != null && !as.isBlank() && ctx.isAdmin() && "GET".equals(method)) {
-          if (auth.getUser(as) == null) {
+          Map<String, Object> target = auth.getUser(as);
+          if (target == null || (!ctx.isSuper() && J.num(target.get("role_id")) == 0)) {
             json(res, 404, "User not found.");
             return;
           }

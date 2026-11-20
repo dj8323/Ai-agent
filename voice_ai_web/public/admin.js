@@ -72,7 +72,7 @@ async function loadMe() {
   state.me = user; state.access = access;
   document.body.classList.toggle("is-super", user.role === 0);
   $("restartBtn").hidden = user.role !== 0;
-  if (!mySections().length) document.querySelector(".wrap").insertAdjacentHTML("beforeend", '<div class="card empty">No dashboard sections are open for your account. Ask the SuperAdmin.</div>');
+  if (!mySections().length) document.querySelector(".wrap").insertAdjacentHTML("beforeend", '<div class="card empty">No dashboard sections are open for your account. Ask your administrator.</div>');
   $("uAv").textContent = (user.name || user.username)[0].toUpperCase();
   $("uName").textContent = user.name || user.username;
   if (user.mustChangePassword) {
