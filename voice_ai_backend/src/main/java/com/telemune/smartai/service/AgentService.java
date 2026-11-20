@@ -279,6 +279,8 @@ public class AgentService {
           boolean ok = !pb.isEmpty() && db.one("SELECT id FROM playbooks WHERE id = ? AND user_id = ?", pb, userId) != null;
           db.exec("UPDATE agents SET playbook_id = ? WHERE id = ? AND user_id = ?", ok ? pb : null, agentId, userId);
         }
+        if (J.bool(m.get("resetModels"))) // a user (not an admin) saved: back to the default models
+          db.exec("UPDATE agents SET chat_model = NULL, tts_model = NULL, stt_model = NULL, stt_engine = NULL WHERE id = ?", agentId);
         if (modelId(m.get("chat")) != null) db.exec("UPDATE agents SET chat_model = ? WHERE id = ?", m.get("chat"), agentId);
         if (modelId(m.get("tts")) != null) db.exec("UPDATE agents SET tts_model = ? WHERE id = ?", m.get("tts"), agentId);
         if (m.containsKey("ttsProvider")) db.exec("UPDATE agents SET tts_provider = ? WHERE id = ?", SpeechService.TTS.contains(J.str(m.get("ttsProvider"))) ? m.get("ttsProvider") : null, agentId);

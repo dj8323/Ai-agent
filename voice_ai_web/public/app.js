@@ -135,10 +135,9 @@ const speed = () => Math.min(2, Math.max(0.5, Number($("speedRange").value) || 1
 function renderSpeed() {
   const v = speed();
   $("speedVal").textContent = `${v.toFixed(2)}×`;
-  $("speedPicks").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(Math.abs(Number(b.dataset.speed) - v) < 0.001)));
+  $("speedRange").style.setProperty("--fill", `${((v - 0.5) / 1.5) * 100}%`);
   if (state.audio) state.audio.playbackRate = v; // takes effect even mid-sentence
 }
-$("speedPicks").querySelectorAll("button").forEach((b) => (b.onclick = () => { $("speedRange").value = b.dataset.speed; renderSpeed(); markDirty(); }));
 $("speedRange").addEventListener("input", () => { renderSpeed(); markDirty(); });
 
 function refreshName() {
@@ -202,7 +201,7 @@ async function loadConfig() {
   state.providers = c.providers;
   state.channels = c.channels || {};
   state.countryCodes = (c.countryCodes || []).map((x, i) => ({ ...x, sort: i }));
-  fillCc($("waCc")); fillCc($("nfWaCc"));
+  fillCc($("waCc")); fillCc($("nfWaCc")); fillEmgCc($("emgCc"), $("emgVia").value);
   const cfg = c.settings || {};
   Object.assign(SETTINGS, cfg);
   Object.assign(CONFIG, cfg.conversation || {});
@@ -422,9 +421,6 @@ function fillForm() {
   renderPlaybooks();
   setSelect($("llmSel"), SETTINGS.models.chat);
   $("calToggle").checked = !!SETTINGS.calendar?.enabled;
-  const len = String(SETTINGS.calendar?.defaultDurationMin || 30);
-  if (![...$("calLen").options].some((o) => o.value === len)) $("calLen").add(new Option(`${len} minutes`, len));
-  $("calLen").value = len;
   $("emgToggle").checked = !!SETTINGS.emergency?.enabled;
   state.rules = structuredClone(SETTINGS.emergency?.rules || []);
   renderRules();
@@ -2233,7 +2229,6 @@ async function loadModels() {
 }
 ["llmSel", "sttSel", "ttsSel"].forEach((id) => $(id).addEventListener("change", () => { $(id).title = $(id).value; markDirty(); }));
 $("calToggle").addEventListener("change", () => { renderNotes(); markDirty(); });
-$("calLen").addEventListener("change", markDirty);
 $("emgToggle").addEventListener("change", () => { renderRules(); markDirty(); if ($("emgToggle").checked) $("emgType").focus(); });
 
 // Keywords offered in the "pick a keyword" list (anyone can also type their own).
@@ -2362,16 +2357,38 @@ function toggleKw(k) {
   emgForm.picked = emgForm.picked.includes(k) ? emgForm.picked.filter((x) => x !== k) : [...emgForm.picked, k];
   renderEmgForm();
 }
+// Emergency contact number: 📞 phone = country code + number, or "Local" for short numbers like 108;
+// 💬 WhatsApp = country code + mobile number (codes from the country_codes table); ✉️ email = an address, no code.
+function fillEmgCc(sel, via, iso) {
+  if (!sel.options.length) sel.add(new Option("☎ Local", ""));
+  if (sel.options.length === 1) for (const c of state.countryCodes || []) sel.add(new Option(`${c.flag} +${c.dial}`, c.iso2)); // once the codes have loaded
+  sel.options[0].hidden = via !== "phone";
+  sel.hidden = via === "email";
+  if (iso != null) sel.value = iso;
+  if (via === "whatsapp" && !sel.value) sel.value = "IN";
+  sel.title = sel.value ? ccOf(sel.value)?.name || "" : "Local number (no country code)";
+}
+function emgNumberValue(sel, input, via) {
+  const raw = input.value.trim();
+  if (via === "email") return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(raw) ? { number: raw } : { error: "Enter a valid email address." };
+  if (!sel.value) return /^[\d*#]{2,15}$/.test(raw.replace(/[\s-]/g, "")) ? { number: raw.replace(/[\s-]/g, "") } : { error: "Enter a valid number." };
+  if (via === "whatsapp") { const r = fullNumber(sel, input); return r.error ? r : { number: "+" + r.number }; }
+  const local = raw.replace(/[^\d]/g, "").replace(/^0+/, "");
+  return local.length >= 3 && local.length <= 14 ? { number: `+${ccOf(sel.value).dial} ${local}` } : { error: "Enter a valid number." };
+}
 function setEmgVia(via) {
   $("emgVia").value = via;
   $("emgNumberLabel").textContent = via === "email" ? "Email" : via === "whatsapp" ? "WhatsApp number" : "Number";
-  $("emgNumber").placeholder = via === "email" ? "e.g. help@company.com" : via === "whatsapp" ? "e.g. +91 98765 43210" : "e.g. 108";
+  $("emgNumber").placeholder = via === "email" ? "e.g. help@company.com" : via === "whatsapp" ? "e.g. 98765 43210" : "e.g. 108";
   $("emgNumber").inputMode = via === "email" ? "email" : "tel";
+  fillEmgCc($("emgCc"), via);
 }
+$("emgCc").addEventListener("change", () => fillEmgCc($("emgCc"), $("emgVia").value));
 $("emgVia").addEventListener("change", () => { setEmgVia($("emgVia").value); $("emgNumber").value = ""; $("emgNumber").focus(); });
 function resetEmgForm() {
   const t = EMERGENCY_TYPES[$("emgType").value];
   setEmgVia("phone");
+  fillEmgCc($("emgCc"), "phone", t.number ? "" : "IN"); // the usual services are local short numbers
   $("emgNumber").value = t.number;
   $("emgCustom").value = "";
   emgForm.picked = [...t.keywords.slice(0, 3)]; // start with the most common ones picked
@@ -2389,10 +2406,11 @@ $("emgAddBtn").addEventListener("click", () => {
   const typed = $("emgKwInput").value.trim();
   if (typed) { toggleKw(typed); $("emgKwInput").value = ""; }
   const label = $("emgType").value === "Other" ? $("emgCustom").value.trim() : $("emgType").value;
-  const number = $("emgNumber").value.trim();
   const via = $("emgVia").value;
   if (!label) return emgMsg("Give it a name.", "err");
-  if (via === "email" ? !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(number) : !/^[\d+*# -]{2,20}$/.test(number)) return emgMsg(via === "email" ? "Enter a valid email address." : "Enter a valid number.", "err");
+  const nv = emgNumberValue($("emgCc"), $("emgNumber"), via);
+  if (nv.error) return emgMsg(nv.error, "err");
+  const number = nv.number;
   if (!emgForm.picked.length) return emgMsg("Pick or type at least one keyword.", "err");
   // Same service again: update its number and add the new keywords instead of making a duplicate.
   const existing = state.rules.find((r) => r.label.toLowerCase() === label.toLowerCase());
@@ -2415,7 +2433,7 @@ function formPayload() {
   return {
     agent: { defaultName: agentName(), defaultLanguage: lang(), defaultVoice: $("voice").value, defaultPlaybookId: state.playbookId, speechSpeed: speed() },
     models: { chat: $("llmSel").value, stt: $("sttSel").value, tts: $("ttsSel").value, ttsProvider: ttsProv(), sttProvider: sttProv() },
-    calendar: { enabled: $("calToggle").checked, defaultDurationMin: Number($("calLen").value) || 30 },
+    calendar: { enabled: $("calToggle").checked },
     emergency: { enabled: $("emgToggle").checked, rules: state.rules },
     persona: personaPayload(),
     notify: notifyPayload(),
@@ -2629,6 +2647,7 @@ function setupUserMenu(me) {
   $("uName").textContent = me.name || me.username;
   $("uRole").textContent = me.role === 1 ? "👑 Admin" : "👤 User";
   $("mDash").hidden = me.role !== 1;
+  document.body.classList.toggle("is-admin", me.role === 1); // AI model pickers are for admins; users run on the defaults
   if (me.mustChangePassword && !$("pwBanner")) {
     const b = document.createElement("div");
     b.id = "pwBanner"; b.className = "note-banner"; b.setAttribute("role", "status");
@@ -2735,11 +2754,11 @@ const goCall = () => { if (!/^#?(call)?$/.test(location.hash)) location.hash = "
 const isOpen = (id) => $(id).classList.contains("open");
 
 const TOURS = [
-  { id: "first-agent", icon: "＋", title: "Create your first agent", desc: "Step by step: profile, voice, availability, calendar, emergency, playbook, then create.",
+  { id: "first-agent", icon: "＋", title: "Create your first agent", desc: "Step by step, like the My agents tabs: profile, voice & AI, availability, tools, then create.",
     steps: [
       { target: () => (state.agents.length ? "#sumNew" : "#firstAgentBtn"), before: goCall, title: "Open the new agent form",
         text: () => (state.agents.length ? "👉 Click **＋** next to \"Agent for this call\"." : "👉 Click **＋ Create my first agent**."), done: () => isOpen("agentDialog") },
-      { target: "#naSteps", title: "Seven short steps", text: "Creating an agent goes step by step: **Profile → Voice → Availability → Calendar → Emergency → Playbook → Review**. The bar shows how far you are.", next: true },
+      { target: "#naSteps", title: "Five short steps", text: "Creating an agent follows the same tabs as **🤖 My agents**: **Profile → Voice & AI → Availability → Tools → Review**. The bar shows how far you are.", next: true },
       { target: "#naType", title: "1 · What is it for?", text: "👉 Pick the **Agent type**. To answer calls for someone who is busy, choose **Call Assistant (for a person)**. Hospital, Real Estate, Banking, HR and more are in the list too.",
         next: true },
       { target: "#naTemplate", title: "Its script", text: "The template the agent follows: what it asks and in which order. Keep the suggested one or pick another.", next: true },
@@ -2748,18 +2767,17 @@ const TOURS = [
         ready: () => !typeOf(na.type).needsOwner || !!$("naOwner").value.trim() },
       { target: ["#naPreview:not(:empty)", "#naType"], title: "Its first line", text: "This is what the agent will say at the start of every call.", next: true },
       { target: "#naNext", title: "Next step", text: "👉 Click **Next →**.", done: () => NA_STEPS[na.step] === "voice", warn: () => $("naErr").textContent },
-      { target: "#naVoice", title: "2 · Voice", text: "Pick the language it speaks and its voice. 10 voices, male and female.", next: true },
-      { target: "#naListen", title: "Listen to it", text: "👉 Click **▶** to hear the voice before you choose.", clickIn: "#naListen", next: true, nextLabel: "Skip" },
-      { target: "#naSpeedPicks", title: "Speaking speed", text: "How fast it talks: 🐢 Slow, Normal, Fast or 🚀 Faster. 👉 Then click **Next →**.", done: () => NA_STEPS[na.step] === "availability" },
+      { target: "#naVoice", title: "2 · Voice & AI", text: "Pick the speech providers, the language it speaks and its voice.", next: true },
+      { target: ".na-step[data-step=voice] .speed-bar", title: "Speaking speed", text: "Drag the **⏩ Speed** bar to make it talk slower or faster.", next: true },
+      { target: "#naListen", title: "Listen to it", text: "👉 Click **▶ Play** to hear the voice at that speed. Then click **Next →**.", done: () => NA_STEPS[na.step] === "availability" },
       { target: "#naDays", title: "3 · Availability (optional)", text: "When the person can take meetings: pick days and hours. The agent only offers times inside them. Skip it if you like. 👉 **Next →**",
-        done: () => NA_STEPS[na.step] === "calendar", warn: () => $("naErr").textContent },
-      { target: "label[for=naCal]", title: "4 · Calendar", text: "Switch it on and the agent books confirmed meetings into its calendar. Pick the meeting length. 👉 **Next →**",
-        done: () => NA_STEPS[na.step] === "emergency" },
-      { target: "label[for=naEmg]", title: "5 · Emergency (optional)", text: "Add a number or email to show when a caller mentions an emergency word. 👉 **Next →**",
-        done: () => NA_STEPS[na.step] === "playbook", warn: () => $("naErr").textContent },
-      { target: "#naPbs", title: "6 · Playbook (optional)", text: "Pick a saved playbook (a ready script for one job), or keep **No playbook** to use the agent's template. Playbooks your other agents already use aren't listed. 👉 **Next →**",
-        done: () => NA_STEPS[na.step] === "review" },
-      { target: "#naReview", title: "7 · Review", text: "Everything in one place. **Edit** jumps back to that step.", next: true },
+        done: () => NA_STEPS[na.step] === "tools", warn: () => $("naErr").textContent },
+      { target: "label[for=naCal]", title: "4 · Tools: Calendar", text: "Switch it on and the agent books confirmed meetings into its calendar.", next: true },
+      { target: "label[for=naEmg]", title: "Emergency contacts (optional)", text: "Pick 📞 phone, 💬 WhatsApp or ✉️ email, the country code and number (or the email), and the words that trigger it.", next: true },
+      { target: "#naPbs", title: "Playbook (optional)", text: "Pick a saved playbook (a ready script for one job), or keep **No playbook** to use the agent's template. Playbooks your other agents already use aren't listed.", next: true },
+      { target: "label[for=naNfWa]", title: "Call summaries (optional)", text: "Send the AI summary of every call by 💬 WhatsApp and/or ✉️ email. 👉 Then click **Next →**.",
+        done: () => NA_STEPS[na.step] === "review", warn: () => $("naErr").textContent },
+      { target: "#naReview", title: "5 · Review", text: "Everything in one place. **Edit** jumps back to that step.", next: true },
       { target: "#naCreate", title: "Create it", text: "👉 Click **✨ Create agent** and watch the progress bar.", done: () => !isOpen("agentDialog") && state.agents.length > tourCtx.agents,
         warn: () => $("naErr").textContent },
       { target: ".phone .stage", before: goCall, title: "🎉 Your agent is ready", text: "It's set up and selected for calls. Fine-tune it any time in **🤖 My agents**. Next, try a call!", next: true },
@@ -2792,7 +2810,7 @@ const TOURS = [
       { target: "#avPreview", before: goTab("availability"), title: "Saved", text: "The agent only offers meeting times inside these hours.", next: true },
       { target: ["label[for=calToggle]"], before: goTab("calendar"), title: "Switch on the calendar", text: "👉 Switch on **Book into the calendar** so the agent can add confirmed meetings.",
         ready: () => $("calToggle").checked, auto: true },
-      { target: "#calLen", before: goTab("calendar"), title: "Meeting length", text: "How long each booked meeting is. Booked meetings show below, and **⬇ Export all (.ics)** adds them to your own calendar.", next: true },
+      { target: "#calendarCard", before: goTab("calendar"), title: "Booked meetings", text: "Booked meetings show here, and **⬇ Export all (.ics)** adds them to your own calendar.", next: true },
     ] },
   { id: "voice", icon: "🧠", title: "Voice & speed", needsAgent: true, desc: "Speech providers, language, voice, speaking speed and AI model.",
     steps: [
@@ -2800,15 +2818,16 @@ const TOURS = [
       { target: "#lang", before: goTab("voice"), title: "Language", text: "Only languages both providers support are listed, the most spoken first. It also matches callers who mix languages.", next: true },
       { target: "#voice", before: goTab("voice"), title: "Voice", text: "The voices of the chosen text-to-speech provider. The cartoon agent on the call page follows: a man for male voices, a woman for the others.", next: true },
       { target: "#previewBtn", before: goTab("voice"), title: "Hear it", text: "👉 Click **▶** to hear a sample.", clickIn: "#previewBtn", next: true, nextLabel: "Skip" },
-      { target: "#speedPicks", before: goTab("voice"), title: "Speaking speed", text: "👉 Pick a speed: 🐢 Slow, Normal, Fast or 🚀 Faster. The slider below fine-tunes it.", clickIn: "#speedPicks button", next: true, nextLabel: "Skip" },
-      { target: ".model-row", before: goTab("voice"), title: "AI model", text: "The LLM thinks and writes the replies. **gpt-4.1-mini** answers fastest.", next: true },
+      { target: ".tab-panel[data-panel=voice] .speed-bar", before: goTab("voice"), title: "Speaking speed", text: "Drag the **⏩ Speed** bar, then **▶ Play** to hear it.", next: true },
+      { target: () => (state.me?.role === 1 ? ".model-row" : ".tab-panel[data-panel=voice] .speed-bar"), before: goTab("voice"), title: "AI model",
+        text: () => (state.me?.role === 1 ? "The LLM thinks and writes the replies. **gpt-4.1-mini** answers fastest. Only admins see this; users' agents use the default model." : "Your agent uses the default AI model, set by the admin."), next: true },
     ] },
   { id: "emergency", icon: "🚨", title: "Emergency contact", needsAgent: true, desc: "Give callers the right number, WhatsApp or email in an emergency.",
     steps: [
       { target: "label[for=emgToggle]", before: goTab("emergency"), title: "Switch it on", text: "👉 Switch on **Emergency detection**.", ready: () => $("emgToggle").checked, auto: true },
       { target: "#emgType", before: goTab("emergency"), title: "Related to", text: "What the contact is for: Ambulance, Police, Fire, a helpline, or Other.", next: true },
       { target: "#emgVia", before: goTab("emergency"), title: "Phone, WhatsApp or email", text: "How to reach it: 📞 Phone, 💬 WhatsApp or ✉️ Email. WhatsApp and email contacts also get an alert from the server when the word is heard.", next: true },
-      { target: "#emgNumber", before: goTab("emergency"), title: "Number or email", text: "Check the number (it's filled in for the usual services) or type the email address.", next: true },
+      { target: "#emgNumber", before: goTab("emergency"), title: "Number or email", text: "Pick the country code (☎ Local for short numbers like 108) and type the number, or type the email address.", next: true },
       { target: "#emgSuggest", before: goTab("emergency"), title: "Keywords", text: "Words that trigger it. Tap suggestions or type your own below.", next: true },
       { target: "#emgAddBtn", before: goTab("emergency"), title: "Add it", text: "👉 Click **＋ Add**.", done: () => state.rules.length > tourCtx.rules, warn: () => $("emgMsg").classList.contains("err") ? $("emgMsg").textContent : "" },
       { target: "#emgRules", before: goTab("emergency"), title: "Saved", text: "During a call, a matching word shows a red banner with this contact, and the agent tells the caller first.", next: true },
@@ -3104,7 +3123,7 @@ $("agentDelete").addEventListener("click", async () => {
 // Profile → Voice → Availability → Calendar → Emergency → Playbook → Review. "Create agent" then makes the agent (POST /api/agents
 // with the profile), opens it, applies the other steps through the normal auto-save (POST /api/settings) and prepares
 // its greeting, with a progress bar. The type and template list come from the DB (agent_types / agent_templates).
-const NA_STEPS = ["profile", "voice", "availability", "calendar", "emergency", "playbook", "review"];
+const NA_STEPS = ["profile", "voice", "availability", "tools", "review"]; // the same as the My agents tabs
 const na = { type: "personal", step: 0, days: [], rules: [], busy: false, playbookId: "" };
 
 function openAgentDialog() {
@@ -3122,7 +3141,6 @@ function openAgentDialog() {
   // Availability step
   if (!$("naTz").options.length) for (const o of $("avTz").options) $("naTz").add(new Option(o.text, o.value));
   $("naTz").value = localTz;
-  $("naCalLen").value = String(SETTINGS.calendar?.defaultDurationMin || 30);
   $("naProgress").hidden = true;
   $("naProgress").className = "na-progress";
   renderAgentTypes();
@@ -3174,9 +3192,7 @@ $("naTemplate").addEventListener("change", renderNaPreview);
 const naSpeed = () => Math.min(2, Math.max(0.5, Number($("naSpeed").value) || 1));
 function renderNaSpeed() {
   $("naSpeedVal").textContent = `${naSpeed().toFixed(2)}×`;
-  $("naSpeedPicks").querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(Math.abs(Number(b.dataset.speed) - naSpeed()) < 0.001)));
 }
-$("naSpeedPicks").querySelectorAll("button").forEach((b) => (b.onclick = () => { $("naSpeed").value = b.dataset.speed; renderNaSpeed(); }));
 $("naSpeed").addEventListener("input", renderNaSpeed);
 
 // providers in the wizard: same rules as the Voice & AI tab (languages both support, the provider's voices)
@@ -3299,17 +3315,23 @@ $("naCal").addEventListener("change", () => { na.calTouched = true; });
 
 // emergency contacts
 $("naEmg").addEventListener("change", () => { $("naEmgBox").hidden = !$("naEmg").checked; if ($("naEmg").checked) $("naEmgLabel").focus(); });
-$("naEmgType").addEventListener("change", () => {
-  const mail = $("naEmgType").value === "email";
-  const wa = $("naEmgType").value === "whatsapp";
+function naEmgVia() {
+  const via = $("naEmgType").value, mail = via === "email", wa = via === "whatsapp";
   $("naEmgNumberLabel").textContent = mail ? "Email" : wa ? "WhatsApp number" : "Number";
-  $("naEmgNumber").placeholder = mail ? "e.g. help@company.com" : wa ? "e.g. +91 98765 43210" : "e.g. 108";
-});
+  $("naEmgNumber").placeholder = mail ? "e.g. help@company.com" : wa ? "e.g. 98765 43210" : "e.g. 108";
+  $("naEmgNumber").inputMode = mail ? "email" : "tel";
+  fillEmgCc($("naEmgCc"), via);
+}
+$("naEmgType").addEventListener("change", naEmgVia);
+$("naEmgCc").addEventListener("change", () => fillEmgCc($("naEmgCc"), $("naEmgType").value));
 function naAddRule() {
-  const label = $("naEmgLabel").value.trim(), number = $("naEmgNumber").value.trim();
+  const label = $("naEmgLabel").value.trim(), typed = $("naEmgNumber").value.trim();
   const keywords = $("naEmgWords").value.split(",").map((w) => w.trim()).filter(Boolean);
-  if (!label && !number && !keywords.length) return true; // nothing typed
-  if (!label || !number || !keywords.length) { $("naErr").textContent = "Fill in the name, the number (or email) and at least one word for this contact."; return false; }
+  if (!label && !typed && !keywords.length) return true; // nothing typed
+  if (!label || !typed || !keywords.length) { $("naErr").textContent = "Fill in the name, the number (or email) and at least one word for this contact."; return false; }
+  const nv = emgNumberValue($("naEmgCc"), $("naEmgNumber"), $("naEmgType").value);
+  if (nv.error) { $("naErr").textContent = nv.error; $("naEmgNumber").focus(); return false; }
+  const number = nv.number;
   na.rules.push({ label, type: $("naEmgType").value, number, keywords });
   ["naEmgLabel", "naEmgNumber", "naEmgWords"].forEach((id) => ($(id).value = ""));
   $("naErr").textContent = "";
@@ -3333,6 +3355,22 @@ function renderNaRules() {
   });
 }
 
+// call summaries (WhatsApp / email after every call), the same switches as My agents → Tools
+function renderNaNotify() {
+  for (const [sw, to, st, ch] of [["naNfWa", "naNfWaRow", "naNfWaState", "whatsapp"], ["naNfMail", "naNfMailTo", "naNfMailState", "email"]]) {
+    $(to).hidden = !$(sw).checked;
+    const ready = state.channels?.[ch] !== false;
+    $(st).textContent = ready ? "" : "not set up on the server yet";
+    $(sw).disabled = !ready && !$(sw).checked;
+  }
+  fillCc($("naNfWaCc"));
+}
+["naNfWa", "naNfMail"].forEach((id) => $(id).addEventListener("change", () => {
+  renderNaNotify();
+  const to = $(id === "naNfWa" ? "naNfWaTo" : "naNfMailTo");
+  if ($(id).checked && !to.value) to.focus();
+}));
+
 // stepping
 function naCheck(step) {
   const t = typeOf(na.type);
@@ -3343,8 +3381,15 @@ function naCheck(step) {
   if (step === "availability" && na.days.length && $("naFrom").value >= $("naTo").value) {
     $("naErr").textContent = "The end time must be after the start time."; $("naTo").focus(); return false;
   }
-  if (step === "emergency" && $("naEmg").checked) {
-    if (!naAddRule()) return false; // a contact still being typed is added (or explained) first
+  if (step === "tools") {
+    if ($("naEmg").checked && !naAddRule()) return false; // a contact still being typed is added (or explained) first
+    if ($("naNfWa").checked) {
+      const r = fullNumber($("naNfWaCc"), $("naNfWaTo"));
+      if (r.error) { $("naErr").textContent = "Call summaries by WhatsApp: " + r.error; $("naNfWaTo").focus(); return false; }
+    }
+    if ($("naNfMail").checked && !/^[^\s@,]+@[^\s@,]+\.[^\s@,]{2,}(\s*,\s*[^\s@,]+@[^\s@,]+\.[^\s@,]{2,})*$/.test($("naNfMailTo").value.trim())) {
+      $("naErr").textContent = "Call summaries by email: enter a valid email address."; $("naNfMailTo").focus(); return false;
+    }
   }
   return true;
 }
@@ -3362,8 +3407,7 @@ function naGo(n) {
   $("naCreate").hidden = step !== "review";
   $("naErr").textContent = "";
   if (step === "availability") renderNaDays();
-  if (step === "emergency") $("naEmgBox").hidden = !$("naEmg").checked;
-  if (step === "playbook") renderNaPlaybooks();
+  if (step === "tools") { $("naEmgBox").hidden = !$("naEmg").checked; naEmgVia(); renderNaPlaybooks(); renderNaNotify(); }
   if (step === "review") renderNaReview();
 }
 $("naNext").addEventListener("click", () => { if (naCheck(NA_STEPS[na.step])) naGo(na.step + 1); });
@@ -3395,9 +3439,10 @@ function renderNaReview() {
     ["Language · voice", `${$("naLang").selectedOptions[0]?.text} · ${voiceText.split(" — ")[0]}`, 1],
     ["Speaking speed", `${naSpeed().toFixed(2)}×`, 1],
     ["Availability", naPlanText() || "Not set (asks the caller)", 2],
-    ["Calendar", $("naCal").checked ? `On · ${$("naCalLen").selectedOptions[0]?.text} meetings` : "Off", 3],
-    ["Emergency", $("naEmg").checked && na.rules.length ? na.rules.map((r) => `${r.label} (${r.number})`).join(", ") : "Off", 4],
-    ["Playbook", state.saved.find((p) => p.id === na.playbookId)?.name || "None (the agent's template)", 5],
+    ["Calendar", $("naCal").checked ? "On" : "Off", 3],
+    ["Emergency", $("naEmg").checked && na.rules.length ? na.rules.map((r) => `${r.label} (${r.number})`).join(", ") : "Off", 3],
+    ["Playbook", state.saved.find((p) => p.id === na.playbookId)?.name || "None (the agent's template)", 3],
+    ["Call summaries", [$("naNfWa").checked && "WhatsApp", $("naNfMail").checked && "email"].filter(Boolean).join(" + ") || "Off", 3],
   ];
   const dl = $("naReview");
   dl.innerHTML = "";
@@ -3440,7 +3485,7 @@ $("naForm").addEventListener("submit", async (e) => {
     naProgress(40, "Opening it…");
     await switchAgent(a.id);
 
-    naProgress(65, "Saving voice, playbook, availability, calendar and emergency contacts…");
+    naProgress(65, "Saving voice, availability and tools (calendar, emergency, playbook, call summaries)…");
     $("ttsProv").value = $("naTtsProv").value; $("sttProv").value = $("naSttProv").value;
     fillTtsModels(""); fillSttModels("");
     renderLangs($("naLang").value);
@@ -3450,9 +3495,12 @@ $("naForm").addEventListener("submit", async (e) => {
     av.days = [...na.days]; $("avFrom").value = $("naFrom").value; $("avTo").value = $("naTo").value;
     if (![...$("avTz").options].some((o) => o.value === $("naTz").value)) $("avTz").add(new Option($("naTz").value, $("naTz").value));
     $("avTz").value = $("naTz").value; $("avNote").value = $("naAvNote").value.trim(); renderAvailability();
-    $("calToggle").checked = $("naCal").checked; $("calLen").value = $("naCalLen").value;
+    $("calToggle").checked = $("naCal").checked;
     $("emgToggle").checked = $("naEmg").checked && na.rules.length > 0;
     state.rules = $("naEmg").checked ? structuredClone(na.rules) : [];
+    $("nfWa").checked = $("naNfWa").checked; fillCc($("nfWaCc"), $("naNfWaCc").value); $("nfWaTo").value = $("naNfWa").checked ? $("naNfWaTo").value.trim() : "";
+    $("nfMail").checked = $("naNfMail").checked; $("nfMailTo").value = $("naNfMail").checked ? $("naNfMailTo").value.trim() : "";
+    renderNotify();
     renderRules(); renderNotes();
     clearTimeout(state.saveTimer);
     await autoSave();

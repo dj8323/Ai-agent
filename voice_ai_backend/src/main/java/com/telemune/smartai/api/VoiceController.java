@@ -266,10 +266,20 @@ public class VoiceController {
     Map<String, Object> cfg = config.forAgent(ctx.agent);
     String emotion = Prompts.EMOTIONS.containsKey(J.str(emotionIn)) ? J.str(emotionIn) : "neutral";
     String provider = speech.ttsProvider(J.blank(providerIn) ? J.get(cfg, "models.ttsProvider") : providerIn);
-    String model = J.blank(modelIn) ? J.str(J.get(cfg, "models.tts")) : J.str(modelIn, 80);
+    String model = J.blank(modelIn) || !ctx.isAdmin() ? J.str(J.get(cfg, "models.tts")) : J.str(modelIn, 80);
     String voice = J.str(voiceIn, 64);
+    if (!"openai".equals(provider)) model = SpeechService.ttsModelFor(provider, model); // users keep the provider's default model
     Speech s = new Speech(provider, model, voice, text, emotion, J.str(langIn, 12));
     if ("openai".equals(provider)) return s.openai(openaiTtsModel(cfg, model));
+    if (speech.ready(provider) && (voice.isEmpty() || Prompts.VOICES.containsKey(voice))) {
+      // the agent switched provider but still has no voice of it (or an OpenAI voice): use the provider's first voice
+      String v = speech.defaultVoice(provider, J.str(langIn, 12));
+      if (!v.isEmpty()) {
+        log.debug("TTS {}: no {} voice set, using {}", provider, provider, v);
+        s = new Speech(provider, model, v, text, emotion, J.str(langIn, 12));
+        voice = v;
+      }
+    }
     if (!speech.ready(provider) || voice.isEmpty() || Prompts.VOICES.containsKey(voice)) {
       log.warn("TTS {} not usable (set up: {}, voice \"{}\"), using OpenAI", provider, speech.ready(provider), voice);
       return s.openai(openaiTtsModel(cfg, null));
@@ -401,7 +411,7 @@ public class VoiceController {
     String model = J.str(J.get(cfg, "speechToText.model"));
     if (!"openai".equals(provider) && speech.ready(provider)) {
       try {
-        return ResponseEntity.ok(J.map("text", speech.transcribe(provider, model, audio, "speech." + ext, mime, lang), "provider", provider));
+        return ResponseEntity.ok(J.map("text", speech.transcribe(provider, SpeechService.sttModelFor(provider, model), audio, "speech." + ext, mime, lang), "provider", provider));
       } catch (SpeechService.SpeechException e) {
         log.warn("STT {} failed ({}), falling back to OpenAI: {}", provider, e.status, e.getMessage());
       }

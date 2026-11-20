@@ -96,7 +96,7 @@ All routes are under `/api`, JSON in and out (errors are `{"error": "…"}`). Si
 | GET | `/api/voices?provider&lang` | voices of a TTS provider: openai, aws (Polly), elevenlabs, cartesia |
 | POST | `/api/whatsapp/send` | {to, message}: send a typed WhatsApp message through the approved summary template (`whatsapp.text-*` in keys.env; `whatsapp.text-mode=text` = free text via `/sendTextWhatsApp`, delivered only within 24 hours of the person's last message); also saved in `calls` with channel `whatsapp` |
 | POST | `/api/emergency/alert` | {label, keyword}: WhatsApp / email alert to that emergency contact |
-| GET | `/api/models` | OpenAI models {chat, stt, tts} |
+| GET | `/api/models` | OpenAI models {chat, stt, tts} (only admins pick models; `POST /api/settings` ignores them for users) |
 | GET/POST/DELETE | `/api/playbooks[/:id]` | the user's own playbooks |
 | GET/POST/DELETE | `/api/calendar[/:id]`, `/api/calendar/calendar.ics` | meetings the agent booked |
 | GET/POST/PATCH/DELETE | `/api/messages[/:id]` | messages callers left |

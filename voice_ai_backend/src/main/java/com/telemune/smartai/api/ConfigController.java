@@ -65,6 +65,13 @@ public class ConfigController {
   /** Saves the Agent setup card into the active agent only (other agents and other users are untouched). */
   @PostMapping("/api/settings")
   Map<String, Object> save(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
+    if (!ctx.isAdmin() && body.get("models") instanceof Map<?, ?>) {
+      // Only admins pick AI models; a user's agent always runs on the default models (providers and voice stay theirs).
+      Map<String, Object> m = new java.util.LinkedHashMap<>(J.obj(body.get("models")));
+      m.keySet().removeAll(java.util.Set.of("chat", "tts", "stt"));
+      m.put("resetModels", true);
+      body.put("models", m);
+    }
     Map<String, Object> a = agents.saveSettings(body, ctx.agent);
     ctx.agent = a;
     logs.activity(ctx, "agent.settings", (String) a.get("name"), J.map("agentId", a.get("id"), "changed", body.keySet()));

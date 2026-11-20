@@ -320,6 +320,8 @@
   .cc-row { display: flex; gap: 6px; }
   .cc-row select { flex: 0 0 auto; max-width: 46%; padding: 8px 6px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); color: var(--text); font: inherit; font-size: 14px; }
   .cc-row input { flex: 1; min-width: 0; }
+  .emg-add-row .cc-row select, .na-tools .cc-row select { flex: 0 0 96px; max-width: 96px; }
+  .emg-add-row .cc-row select[hidden], .na-tools .cc-row select[hidden] { display: none; }
   .talk-row { display: flex; gap: 8px; width: 100%; }
   .talk-row input { flex: 1; min-width: 0; }
   .btn-send { background: var(--grad); padding: 10px 18px; }
@@ -672,7 +674,16 @@
   .tour-card .tc-skip:hover { color: var(--text); }
   .tour-card .btn:disabled { opacity: .45; cursor: default; }
 
-  /* Speaking speed */
+  /* Speaking speed: a bar beside ▶ Play */
+  .play-speed { display: flex; align-items: center; gap: 12px; margin-top: 12px; flex-wrap: wrap; }
+  .btn-play { flex: none; padding: 9px 16px; border-radius: 999px; background: var(--grad); color: #fff; border: 0; font-weight: 650; cursor: pointer; }
+  .speed-bar { flex: 1; min-width: 220px; display: flex; align-items: center; gap: 10px; background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 999px; padding: 6px 14px; font-size: 13px; color: var(--muted); }
+  .speed-bar input[type=range] { flex: 1; margin: 0; accent-color: var(--c1); min-width: 80px; }
+  .speed-bar output { font-weight: 700; color: var(--text); min-width: 48px; text-align: right; font-variant-numeric: tabular-nums; }
+  body:not(.is-admin) .admin-only { display: none !important; }
+  .na-tools .tool-head { margin: 18px 0 8px; }
+  .na-tools .tool-head:first-of-type { margin-top: 6px; }
   .speed-picks { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   .speed-picks button { padding: 9px 6px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); color: var(--text); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
   .speed-picks button[aria-pressed="true"] { background: var(--grad); color: #fff; border-color: transparent; }
@@ -880,7 +891,6 @@
   </section>
   </div>
 
-
   <footer id="brandFooter">Powered by Telemune © 2027 · Designed by DJ</footer>
 </div>
 
@@ -953,35 +963,34 @@
               <div class="block-title">🎙 Speech-to-text <span class="sub">hears the caller</span></div>
               <div class="vl-row">
                 <label class="mini"><span>Provider</span><select id="sttProv"></select></label>
-                <label class="mini" title="Speech-to-text model"><span>Model</span><select id="sttSel"></select></label>
+                <label class="mini admin-only" title="Speech-to-text model (admins only)"><span>Model</span><select id="sttSel"></select></label>
               </div>
             </div>
             <div class="prov-box">
               <div class="block-title">🔊 Text-to-speech <span class="sub">the agent's voice</span></div>
               <div class="vl-row">
                 <label class="mini"><span>Provider</span><select id="ttsProv"></select></label>
-                <label class="mini" title="Text-to-speech model"><span>Model</span><select id="ttsSel"></select></label>
+                <label class="mini admin-only" title="Text-to-speech model (admins only)"><span>Model</span><select id="ttsSel"></select></label>
               </div>
             </div>
           </div>
           <div class="vl-row" style="margin-top:12px">
             <label class="mini"><span>Language <em class="sub" id="langHint"></em></span><select id="lang"></select></label>
             <div class="mini"><label for="voice"><span>Voice</span></label>
-              <div class="voice-row"><select id="voice"></select><button class="icon-mini" id="previewBtn" type="button" title="Preview this voice" aria-label="Preview voice">▶</button></div>
+              <div class="voice-row"><select id="voice"></select></div>
             </div>
           </div>
           <div class="hint-line" id="provHint"></div>
-          <div class="block-title" style="margin-top:16px">⏩ Speaking speed <span class="sec-note on" id="speedVal">1.00×</span></div>
-        <div class="speed-picks" id="speedPicks" role="group" aria-label="Speaking speed">
-          <button type="button" data-speed="0.8">🐢 Slow</button><button type="button" data-speed="1">Normal</button><button type="button" data-speed="1.2">Fast</button><button type="button" data-speed="1.4">🚀 Faster</button>
-        </div>
-        <input type="range" id="speedRange" min="0.5" max="2" step="0.05" value="1" aria-label="Speaking speed (fine tune)" />
-        <div class="hint-line">Every sentence the agent says, and ▶ preview, play at this speed.</div>
-        <div class="block-title" style="margin-top:16px">🧠 AI model</div>
-          <div class="model-row">
+          <!-- ▶ preview and the speaking speed bar side by side -->
+          <div class="play-speed">
+            <button class="btn btn-play" id="previewBtn" type="button" title="Hear this voice at this speed" aria-label="Preview voice">▶ Play</button>
+            <label class="speed-bar"><span>⏩ Speed</span><input type="range" id="speedRange" min="0.5" max="2" step="0.05" value="1" aria-label="Speaking speed" /><output id="speedVal">1.00×</output></label>
+          </div>
+        <div class="block-title admin-only" style="margin-top:16px">🧠 AI model <span class="sub">admins only · users get the default</span></div>
+          <div class="model-row admin-only">
             <label class="mini" title="Large language model: thinks and writes replies"><span>LLM (OpenAI)</span><select id="llmSel"></select></label>
           </div>
-          <div class="hint-line" id="modelsHint"></div>
+          <div class="hint-line admin-only" id="modelsHint"></div>
         </div>
 
         <div class="tab-panel" data-panel="availability" role="tabpanel" hidden>
@@ -1005,8 +1014,7 @@
             <span><b>Book into the calendar</b><br /><span class="sub">The agent adds confirmed meetings, bookings and reminders here.</span></span>
             <input type="checkbox" id="calToggle" class="switch" />
           </label>
-          <label class="mini" style="max-width:220px"><span>Meeting length</span>
-            <select id="calLen"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1½ hours</option><option value="120">2 hours</option></select></label>
+          
           <div class="cal-box" id="calendarCard" hidden>
             <div class="cal-head"><span class="sub">Upcoming events</span><a class="link" id="icsAll" href="/api/calendar/calendar.ics" download>⬇ Export all (.ics)</a></div>
             <div class="cal-list" id="calList"><div class="empty">No events yet. Ask the agent to book or remind you of something.</div></div>
@@ -1024,7 +1032,7 @@
             <div class="emg-add-row three">
               <label class="mini"><span>Related to</span><select id="emgType"></select></label>
               <label class="mini"><span>Contact by</span><select id="emgVia"><option value="phone">📞 Phone</option><option value="whatsapp">💬 WhatsApp</option><option value="email">✉️ Email</option></select></label>
-              <label class="mini"><span id="emgNumberLabel">Number</span><input type="text" id="emgNumber" maxlength="120" inputmode="tel" placeholder="e.g. 108" /></label>
+              <div class="mini"><span id="emgNumberLabel">Number</span><div class="cc-row"><select id="emgCc" aria-label="Country code"></select><input type="text" id="emgNumber" maxlength="120" inputmode="tel" placeholder="e.g. 108" aria-labelledby="emgNumberLabel" /></div></div>
             </div>
             <label class="mini" id="emgCustomWrap" hidden><span>Name</span><input type="text" id="emgCustom" maxlength="40" placeholder="e.g. Coast guard" /></label>
             <div class="mini"><span>Keywords <em class="sub">(tap to pick, or type your own)</em></span>
@@ -1144,12 +1152,11 @@
       <h3 id="naTitle">＋ New agent</h3>
       <button class="icon-btn" id="naClose" type="button" title="Close" aria-label="Close">✕</button>
     </div>
-    <!-- Step by step: Profile → Voice → Availability → Calendar → Emergency → Playbook → Review & create -->
+    <!-- Step by step, the same as the My agents tabs: Profile → Voice & AI → Availability → Tools → Review & create -->
     <ol class="na-steps" id="naSteps">
-      <li data-step="profile"><span>1</span>Profile</li><li data-step="voice"><span>2</span>Voice</li>
-      <li data-step="availability"><span>3</span>Availability</li><li data-step="calendar"><span>4</span>Calendar</li>
-      <li data-step="emergency"><span>5</span>Emergency</li><li data-step="playbook"><span>6</span>Playbook</li>
-      <li data-step="review"><span>7</span>Review</li>
+      <li data-step="profile"><span>1</span>Profile</li><li data-step="voice"><span>2</span>Voice &amp; AI</li>
+      <li data-step="availability"><span>3</span>Availability</li><li data-step="tools"><span>4</span>Tools</li>
+      <li data-step="review"><span>5</span>Review</li>
     </ol>
     <div class="na-track" aria-hidden="true"><div class="na-fill" id="naFill"></div></div>
     <form id="naForm" novalidate>
@@ -1174,19 +1181,12 @@
           <div><label for="naTtsProv">Text-to-speech (its voice)</label><select id="naTtsProv"></select></div>
           <div><label for="naLang">Language <span class="sub" id="naLangHint"></span></label><select id="naLang"></select></div>
           <div><label for="naVoice">Voice</label>
-            <div class="voice-row"><select id="naVoice"></select><button class="icon-mini" id="naListen" type="button" title="Listen to this voice" aria-label="Listen to this voice">▶</button></div></div>
+            <div class="voice-row"><select id="naVoice"></select></div></div>
         </div>
-        <div class="block-title" style="margin-top:14px">⏩ Speaking speed <span class="sec-note on" id="naSpeedVal">1.00×</span></div>
-        <div class="speed-picks" id="naSpeedPicks" role="group" aria-label="Speaking speed">
-          <button type="button" data-speed="0.8">🐢 Slow</button><button type="button" data-speed="1">Normal</button><button type="button" data-speed="1.2">Fast</button><button type="button" data-speed="1.4">🚀 Faster</button>
+        <div class="play-speed">
+          <button class="btn btn-play" id="naListen" type="button" title="Hear this voice at this speed" aria-label="Listen to this voice">▶ Play</button>
+          <label class="speed-bar"><span>⏩ Speed</span><input type="range" id="naSpeed" min="0.5" max="2" step="0.05" value="1" aria-label="Speaking speed" /><output id="naSpeedVal">1.00×</output></label>
         </div>
-        <input type="range" id="naSpeed" min="0.5" max="2" step="0.05" value="1" aria-label="Speaking speed (fine tune)" />
-      </section>
-
-      <section class="na-step" data-step="playbook" hidden>
-        <p class="lead">A playbook is a ready script for one job (goal, steps, rules). Pick one, or keep the agent's own template. Playbooks another agent already uses aren't shown. You can change or remove it later on the call page or in My agents → Playbooks.</p>
-        <div class="pb-list na-pbs" id="naPbs"></div>
-        <p class="hint-line" id="naPbHint"></p>
       </section>
 
       <section class="na-step" data-step="availability" hidden>
@@ -1202,17 +1202,17 @@
         <div class="greet-preview" id="naAvPreview"></div>
       </section>
 
-      <section class="na-step" data-step="calendar" hidden>
+      
+
+      <section class="na-step na-tools" data-step="tools" hidden>
+        <p class="lead">The same tools as My agents → Tools. All optional: you can change them any time.</p>
+        <h4 class="tool-head">📅 Calendar</h4>
         <p class="lead">Let the agent book confirmed meetings, bookings and reminders into its calendar.</p>
         <label class="switch-row" for="naCal">
           <span><b>Book into the calendar</b><br /><span class="sub">You'll see the events in My agents → Calendar and can export them (.ics).</span></span>
           <input type="checkbox" id="naCal" class="switch" />
         </label>
-        <label class="mini" style="max-width:220px"><span>Meeting length</span>
-          <select id="naCalLen"><option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option><option value="60">1 hour</option><option value="90">1½ hours</option><option value="120">2 hours</option></select></label>
-      </section>
-
-      <section class="na-step" data-step="emergency" hidden>
+        <h4 class="tool-head">🚨 Emergency contacts</h4>
         <p class="lead">If a caller mentions an emergency word, the page shows a banner to call or email this contact, and the agent points them there. Optional.</p>
         <label class="switch-row" for="naEmg">
           <span><b>Emergency contacts</b><br /><span class="sub">For example an ambulance number, a manager or a support email.</span></span>
@@ -1222,12 +1222,22 @@
           <div class="na-fields">
             <div><label for="naEmgLabel">Name</label><input type="text" id="naEmgLabel" maxlength="40" placeholder="e.g. Ambulance" autocomplete="off" /></div>
             <div><label for="naEmgType">Contact by</label><select id="naEmgType"><option value="phone">📞 Phone</option><option value="whatsapp">💬 WhatsApp</option><option value="email">✉ Email</option></select></div>
-            <div><label for="naEmgNumber" id="naEmgNumberLabel">Number</label><input type="text" id="naEmgNumber" maxlength="80" placeholder="e.g. 108" autocomplete="off" /></div>
+            <div><label for="naEmgNumber" id="naEmgNumberLabel">Number</label><div class="cc-row"><select id="naEmgCc" aria-label="Country code"></select><input type="text" id="naEmgNumber" maxlength="80" placeholder="e.g. 108" autocomplete="off" /></div></div>
             <div><label for="naEmgWords">Words that trigger it</label><input type="text" id="naEmgWords" maxlength="200" placeholder="e.g. accident, chest pain" autocomplete="off" /></div>
           </div>
           <button type="button" class="btn btn-ghost na-add" id="naEmgAdd">＋ Add contact</button>
           <div class="na-list" id="naEmgList"></div>
         </div>
+        <h4 class="tool-head">📘 Playbook</h4>
+        <p class="lead">A playbook is a ready script for one job (goal, steps, rules). Pick one, or keep the agent's own template. Playbooks another agent already uses aren't shown. You can change or remove it later on the call page or in My agents → Tools → Playbooks.</p>
+        <div class="pb-list na-pbs" id="naPbs"></div>
+        <p class="hint-line" id="naPbHint"></p>
+        <h4 class="tool-head">📨 Call summaries</h4>
+        <p class="lead">After every call, send its AI summary to:</p>
+        <label class="switch-row" for="naNfWa"><span><b>💬 WhatsApp</b> <span class="sub" id="naNfWaState"></span></span><input type="checkbox" id="naNfWa" class="switch" /></label>
+        <div class="cc-row nf-to" id="naNfWaRow" hidden><select id="naNfWaCc" aria-label="Country code"></select><input type="tel" id="naNfWaTo" maxlength="15" placeholder="WhatsApp mobile number" aria-label="WhatsApp mobile number" /></div>
+        <label class="switch-row" for="naNfMail"><span><b>✉️ Email</b> <span class="sub" id="naNfMailState"></span></span><input type="checkbox" id="naNfMail" class="switch" /></label>
+        <input type="text" id="naNfMailTo" class="nf-to" maxlength="200" inputmode="email" placeholder="Email address (several: separate with commas)" hidden />
       </section>
 
       <section class="na-step" data-step="review" hidden>

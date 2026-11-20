@@ -79,8 +79,38 @@ header h1 { background-size: 200% 200%; animation: tsa-shine 6s ease-in-out infi
 /* ---------- Buttons: small press feedback ---------- */
 button:not(:disabled):active { transform: scale(.97); }
 
+/* Text boxes, dropdowns and their placeholders: a soft breathing placeholder, a lift and glowing gradient ring on
+   focus, a colour hint on hover. Colours come from the theme (--c1/--c2), so light and dark both work. */
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]), select, textarea {
+  transition: border-color .25s ease, box-shadow .3s ease, transform .2s ease, background-color .25s ease;
+}
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):hover:not(:focus):not(:disabled),
+select:hover:not(:focus):not(:disabled), textarea:hover:not(:focus):not(:disabled) {
+  border-color: color-mix(in srgb, var(--c1) 45%, var(--border));
+}
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=color]):not([type=file]):focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--c1);
+  transform: translateY(-1px);
+  animation: box-glow 2.4s ease-in-out infinite;
+}
+@keyframes box-glow {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--c1) 22%, transparent), 0 6px 18px color-mix(in srgb, var(--c1) 14%, transparent); }
+  50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--c2) 26%, transparent), 0 8px 22px color-mix(in srgb, var(--c2) 18%, transparent); }
+}
+input::placeholder, textarea::placeholder {
+  transition: opacity .3s ease, color .3s ease;
+  animation: ph-breathe 2.8s ease-in-out infinite;
+}
+input:focus::placeholder, textarea:focus::placeholder { animation: none; opacity: .35; }
+@keyframes ph-breathe {
+  0%, 100% { color: var(--muted); opacity: .95; }
+  50% { color: color-mix(in srgb, var(--c1) 65%, var(--muted)); opacity: .6; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .card, .shell, .dialog, .msg, .typing, .typing i, header h1, .btn-call::before, .btn-call::after,
-  .live-mic::before, .live-mic::after, .msg.user .txt .w, .msg.user .fix { animation: none !important; }
+  .live-mic::before, .live-mic::after, .msg.user .txt .w, .msg.user .fix,
+  input, select, textarea, input::placeholder, textarea::placeholder { animation: none !important; }
   .card:hover { transform: none; }
 }

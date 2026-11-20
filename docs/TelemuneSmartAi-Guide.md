@@ -195,13 +195,11 @@ Safety rules travel with the types: the hospital agent never diagnoses and sends
 1. On the main page, the **Agent for this call** dropdown switches agents. **🤖 My agents** in the menu lists them all; ★ marks the one that opens first.
 2. **＋ New agent** (on the main page or in My agents) opens a step-by-step window. The numbered steps and a bar at the top show where you are; **Next →** / **← Back** move between steps, and you can click an earlier step to go back to it:
     1. **Profile**: the **Agent type** dropdown (for example Call Assistant; its description shows underneath) and **template** (the type's usual one is pre-selected, or "No template: free conversation"), a **name** (for example "Brown"), **Works for** (required for the Call Assistant), **Organization** and what it's for. A preview shows the first line the agent will say.
-    2. **Voice**: language, voice (**▶** plays a short hello in that voice) and speaking speed.
+    2. **Voice & AI**: speech providers, language, voice, and the **⏩ Speed** bar beside **▶ Play** (plays a short hello in that voice at that speed).
     3. **Availability** (optional): days, hours and time zone when the person can take meetings.
-    4. **Calendar**: switch on booking into the calendar (on by default for types that need it) and the meeting length.
-    5. **Emergency** (optional): contacts (phone or email) and the words that trigger them.
-    6. **Playbook** (optional): one of your saved playbooks, or none to follow the agent's template. Playbooks already used by your other agents aren't listed.
-    7. **Review**: everything in one list, each with **Edit**. **✨ Create agent** then makes the agent with a progress bar (creating → opening → saving the settings → preparing its greeting → ready) and takes you to the call page with it selected.
-   📚 Tutorials → **Create your first agent** walks through all seven steps.
+    4. **Tools** (all optional), the same as My agents → Tools: **📅 Calendar** on/off · **🚨 Emergency contacts** (name, 📞 phone / 💬 WhatsApp / ✉️ email, the country code and number or the email, and the trigger words) · **📘 Playbook** (one of your saved playbooks, or none; playbooks your other agents use aren't listed) · **📨 Call summaries** by WhatsApp and/or email.
+    5. **Review**: everything in one list, each with **Edit**. **✨ Create agent** then makes the agent with a progress bar (creating → opening → saving the settings → preparing its greeting → ready) and takes you to the call page with it selected.
+   📚 Tutorials → **Create your first agent** walks through all five steps. The steps are the same as the My agents tabs.
 3. Switching loads that agent's settings everywhere. Switching is locked during a call.
 4. In My agents, **☆ Default** makes the agent open first next time and **🗑** deletes it (its past calls stay in Call summaries).
 5. To change what an agent is, pick a new **Agent type** in **My agents → 👤 Profile**. A new type is a new job, so a dialog first shows what will be reset and asks for approval; **Cancel** changes nothing. After **Change type and reset**, the database is updated in one step: template, greeting and description go to the new type's defaults; works for, organization and availability are cleared; the playbook is removed; the calendar and emergency settings go back to the defaults. Name, language, voice, AI models and past calls are kept. If the new type works for a person, fill in **Works for**.
@@ -214,7 +212,7 @@ The app remembers the last agent each user had open. A new account starts with n
 | --- | --- |
 | Name, language, voice | Saved playbooks (any agent can pick one) |
 | LLM, speech-to-text and text-to-speech models | Call summaries list and totals (each call is labelled with its agent) |
-| Selected playbook, template, works for, organization, availability, meeting length, greeting | Calendar events (each records which agent added it) |
+| Selected playbook, template, works for, organization, availability, greeting | Calendar events (each records which agent added it) |
 | Calendar on/off, emergency on/off and contacts (phone or email) | Account and password |
 | Messages callers left with it | |
 
@@ -250,9 +248,9 @@ Every change saves itself within a second: there is no Save button. A small pill
 | Tab | What you set |
 | --- | --- |
 | 👤 Profile | **Agent type** (change it any time, for example Personal Assistant → Call Assistant); Template; **Works for** (required for a Call Assistant); Organization; what it's for; the first line of every call, with a live preview. Text can use `{agent}`, `{owner}` and `{org}` |
-| 🧠 Voice & AI | **Speech-to-text** provider and model (OpenAI, ElevenLabs Scribe, AWS Transcribe, or browser captions) and **text-to-speech** provider and model (OpenAI, AWS Polly, ElevenLabs, Cartesia). **Language**: only the languages both providers support, the most spoken in the world first (up to 39). **Voice**: the chosen provider's voices (▶ plays a sample; the cartoon agent becomes a man or a woman to match). **Speaking speed** (🐢 Slow · Normal · Fast · 🚀 Faster, or 0.5× to 2×) and the LLM. A provider without keys on the server shows "not set up"; if one fails during a call, the agent quietly switches to OpenAI |
+| 🧠 Voice & AI | **Speech-to-text** provider (OpenAI, ElevenLabs Scribe, AWS Transcribe) and **text-to-speech** provider (OpenAI, AWS Polly, ElevenLabs, Cartesia). **Only admins** see and pick the models (LLM, speech-to-text and text-to-speech models); users' agents always run on the default models set in Admin → App settings. **Language**: only the languages both providers support, the most spoken in the world first (up to 39). **Voice**: the chosen provider's voices (▶ plays a sample; the cartoon agent becomes a man or a woman to match). **⏩ Speed** bar (0.5× to 2×) beside **▶ Play**, which plays the voice at that speed. A provider without keys on the server shows "not set up"; if one fails during a call, the agent quietly switches to OpenAI |
 | 🕒 Availability | Days (tap Mon … Sun, or Weekdays / Every day), From and To time, time zone and an optional note. The agent only offers meeting times inside these hours, and says when the person is back |
-| 🧰 Tools | 📅 **Calendar**: book confirmed meetings, meeting length, upcoming events with .ics export · 🚨 **Emergency contacts** by **📞 phone, 💬 WhatsApp or ✉️ email** (below) · 📘 **Playbook**: add, pick, remove · 📨 **Call summaries**: after every call send the AI summary by **WhatsApp** and/or **email** (Flash SMS comes later) |
+| 🧰 Tools | 📅 **Calendar**: book confirmed meetings, upcoming events with .ics export · 🚨 **Emergency contacts** by **📞 phone, 💬 WhatsApp or ✉️ email**: pick the country code (from the database; ☎ Local for short numbers like 108) and the number, or type the email, plus the trigger keywords (below) · 📘 **Playbook**: add, pick, remove · 📨 **Call summaries**: after every call send the AI summary by **WhatsApp** and/or **email** (Flash SMS comes later) |
 
 ### Playbooks
 
@@ -261,6 +259,10 @@ A playbook is your own script: role, goal, steps, rules and what the summary sho
 - With no playbook selected, the agent runs its template, or its type's default role if it has no template.
 - **📘 Playbooks → ＋ Add playbook** → pick an agent type → pick a ready-made script or Custom → edit the fields → save.
 - Choose the playbook for a call from the **Playbook** dropdown on the main page or in the Playbooks tab. Playbooks belong to the user, so all of their agents can use them; each agent remembers its own choice.
+
+### Typing in the app
+
+Every text box and dropdown reacts as you use it: placeholders gently breathe while empty, the box lifts with a glowing ring in the theme colours when you click into it, and its border tints on hover. It works in light and dark mode and switches off when the computer asks for reduced motion.
 
 ### Call summaries by WhatsApp and email
 

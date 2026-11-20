@@ -33,7 +33,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class SpeechService {
   private static final Logger log = LoggerFactory.getLogger(SpeechService.class);
-  private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
+  // HTTP/1.1 on purpose: over HTTP/2 every sentence shares one connection, and Polly refuses extra streams when a reply
+  // asks for several sentences at once ("too many concurrent streams", GOAWAY, RST_STREAM). HTTP/1.1 opens a pooled
+  // connection per request instead.
+  private final HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(15)).build();
+  /** At most this many speech requests per provider at the same time (the rest wait their turn, in order). */
+  private final Map<String, java.util.concurrent.Semaphore> slots = new java.util.concurrent.ConcurrentHashMap<>();
   private final Environment env;
   private final OpenAiClient openai;
   private final Map<String, CachedVoices> voiceCache = new ConcurrentHashMap<>();
@@ -68,6 +73,18 @@ public class SpeechService {
   private static final Map<String, List<String>> STT_MODELS = Map.of(
       "elevenlabs", List.of("scribe_v1"),
       "aws", List.of("streaming"));
+
+  /** The model to use with this TTS provider: the given one when it belongs to the provider, else the provider's default. */
+  public static String ttsModelFor(String provider, String model) {
+    List<String> ms = TTS_MODELS.get(provider);
+    return ms == null || ms.contains(model) ? model : ms.get(0);
+  }
+
+  /** Same for speech-to-text. */
+  public static String sttModelFor(String provider, String model) {
+    List<String> ms = STT_MODELS.get(provider);
+    return ms == null || ms.contains(model) ? model : ms.get(0);
+  }
 
   /** Base language codes each provider supports ("*" = all the app offers). Approximate: confirm in provider docs. */
   private static final Map<String, Set<String>> TTS_LANGS = Map.of(
@@ -129,8 +146,17 @@ public class SpeechService {
 
   // ---------- HTTP helpers ----------
   private InputStream stream(String provider, HttpRequest req) {
+    java.util.concurrent.Semaphore slot = slots.computeIfAbsent(provider, k -> new java.util.concurrent.Semaphore(4, true));
+    boolean got = false;
     try {
-      HttpResponse<InputStream> res = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+      got = slot.tryAcquire(20, java.util.concurrent.TimeUnit.SECONDS);
+      HttpResponse<InputStream> res;
+      try {
+        res = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+      } catch (IOException first) { // a dropped connection: try once more before falling back
+        log.debug("{} request retried after: {}", LABEL.getOrDefault(provider, provider), first.toString());
+        res = http.send(req, HttpResponse.BodyHandlers.ofInputStream());
+      }
       if (res.statusCode() / 100 != 2) {
         String body;
         try (InputStream in = res.body()) { body = new String(in.readAllBytes(), StandardCharsets.UTF_8); }
@@ -142,6 +168,18 @@ public class SpeechService {
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new SpeechException(provider, 0, "interrupted");
+    } finally {
+      if (got) slot.release(); // the headers are in; the body streams on without holding a slot
+    }
+  }
+
+  /** The provider's first voice for this language: used when an agent has no voice of that provider yet. */
+  public String defaultVoice(String provider, String lang) {
+    try {
+      List<Map<String, Object>> v = voices(provider, lang);
+      return v.isEmpty() ? "" : J.str(v.get(0).get("id"));
+    } catch (RuntimeException e) {
+      return "";
     }
   }
 

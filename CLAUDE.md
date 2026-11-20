@@ -259,8 +259,17 @@ voice_ai_web/          ── frontend team ──
   `POST /sendWhatsApp {to: digits, template, headerParam, params[], reply}`; ai_message_summary = header "Conversation Summary",
   params [recipient (owner, else agent), brief (summary on one line)]; emergency_alert_new = header "Emergency Alert",
   params [agent, alert (one line: keyword, agent, owner, time, contact)]; whatsapp.* in keys.env). All tested 2026-11-19. Flash SMS is shown but off (later). `/api/config.channels` says what's set up.
-- **Speaking speed:** `agents.speech_speed` (0.5–2.0; `agent.speechSpeed` in settings), set in Voice & AI; applied as
-  `audio.playbackRate` (pitch kept) to every sentence and the preview.
+- **Speaking speed:** `agents.speech_speed` (0.5–2.0; `agent.speechSpeed` in settings), set with the `#speedRange` bar beside
+  ▶ Play `#previewBtn` (`.play-speed`) in Voice & AI; applied as `audio.playbackRate` (pitch kept) to every sentence and the preview.
+- **Models are admin-only** (2026-11-20): `.admin-only` (STT/TTS model, LLM) hidden unless `body.is-admin` (role 1).
+  `POST /api/settings` from a non-admin drops models.chat/tts/stt and sends `resetModels` → agent chat/tts/stt model + stt_engine
+  NULL (app defaults); `/api/tts` ignores a non-admin's `model`; `SpeechService.ttsModelFor/sttModelFor` give the provider's
+  default model when the stored one belongs to another provider.
+- **AWS/other speech requests:** `SpeechService` uses HTTP/1.1 (Polly refused parallel HTTP/2 streams), at most 4 at once per
+  provider (`slots`), one retry on a dropped connection; an agent with no voice of its provider gets `defaultVoice()` (first one).
+- **Emergency numbers:** `#emgCc` / `#naEmgCc` (`fillEmgCc`: ☎ Local + `country_codes`), `emgNumberValue()`: phone = "+CC number"
+  or a local short number, WhatsApp = "+CC mobile" (`fullNumber`), email = address.
+- **Animated inputs** (motion.css): focus = `box-glow` ring + lift, hover tint, placeholders `ph-breathe`; off with reduced motion.
 
 - Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions
   (`showLive()`) / fallback. Caller's live bubble: `liveBubble()` (made when speech starts: 🎙 `.live-mic` ripples scaled
@@ -278,9 +287,10 @@ voice_ai_web/          ── frontend team ──
 - Call page = basic info only: agent picker (`#agentPick`) on the call card, then the summary card (works for,
   organization, availability, language · voice, AI models, playbook picker `#pbPick` + ✕ `#pbClear` (removes it from the agent), feature chips). ✎ Edit agent →
   `#agents/profile`. Keep it simple: anything that edits an agent belongs in My agents.
-- **New agent wizard** (`#agentDialog`, `openAgentDialog()`): steps `NA_STEPS` profile → voice (▶ `#naListen`: `fetchSpeech(text, emotion, {voice, language})`, works before
-  the agent exists) → availability → calendar → emergency → playbook (`#naPbs`, `na.playbookId`; hides playbooks
-  another agent already uses, from `state.agents[].playbookId`) → review. Profile's agent type is a dropdown `#naType`
+- **New agent wizard** (`#agentDialog`, `openAgentDialog()`): steps `NA_STEPS` = the My agents tabs: profile → voice ("Voice & AI";
+  ▶ Play `#naListen`: `fetchSpeech(text, emotion, {voice, language})`, works before the agent exists, beside the `#naSpeed` bar) →
+  availability → tools (`.na-tools`: calendar on/off, emergency with `#naEmgCc`, playbook `#naPbs` / `na.playbookId` hiding playbooks
+  another agent already uses, call summaries `#naNfWa`/`#naNfMail` → copied into `#nfWa…` on create) → review. Profile's agent type is a dropdown `#naType`
   (+ `#naTypeDesc`) (`naGo(n)`, `naCheck(step)`, step list `#naSteps` + bar `#naFill`, review `#naReview` with Edit links).
   Create: POST `/api/agents` (profile; `na.created` stops a duplicate on retry) → `switchAgent()` → copy the wizard's
   voice/speed/availability/calendar/emergency into the My agents controls → `autoSave()` → `prepareGreeting()`, with the
@@ -290,7 +300,7 @@ voice_ai_web/          ── frontend team ──
   playbook, works for, organization, availability, calendar and emergency to defaults in one transaction (keeps name,
   language, voice, models), then the form reloads; template, works for,
   organization, what it's for, greeting + preview) · Voice & AI · Availability (day buttons, from/to, time zone, note) ·
-  Calendar (switch, meeting length, events) · Emergency · Playbooks. Hero: name, 🎙 Call, ☆ Default, 🗑.
+  Tools (calendar switch + events, emergency, playbook, call summaries). No meeting-length picker any more (app default). Hero: name, 🎙 Call, ☆ Default, 🗑.
 - Everything auto-saves (no Save button; `markDirty()` → `autoSave()` → POST `/api/settings`; persona payload carries
   description, availability text + availabilityPlan; calendar carries defaultDurationMin).
 - Emergency contacts `{label, type: phone|email, number, keywords[]}` per agent (`emergency_rules.contact_type`);
