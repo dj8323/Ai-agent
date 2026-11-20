@@ -201,6 +201,8 @@ voice_ai_web/          ── frontend team ──
 | GET | `/api/models` | OpenAI models grouped {chat, stt, tts} (cached 10 min) |
 | GET/POST/DELETE | `/api/playbooks[/:id]` | {types, saved} / add / delete (the user's own playbooks) |
 | GET/POST/DELETE | `/api/calendar[/:id]`, GET `/api/calendar/calendar.ics`, `/:id.ics` | events (POST only when the calendar is on) |
+| POST | `/api/calendar/check` | {when: local time or NOW, minutes} → free, or busy with 3 free options |
+| GET / POST / DELETE | `/api/calendar-accounts`, `/oauth/{google\|microsoft}`, `/caldav`; GET `/api/calendar-oauth/{p}/callback` | connect the agent's real calendar |
 | GET/POST/PATCH/DELETE | `/api/messages[/:id]` | current agent's messages (`?scope=all`, `?status=new\|done`) / add {callerName, callerNumber, urgency, message} / {status} / delete |
 | GET/POST | `/api/calls` (`?channel=`), `/api/calls/stats` (+ `byChannel`), `/api/calls/:id` (GET/DELETE), `/:id/summary`, `/:id/recording` (GET/PUT) | history of every channel |
 | GET | `/api/admin/overview`, `/api/admin/logs?page&user`, `/api/admin/logins?page` | admin: totals + users / activity / sign-ins |
@@ -276,6 +278,14 @@ voice_ai_web/          ── frontend team ──
   `X-Speech-Fallback`, WARN log). `/api/transcribe` takes `provider`; failures fall back to OpenAI. Web: `#sttProv`/`#ttsProv`,
   `fillSttModels/fillTtsModels`, `renderLangs()` (LANGS has 39 languages with speaker counts; only those both providers
   support, most spoken first), `renderVoices()`. Only OpenAI voices take emotion instructions.
+- **Connected calendar (2026-11-20):** `calendar_accounts` (one per agent; provider google | microsoft | caldav + label yahoo|icloud|zoho|other;
+  `secret` = AES-GCM via `util/SecretBox`, key `CALENDAR_TOKEN_KEY` in .env, auto-created). `service/CalendarSyncService` (OAuth with PKCE,
+  token refresh, Google freeBusy/events, Graph calendarView/events, CalDAV discovery/REPORT/PUT, `check()` = provider busy + app events +
+  availability plan → free or busy + 3 suggestions, `book()` re-checks), `api/CalendarAccountController`. Keys in keys.env
+  `calendar.google.*`, `calendar.microsoft.*`, `calendar.oauth.redirect-base`. Agent flow: `<calendar-check:LOCAL|MIN>` (or `NOW` =
+  `calendar.immediateMinutes`, per agent `agents.calendar_immediate_min`) → app `checkCalendarSlot` → hidden `[calendar check: FREE|BUSY …]`
+  sent after the speech (`sendCalendarNote`, `state.calNote`) → `<calendar:…>` → POST /api/calendar {when} (201 / 409 + options →
+  `[calendar booking failed: …]`). Setup guide: `docs/TelemuneSmartAi-Calendar-Setup.md`.
 - **🧰 Tools tab** = Calendar + Emergency + Playbook + Call summaries (`TOOL_SECTIONS`; old `#agents/calendar|emergency|playbooks`
   links open Tools at that section). Emergency contacts: phone | whatsapp (banner opens wa.me) | email; WhatsApp/email
   contacts also get a server alert once per call (POST `/api/emergency/alert` → `NotifyService.emergency`). Call summaries:

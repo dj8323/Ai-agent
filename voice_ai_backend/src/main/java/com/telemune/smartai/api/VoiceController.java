@@ -57,7 +57,11 @@ public class VoiceController {
   private final Map<String, byte[]> speechCache = lru(300);
   private final Map<String, String> greetingCache = lru(200);
 
-  public VoiceController(AppConfigService config, TemplateService templates, PlaybookService playbooks, OpenAiClient openai, SpeechService speech) {
+  private final com.telemune.smartai.service.CalendarSyncService calSync;
+
+  public VoiceController(AppConfigService config, TemplateService templates, PlaybookService playbooks, OpenAiClient openai, SpeechService speech,
+                         com.telemune.smartai.service.CalendarSyncService calSync) {
+    this.calSync = calSync;
     this.config = config;
     this.templates = templates;
     this.playbooks = playbooks;
@@ -111,6 +115,14 @@ public class VoiceController {
     String name = J.blank(body.get("assistantName")) ? J.str(J.get(cfg, "agent.defaultName")) : J.str(body.get("assistantName"), 40);
     String lang = J.str(body.get("lang"));
     String owner = ctx.agent == null ? "" : J.str(ctx.agent.get("owner_name"));
+    if (ctx.agent != null && J.bool(J.get(cfg, "calendar.enabled"))) { // the linked calendar, the owner's time zone, "right now" minutes
+      Map<String, Object> cal = new java.util.LinkedHashMap<>(J.obj(cfg.get("calendar")));
+      String linked = com.telemune.smartai.service.CalendarSyncService.nameOf(calSync.row(J.str(ctx.agent.get("id"))));
+      if (linked != null) cal.put("account", linked);
+      cal.put("tz", calSync.zone(ctx.agent).getId());
+      cal.put("immediateMinutes", calSync.immediateMinutes(ctx.agent));
+      cfg.put("calendar", cal);
+    }
     String system = Prompts.system(lang, name, templates.rolePrompt(ctx.agent, pb, name), templates.greeting(ctx.agent, name), owner, cfg);
 
     List<Map<String, Object>> messages = new ArrayList<>();
@@ -212,7 +224,8 @@ public class VoiceController {
     for (Map<String, Object> m : cleanTurns(body.get("messages"), cfg)) {
       String content = (String) m.get("content");
       if (content.matches("^\\[(call connected|no response[^\\]]*)\\]$")) continue; // app markers, not the caller's words
-      String clean = content.replaceAll("(?i)<[a-z]+:[^>]*>|\\[[a-z]+]", "").trim();
+      if (content.startsWith("[calendar")) continue; // the app's calendar notes ([calendar check: …], [calendar booking failed: …])
+      String clean = content.replaceAll("(?i)<[a-z-]+:[^>]*>|\\[[a-z]+]", "").trim();
       transcript.append("user".equals(m.get("role")) ? "Caller: " : "Agent: ").append(clean).append("\n");
     }
     Map<String, Object> pb = playbooks.get(body.get("playbookId"), ctx.dataUserId);

@@ -24,7 +24,8 @@ public class CalendarService {
 
   private static Map<String, Object> fromRow(Map<String, Object> r) {
     return J.map("id", r.get("id"), "agentId", r.get("agent_id"), "title", r.get("title"), "start", J.iso(r.get("start_at")),
-        "durationMin", r.get("duration_min"), "notes", r.get("notes"), "source", r.get("source"), "createdAt", J.iso(r.get("created_at")));
+        "durationMin", r.get("duration_min"), "notes", r.get("notes"), "source", r.get("source"), "createdAt", J.iso(r.get("created_at")),
+        "externalProvider", r.get("external_provider"));
   }
 
   public List<Map<String, Object>> list(String userId) {

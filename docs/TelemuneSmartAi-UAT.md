@@ -11,9 +11,9 @@ feature is added.
 
 | Part | Cases | Passed | Failed | Skipped | Notes |
 |---|---|---|---|---|---|
-| Automated (API, `uat/run-uat.mjs`) | 61 | 57 | 0 | 4 | Skipped on purpose: 2 SuperAdmin cases (need its sign-in) and 2 AI cases (cost OpenAI tokens) |
+| Automated (API, `uat/run-uat.mjs`) | 66 | 62 | 0 | 4 | Skipped on purpose: 2 SuperAdmin cases (need its sign-in) and 2 AI cases (cost OpenAI tokens) |
 | Screen checks (browser) | 30 | 30 | 0 | 0 | Desktop 1280 px, phone 375 px, light and dark |
-| **Total** | **91** | **87** | **0** | **4** | No blocking issues. 1 known layout issue on phones (section 7) |
+| **Total** | **96** | **92** | **0** | **4** | No blocking issues. 1 known layout issue on phones (section 7) |
 
 **Verdict:** ready for use. The 4 skipped cases should be run once by the SuperAdmin before a production release (section 3.3).
 
@@ -98,6 +98,11 @@ Result of run `11201113b338` on 20 Nov 2026.
 | TOOL-02 | Tools: playbooks, calendar, emergency, messages | Put the playbook on an agent | ✅ PASS |  |
 | TOOL-03 | Tools: playbooks, calendar, emergency, messages | Book a calendar event (calendar on) and export it | ✅ PASS |  |
 | TOOL-04 | Tools: playbooks, calendar, emergency, messages | Calendar off refuses new events | ✅ PASS |  |
+| CAL-01 | Tools: playbooks, calendar, emergency, messages | Calendar status: providers and 'right now' minutes | ✅ PASS | google/microsoft "not set up" until the keys are added |
+| CAL-02 | Tools: playbooks, calendar, emergency, messages | Slot check: outside working hours gives 3 free options | ✅ PASS |  |
+| CAL-03 | Tools: playbooks, calendar, emergency, messages | Book a free slot by local time; the same slot then clashes (409 + options) | ✅ PASS |  |
+| CAL-04 | Tools: playbooks, calendar, emergency, messages | 'Right now' books in the agent's set minutes | ✅ PASS | 6.4 min with 6 set |
+| CAL-05 | Tools: playbooks, calendar, emergency, messages | A wrong CalDAV address is refused with a clear message | ✅ PASS |  |
 | TOOL-05 | Tools: playbooks, calendar, emergency, messages | Emergency contacts save with keywords | ✅ PASS |  |
 | TOOL-06 | Tools: playbooks, calendar, emergency, messages | A caller's message: add, list, mark done, delete | ✅ PASS |  |
 | CALL-01 | Conversations and call summaries (every channel) | Save conversations on every channel (call, live chat, voice chat) | ✅ PASS | 6 saved |
@@ -138,6 +143,17 @@ Result of run `11201113b338` on 20 Nov 2026.
 | ACC-01 | Account | Change my password: the old one stops working | ✅ PASS |  |
 | ACC-02 | Account | Sign out ends the session | ✅ PASS |  |
 
+
+### Calendar connection tests (20 Nov 2026)
+
+Run against a real CalDAV server (Radicale on the test machine) and a test double of Google's and Microsoft's sign-in and calendar
+APIs: 33 checks, all passed. Covered: CalDAV discovery, wrong password refused, password stored encrypted (`v1:…`), busy and free
+slots, options that skip the busy hour, booking onto the CalDAV server, clash → 409 with options; Google and Microsoft sign-in
+with PKCE, the return link only for its owner and only once, free/busy, booking with the access token, token refresh when it
+expires; "right now" in the agent's minutes; disconnect. In the browser: connect CalDAV through the form, Sign in with Google
+round trip back to the window, and a full chat (busy time → options → pick one → booked in Google Calendar). With the real
+AI model the agent checked before booking, offered the free times, and used NOW for an urgent request. Real Google/Microsoft
+accounts need the console keys first (MAN-11, MAN-12).
 
 ## 5. Screen checks (browser)
 
@@ -193,6 +209,10 @@ These use paid services or reach real people, so they are run by hand, on purpos
 | MAN-08 | Emergency | Say a keyword during a call | Banner with the contact; WhatsApp/email alert once |
 | MAN-09 | SuperAdmin restart | 🔄 Restart backend | Back in 10–20 s; the page waits and reloads |
 | MAN-10 | HTTPS from another computer | Open `https://<server-ip>:8443` | Certificate warning once, then the mic works |
+| MAN-11 | Google Calendar | SuperAdmin adds Google keys (Calendar Setup guide); a user connects with Sign in with Google; in a call, ask for a busy time, then a free one | Busy time refused with free options; free time booked and visible in Google Calendar |
+| MAN-12 | Outlook / Microsoft 365 | Same with the Microsoft keys and an Outlook.com or work account | Same, visible in Outlook |
+| MAN-13 | Yahoo / iCloud / Zoho | Connect with an app password; book a meeting in a call | Meeting appears in that calendar |
+| MAN-14 | Right now | Caller: "book me right now" | Booked in the set minutes (default 5) if that time is free |
 
 
 ## 7. Known issues and notes

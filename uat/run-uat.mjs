@@ -222,6 +222,34 @@ async function main() {
     const r = await S.user.post("/api/calendar", { title: "nope", start: new Date(Date.now() + 864e5).toISOString(), durationMin: 15 }, { "x-agent-id": D.riya });
     eq(r.status, 403, "status");
   });
+  await test("CAL-01", "Calendar status: providers and 'right now' minutes", async () => {
+    const r = await S.user.get("/api/calendar-accounts", { "x-agent-id": D.brown }); eq(r.status, 200, "status");
+    ok(r.json.providers && r.json.providers.caldav === true && r.json.connected === false && r.json.immediateMinutes >= 0, "shape");
+    return `google ${r.json.providers.google ? "set up" : "not set up"} · microsoft ${r.json.providers.microsoft ? "set up" : "not set up"} · zone ${r.json.zone}`;
+  });
+  await test("CAL-02", "Slot check: outside working hours gives 3 free options", async () => {
+    await S.user.post("/api/settings", { persona: { availabilityPlan: { days: [1, 2, 3, 4, 5, 6, 7], from: "09:00", to: "18:00", tz: "Asia/Kolkata" } }, calendar: { enabled: true, immediateMin: 6 } }, { "x-agent-id": D.brown });
+    const day = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date(Date.now() + 3 * 864e5)); D.calDay = day;
+    const r = await S.user.post("/api/calendar/check", { when: `${day}T21:00`, minutes: 30 }, { "x-agent-id": D.brown });
+    eq(r.status, 200, "status"); eq(r.json.free, false, "free"); eq(r.json.suggestions.length, 3, "options");
+    ok(r.json.suggestions.every((x) => +x.local.slice(11, 13) >= 9 && +x.local.slice(11, 13) < 18), "options inside 9–6");
+  });
+  await test("CAL-03", "Book a free slot by local time; the same slot then clashes (409 + options)", async () => {
+    const a = await S.user.post("/api/calendar", { title: "UAT booked", when: `${D.calDay}T10:00`, durationMin: 30 }, { "x-agent-id": D.brown });
+    eq(a.status, 201, "book " + a.text.slice(0, 100)); eq(a.json.local, `${D.calDay}T10:00`, "local time kept");
+    const b = await S.user.post("/api/calendar", { title: "UAT clash", when: `${D.calDay}T10:15`, durationMin: 30 }, { "x-agent-id": D.brown });
+    eq(b.status, 409, "clash"); ok(b.json.suggestions?.length, "options");
+  });
+  await test("CAL-04", "'Right now' books in the agent's set minutes", async () => {
+    await S.user.post("/api/settings", { persona: { availabilityPlan: { days: [1, 2, 3, 4, 5, 6, 7], allDay: true, tz: "Asia/Kolkata" } } }, { "x-agent-id": D.brown });
+    const r = await S.user.post("/api/calendar/check", { when: "NOW", minutes: 15 }, { "x-agent-id": D.brown });
+    const mins = (new Date(r.json.start) - Date.now()) / 60000;
+    ok(r.json.free && r.json.immediate && mins > 5 && mins < 8.5, `in ${mins.toFixed(1)} min`); return `${mins.toFixed(1)} min`;
+  });
+  await test("CAL-05", "A wrong CalDAV address is refused with a clear message", async () => {
+    const r = await S.user.post("/api/calendar-accounts/caldav", { label: "other", url: "http://127.0.0.1:9/", username: "x", password: "y" }, { "x-agent-id": D.brown });
+    eq(r.status, 400, "status"); ok(/reach|find/.test(r.json.error), r.json.error);
+  });
   await test("TOOL-05", "Emergency contacts save with keywords", async () => {
     const r = await S.user.post("/api/settings", { emergency: { enabled: true, rules: [{ label: "Doctor", type: "phone", number: "+91 90000 00000", keywords: ["chest pain", "accident"] }] } }, { "x-agent-id": D.brown });
     eq(r.status, 200, "status");

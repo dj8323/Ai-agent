@@ -838,6 +838,25 @@
   .cd-app[aria-checked="true"] { border-color: var(--c1); box-shadow: 0 0 0 2px color-mix(in srgb, var(--c1) 30%, transparent); background: color-mix(in srgb, var(--c1) 8%, var(--panel-2)); }
   .cd-logo { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 13px; flex: none; }
   .cd-logo.g { background: #4285f4; } .cd-logo.o { background: #0f6cbd; } .cd-logo.y { background: #6001d2; } .cd-logo.a { background: #1d1d1f; } .cd-logo.x { background: var(--muted); }
+  .cd-logo.z { background: #e42527; }
+  /* connected calendar, connect forms, "right now" minutes */
+  .cd-status { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; margin-top: 10px;
+    background: color-mix(in srgb, var(--green) 10%, var(--panel-2)); border: 1px solid color-mix(in srgb, var(--green) 35%, var(--border)); }
+  .cd-status.err { background: color-mix(in srgb, var(--red) 9%, var(--panel-2)); border-color: color-mix(in srgb, var(--red) 35%, var(--border)); }
+  .cd-status-text { display: grid; min-width: 0; flex: 1; }
+  .cd-status-text .sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cd-msg { margin-top: 10px; padding: 9px 12px; border-radius: 12px; font-size: 13px; font-weight: 600; background: color-mix(in srgb, var(--green) 12%, var(--panel-2)); }
+  .cd-msg.err { background: color-mix(in srgb, var(--red) 12%, var(--panel-2)); color: var(--red); }
+  .cd-connect { display: grid; gap: 10px; padding: 12px 14px; border-radius: 14px; border: 1px dashed var(--border); background: var(--panel-2); margin-bottom: 12px; animation: tsa-pop .3s ease-out both; }
+  .cd-connect p { margin: 0; }
+  .cd-connect .field { display: grid; gap: 4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .cd-two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+  @media (max-width: 560px) { .cd-two { grid-template-columns: minmax(0, 1fr); } }
+  .cd-connect .btn { justify-self: start; }
+  .cd-err { color: var(--red); font-size: 12px; min-height: 0; }
+  .cd-err:empty { display: none; }
+  .cd-now { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; margin: 2px 0 12px; }
+  .cd-now input { width: 74px; }
   .cd-dialog .cal-box { margin-top: 0; }
   .cal-actions .cal-add { font-weight: 600; }
 
@@ -1466,16 +1485,41 @@
 <div class="overlay" id="calDialog" role="dialog" aria-modal="true" aria-labelledby="cdTitle">
   <div class="dialog cd-dialog">
     <div class="dialog-head">
-      <h3 id="cdTitle">📅 Where do you keep your meetings?</h3>
+      <h3 id="cdTitle">📅 Connect a calendar</h3>
       <button class="icon-btn" id="cdClose" type="button" title="Close" aria-label="Close">✕</button>
     </div>
-    <p class="lead">Meetings the agent books get a one-click <b>Add</b> button for this calendar.</p>
-    <div class="cd-apps" id="cdApps" role="radiogroup" aria-label="Calendar app">
+    <p class="lead">Link the calendar where the meetings should go. The agent checks it for free time before it books, and puts each meeting straight into it.</p>
+    <div class="cd-msg" id="cdMsg" role="status" hidden></div>
+    <div class="cd-status" id="cdStatus" hidden>
+      <span class="cd-logo" id="cdStatusLogo" aria-hidden="true"></span>
+      <div class="cd-status-text"><b id="cdStatusName"></b><span class="sub" id="cdStatusAcc"></span></div>
+      <button class="btn btn-small" id="cdDisconnect" type="button">Disconnect</button>
+    </div>
+    <div class="cd-apps" id="cdApps" role="radiogroup" aria-label="Calendar provider">
       <button type="button" class="cd-app" data-app="google" role="radio"><span class="cd-logo g">G</span>Google Calendar</button>
-      <button type="button" class="cd-app" data-app="outlook" role="radio"><span class="cd-logo o">O</span>Outlook</button>
+      <button type="button" class="cd-app" data-app="microsoft" role="radio"><span class="cd-logo o">O</span>Outlook / Microsoft 365</button>
       <button type="button" class="cd-app" data-app="yahoo" role="radio"><span class="cd-logo y">Y!</span>Yahoo Calendar</button>
-      <button type="button" class="cd-app" data-app="apple" role="radio"><span class="cd-logo a">🍎</span>Apple Calendar</button>
-      <button type="button" class="cd-app" data-app="other" role="radio"><span class="cd-logo x">⋯</span>Other (.ics file)</button>
+      <button type="button" class="cd-app" data-app="icloud" role="radio"><span class="cd-logo a">🍎</span>iCloud Calendar</button>
+      <button type="button" class="cd-app" data-app="zoho" role="radio"><span class="cd-logo z">Z</span>Zoho Calendar</button>
+      <button type="button" class="cd-app" data-app="other" role="radio"><span class="cd-logo x">⋯</span>Other (CalDAV)</button>
+    </div>
+    <div class="cd-connect" id="cdOauth" hidden>
+      <p class="sub" id="cdOauthText"></p>
+      <button class="btn btn-primary" id="cdOauthBtn" type="button">Sign in</button>
+    </div>
+    <form class="cd-connect cd-dav" id="cdDav" hidden autocomplete="off">
+      <p class="sub" id="cdDavHelp"></p>
+      <label class="field">CalDAV address<input id="cdDavUrl" type="url" placeholder="https://caldav.example.com/" /></label>
+      <div class="cd-two">
+        <label class="field">User name or email<input id="cdDavUser" autocomplete="username" placeholder="you@example.com" /></label>
+        <label class="field">App password<input id="cdDavPass" type="password" autocomplete="new-password" placeholder="xxxx-xxxx-xxxx-xxxx" /></label>
+      </div>
+      <div class="cd-err" id="cdDavErr" role="alert"></div>
+      <button class="btn btn-primary" id="cdDavBtn" type="submit">Connect</button>
+    </form>
+    <div class="cd-now">
+      <label for="calNowMin">When a caller wants it <b>right now</b>, book it in</label>
+      <input type="number" id="calNowMin" min="0" max="240" step="1" placeholder="5" /> <span class="sub">minutes</span>
     </div>
     <div class="cal-box" id="calendarCard">
       <div class="cal-head"><span class="sub">Upcoming meetings</span><a class="link" id="icsAll" href="/api/calendar/calendar.ics" download>⬇ Export all (.ics)</a></div>

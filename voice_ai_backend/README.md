@@ -180,3 +180,10 @@ src/main/java/com/telemune/smartai/
 Troubleshooting.md     logs, tracing a request, every table, ready SQL queries
 data/  logs/  target/  (not in git)
 ```
+
+## Connected calendars
+
+Agents can check free time in, and book into, Google Calendar, Outlook / Microsoft 365 (OAuth; keys `calendar.google.*` and
+`calendar.microsoft.*` in keys.env) and CalDAV calendars (Yahoo, iCloud, Zoho, other; app password entered by each user).
+Tokens and passwords are encrypted with `CALENDAR_TOKEN_KEY` (.env, created on first start). Console steps, security notes and
+troubleshooting: [../docs/TelemuneSmartAi-Calendar-Setup.md](../docs/TelemuneSmartAi-Calendar-Setup.md).

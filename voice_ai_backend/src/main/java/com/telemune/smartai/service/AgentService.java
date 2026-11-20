@@ -83,7 +83,8 @@ public class AgentService {
         "meetingMinutes", a.get("meeting_minutes"), "speechSpeed", a.get("speech_speed") == null ? null : J.dbl(a.get("speech_speed")),
         "greeting", J.str(a.get("greeting")),
         "greetingPreview", templates.greeting(a, null),
-        "calendar", J.bool(a.get("calendar_enabled")), "emergency", J.bool(a.get("emergency_enabled")), "isDefault", J.bool(a.get("is_default")),
+        "calendar", J.bool(a.get("calendar_enabled")), "calendarImmediateMin", a.get("calendar_immediate_min"),
+        "emergency", J.bool(a.get("emergency_enabled")), "isDefault", J.bool(a.get("is_default")),
         "createdAt", J.iso(a.get("created_at")), "updatedAt", J.iso(a.get("updated_at")));
   }
 
@@ -298,6 +299,10 @@ public class AgentService {
         if (in.get("calendar") instanceof Map<?, ?>) {
           Map<String, Object> cal = J.obj(in.get("calendar"));
           db.exec("UPDATE agents SET calendar_enabled = ? WHERE id = ?", J.bool(cal.get("enabled")) ? 1 : 0, agentId);
+          if (cal.containsKey("immediateMin")) { // "book it right now" = this many minutes from now (0–240); empty = app default
+            Long im = J.blank(cal.get("immediateMin")) ? null : Math.max(0, Math.min(240, J.num(cal.get("immediateMin"))));
+            db.exec("UPDATE agents SET calendar_immediate_min = ? WHERE id = ?", im, agentId);
+          }
           if (cal.containsKey("app")) { // where the owner keeps meetings (one-click "add to" links)
             String app = J.str(cal.get("app"));
             db.exec("UPDATE agents SET calendar_app = ? WHERE id = ?", List.of("google", "outlook", "yahoo", "apple", "other").contains(app) ? app : null, agentId);

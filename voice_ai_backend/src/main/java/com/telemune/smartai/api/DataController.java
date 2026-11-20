@@ -42,10 +42,13 @@ public class DataController {
   private final MessageService messages;
   private final LogService logs;
   private final com.telemune.smartai.service.NotifyService notify;
+  private final com.telemune.smartai.service.CalendarSyncService calSync;
 
   public DataController(AppConfigService config, TemplateService templates, PlaybookService playbooks, CallService calls,
-                        CalendarService calendar, MessageService messages, LogService logs, com.telemune.smartai.service.NotifyService notify) {
+                        CalendarService calendar, MessageService messages, LogService logs, com.telemune.smartai.service.NotifyService notify,
+                        com.telemune.smartai.service.CalendarSyncService calSync) {
     this.notify = notify;
+    this.calSync = calSync;
     this.config = config;
     this.templates = templates;
     this.playbooks = playbooks;
@@ -193,6 +196,15 @@ public class DataController {
   @PostMapping("/api/calendar")
   ResponseEntity<Map<String, Object>> addEvent(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
     if (!J.bool(J.get(config.forAgent(ctx.agent), "calendar.enabled"))) throw ApiException.forbidden("Calendar is switched off in Agent setup.");
+    if (body.containsKey("when")) {
+      // booked by the agent: {title, when: "2026-11-21T15:00" (agent's zone) | "NOW", durationMin, notes}. Checked again first:
+      // 201 = booked (also in the linked calendar), 409 = taken or outside hours, with free options.
+      Map<String, Object> r = calSync.book(ctx.agent, ctx.dataUserId, J.str(body.get("title"), 120), J.str(body.get("when")), J.num(body.get("durationMin")),
+          J.str(body.get("notes"), 500), J.str(body.get("source"), 40));
+      if (!J.bool(r.get("booked"))) return ResponseEntity.status(409).body(r);
+      logs.activity(ctx, "calendar.add", (String) r.get("title"), J.map("id", r.get("id"), "start", r.get("start"), "agentId", ctx.agentId(), "calendar", r.get("calendar")));
+      return ResponseEntity.status(201).body(r);
+    }
     Map<String, Object> ev = calendar.add(body, ctx.dataUserId, ctx.agent);
     logs.activity(ctx, "calendar.add", (String) ev.get("title"), J.map("id", ev.get("id"), "start", ev.get("start"), "agentId", ev.get("agentId")));
     return ResponseEntity.status(201).body(ev);

@@ -89,6 +89,14 @@ public class AppConfigService {
     return v instanceof Map<?, ?> m ? (Map<String, Object>) m : new LinkedHashMap<>();
   }
 
+  /** The agent's own calendar values (only those it has set, so the app defaults stay underneath). */
+  private static Map<String, Object> calendarLayer(Map<String, Object> a) {
+    Map<String, Object> c = J.map("enabled", J.bool(a.get("calendar_enabled")), "app", J.str(a.get("calendar_app")));
+    if (a.get("meeting_minutes") != null) c.put("defaultDurationMin", a.get("meeting_minutes"));
+    if (a.get("calendar_immediate_min") != null) c.put("immediateMinutes", a.get("calendar_immediate_min"));
+    return c;
+  }
+
   /** Admin: replace one section of the shared settings. */
   public Object saveSection(String section, Map<String, Object> value, String userId) {
     if (!sections.contains(section)) throw ApiException.bad("Unknown settings section \"" + section + "\".");
@@ -116,8 +124,7 @@ public class AppConfigService {
     return J.map(
         "agent", agentSec,
         "models", models, "speechToText", stt,
-        "calendar", a.get("meeting_minutes") == null ? J.map("enabled", J.bool(a.get("calendar_enabled")), "app", J.str(a.get("calendar_app")))
-            : J.map("enabled", J.bool(a.get("calendar_enabled")), "app", J.str(a.get("calendar_app")), "defaultDurationMin", a.get("meeting_minutes")),
+        "calendar", calendarLayer(a),
         "emergency", J.map("enabled", J.bool(a.get("emergency_enabled")), "rules", a.getOrDefault("rules", List.of())));
   }
 

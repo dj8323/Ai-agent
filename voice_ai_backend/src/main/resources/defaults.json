@@ -12,7 +12,7 @@
   "speechToText": { "engine": "openai", "model": "gpt-4o-transcribe", "vadThreshold": 0.015, "minSpeechMs": 250, "maxUtteranceSeconds": 60 },
   "conversation": { "responseDelayMs": 1000, "hangupDelayMs": 800, "historyTurnsSentToModel": 30, "bargeIn": true, "bargeInMs": 300, "bargeInLevel": 0.035, "silenceRetrySeconds": 8, "silenceRetries": 2 },
   "history": { "pageSize": 5, "maxRecordingMB": 100 },
-  "calendar": { "enabled": false, "defaultDurationMin": 30 },
+  "calendar": { "enabled": false, "defaultDurationMin": 30, "immediateMinutes": 5, "suggestDays": 14, "slotStepMin": 30 },
   "emergency": {
     "enabled": true,
     "rules": [

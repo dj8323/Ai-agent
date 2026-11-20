@@ -84,14 +84,26 @@ public final class Prompts {
     if (!J.bool(J.get(cfg, "calendar.enabled"))) {
       return "\nCalendar: switched off. If the caller wants a meeting or appointment, take their preferred day and time as a message instead.\n";
     }
-    String tz = ZoneId.systemDefault().getId();
+    String tz = J.str(J.get(cfg, "calendar.tz"));
+    ZoneId zone;
+    try { zone = tz.isEmpty() ? ZoneId.systemDefault() : ZoneId.of(tz); } catch (Exception e) { zone = ZoneId.systemDefault(); }
     long mins = J.num(J.get(cfg, "calendar.defaultDurationMin"));
-    return "\nCalendar (switched on): you can add events to the calendar.\n"
-        + "- When the caller wants something scheduled (appointment, meeting, reminder, follow-up) and the date and time are clear and confirmed, "
-        + "add ONE tag right after the other tags: <calendar:TITLE|YYYY-MM-DDTHH:MM|MINUTES>\n"
-        + "  e.g. <calendar:Meeting with Rahul Mehta about the contract|2026-11-21T18:30|30>. Times are local (" + tz + "). Use "
-        + (mins > 0 ? mins : 30) + " minutes if no length is given. Put the caller's name in the title.\n"
-        + "- Then tell them in a few words that it's booked. Only add it once; never add a tag for something not yet confirmed.\n";
+    long now = J.num(J.get(cfg, "calendar.immediateMinutes"));
+    String account = J.str(J.get(cfg, "calendar.account"));
+    String nowText = ZonedDateTime.now(zone).format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a", Locale.US));
+    return "\nCalendar (switched on" + (account.isEmpty() ? "" : ", linked to " + account) + "): you can book meetings. All times are in "
+        + zone.getId() + "; it is now " + nowText + ".\n"
+        + "1. Ask for the day and time (one question at a time). Meetings are " + (mins > 0 ? mins : 30) + " minutes unless the caller asks for another length.\n"
+        + "2. As soon as you have a day and time, say one short line like \"One moment, let me check the calendar.\" and add ONE tag after the other tags: "
+        + "<calendar-check:YYYY-MM-DDTHH:MM|MINUTES>  e.g. <calendar-check:2026-11-21T15:00|30>. If the caller wants it right away, now or as soon as possible, "
+        + "write NOW instead of the date (<calendar-check:NOW|30>); that means in about " + (now > 0 ? now : 5) + " minutes. Do NOT say it is booked yet.\n"
+        + "3. You then get a note like [calendar check: …]. If it says FREE, book it straight away with ONE tag using exactly the time in the note: "
+        + "<calendar:TITLE|YYYY-MM-DDTHH:MM|MINUTES> (the caller's name and the topic in the title) and tell them in a few words it's booked, with the day and time.\n"
+        + "4. If it says BUSY, say that time is taken (or outside hours) and offer one or two of the free times from the note, one question. "
+        + "If they pick one of those free times, book it straight away with the <calendar:…> tag and that exact time (it was just checked). "
+        + "If they ask for a different time, do step 2 again for it.\n"
+        + "5. If you get [calendar booking failed: …], say so briefly and offer the free times from that note.\n"
+        + "Never guess whether " + "the owner is free before the note comes back, and never invent free times: only offer times from a note. Book each meeting only once.\n";
   }
 
   static String messagePrompt(String owner) {

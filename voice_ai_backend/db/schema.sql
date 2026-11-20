@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS agents (
   availability_plan JSON         NULL,                    -- {days:[1..7], from:"15:00", to:"18:00", tz, note}; owner_availability is its text
   meeting_minutes   INT          NULL,                    -- meeting length for calendar bookings; NULL = app default
   calendar_app      VARCHAR(16)  NULL,                    -- where the owner keeps meetings: google | outlook | yahoo | apple | other (one-click add links)
+  calendar_immediate_min INT     NULL,                    -- "book it right now" = this many minutes from now; NULL = app default (5)
   speech_speed      DECIMAL(3,2) NULL,                    -- how fast the agent speaks (0.50–2.00, 1 = normal); NULL = app default
   notify            JSON         NULL,                    -- send call summaries: {whatsapp:{on,to}, email:{on,to}, sms:{on,to}}
   created_at        DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
@@ -174,10 +175,32 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   duration_min INT          NOT NULL DEFAULT 30,
   notes        VARCHAR(500) NOT NULL DEFAULT '',
   source       VARCHAR(40)  NOT NULL DEFAULT 'agent',
+  external_provider VARCHAR(20) NULL,
+  external_id  VARCHAR(300) NULL,
   created_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   INDEX idx_events_user_start (user_id, start_at),
   CONSTRAINT fk_events_user  FOREIGN KEY (user_id)  REFERENCES users (id)  ON DELETE CASCADE,
   CONSTRAINT fk_events_agent FOREIGN KEY (agent_id) REFERENCES agents (id) ON DELETE SET NULL
+);
+
+-- A real calendar linked to an agent (2026-11-20): Google or Microsoft (OAuth) or CalDAV (Yahoo, iCloud, Zoho, other).
+-- secret = AES-GCM encrypted JSON (tokens or the CalDAV app password) with CALENDAR_TOKEN_KEY from .env; never stored in clear.
+CREATE TABLE IF NOT EXISTS calendar_accounts (
+  id           VARCHAR(16)  NOT NULL PRIMARY KEY,
+  user_id      VARCHAR(16)  NOT NULL,
+  agent_id     VARCHAR(16)  NOT NULL,
+  provider     VARCHAR(20)  NOT NULL,                  -- google | microsoft | caldav
+  label        VARCHAR(20)  NOT NULL DEFAULT '',       -- caldav flavour: yahoo | icloud | zoho | other
+  account      VARCHAR(190) NOT NULL DEFAULT '',       -- the email / user name shown
+  calendar_ref VARCHAR(500) NOT NULL DEFAULT '',       -- google/microsoft: calendar id; caldav: the calendar collection URL
+  secret       TEXT         NULL,
+  status       VARCHAR(12)  NOT NULL DEFAULT 'ok',     -- ok | error
+  last_error   VARCHAR(300) NULL,
+  created_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  updated_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
+  UNIQUE KEY uq_calacc_agent (agent_id),
+  CONSTRAINT fk_calacc_user  FOREIGN KEY (user_id)  REFERENCES users (id)  ON DELETE CASCADE,
+  CONSTRAINT fk_calacc_agent FOREIGN KEY (agent_id) REFERENCES agents (id) ON DELETE CASCADE
 );
 
 -- Who did what: sign-ins, sign-ups, account changes, agent/setting changes, calls saved or deleted …

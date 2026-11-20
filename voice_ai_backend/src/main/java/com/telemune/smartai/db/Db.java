@@ -54,6 +54,9 @@ public class Db {
     jdbc.update("INSERT IGNORE INTO roles (id, name, description) VALUES (0, 'superadmin', 'Everything an admin can do, plus server configuration, restart, creating admins and choosing what each admin sees')");
     addColumn("agents", "speech_speed", "DECIMAL(3,2) NULL AFTER meeting_minutes");
     addColumn("api_logs", "request_id", "VARCHAR(16) NULL AFTER id");
+    addColumn("agents", "calendar_immediate_min", "INT NULL AFTER calendar_app");          // "book it now" = this many minutes from now
+    addColumn("calendar_events", "external_provider", "VARCHAR(20) NULL AFTER source");    // google | microsoft | caldav when also in a real calendar
+    addColumn("calendar_events", "external_id", "VARCHAR(300) NULL AFTER external_provider");
     addColumn("activity_logs", "request_id", "VARCHAR(16) NULL AFTER id");
     addIndex("api_logs", "idx_api_request", "request_id");
     addIndex("activity_logs", "idx_activity_request", "request_id");

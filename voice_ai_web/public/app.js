@@ -105,7 +105,7 @@ const state = {
   types: {}, saved: [], playbookId: "", voices: null, rules: [], savedSnapshot: "",
   turns: [], // per caller turn: { intent, mood, lang, firstText, firstVoice, total }
   emotion: "neutral",
-  pendingCalendar: [], pendingMessages: [], utter: null, vadTimer: null, micAnalyser: null, srDisabled: false, pendingHangup: false, historyPage: 1,
+  pendingCalendar: [], pendingChecks: [], calNote: null, calWaiting: false, calChain: 0, pendingMessages: [], utter: null, vadTimer: null, micAnalyser: null, srDisabled: false, pendingHangup: false, historyPage: 1,
   callTokens: { input: 0, output: 0, total: 0 },
   agents: [], agentId: "", agentTypes: {}, me: null,
 };
@@ -493,7 +493,9 @@ function fillForm() {
   fillPersona();
   state.savedSnapshot = formSnapshot();
   state.calApp = SETTINGS.calendar?.app || "";
+  state.calNowMin = SETTINGS.currentAgent?.calendarImmediateMin ?? null;
   renderCalApp();
+  loadCalAccount();
   renderNotes();
   renderSummary();
   prepareGreeting();
@@ -810,7 +812,7 @@ function tickTimer() {
 }
 
 // Strip <intent:..><mood:..><lang:..> and [emotion] tags (also half-streamed ones) for display and speech.
-const stripTags = (t) => t.replace(/<[a-z]+:[^>]*>/gi, "").replace(/<[^>]*$/, "").replace(/\[[a-z]*\]?/gi, "").replace(/\s{2,}/g, " ").trimStart();
+const stripTags = (t) => t.replace(/<[a-z-]+:[^>]*>/gi, "").replace(/<[^>]*$/, "").replace(/\[[a-z]*\]?/gi, "").replace(/\s{2,}/g, " ").trimStart();
 
 // ---------- speech output (OpenAI TTS, one request per sentence, fetched ahead) ----------
 async function fetchSpeech(text, emotion, { voice = $("voice").value, language = lang(), provider = ttsProv(), model = $("ttsSel").value } = {}) {
@@ -841,6 +843,7 @@ async function speakNext() {
   const item = state.speakQueue.shift();
   if (!item) {
     state.playing = false;
+    if (state.streamDone && state.calNote) { const n = state.calNote; state.calNote = null; sendUserText(n, { hidden: true }); return; } // the calendar answer
     if (!state.inCall) { if (state.streamDone) setPhase("idle", "Hold to talk"); return; } // voice chat: wait for the next hold
     if (state.streamDone) afterAgentTurn();
     return;
@@ -879,6 +882,7 @@ async function speakNext() {
 // Agent finished talking: hang up if the caller said goodbye, otherwise listen again.
 function afterAgentTurn() {
   if (!state.inCall) return;
+  if (state.calWaiting || state.calNote) return; // a calendar check is running; its answer continues the call
   if (state.pendingHangup || state.silenceEnding) {
     setPhase("idle", "Ending call…");
     const reason = state.silenceEnding ? "no answer from the caller" : "caller said goodbye";
@@ -1313,7 +1317,10 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
   const emergency = hidden ? null : detectEmergency(text);
   if (emergency) showEmergency(emergency);
   state.pendingCalendar = [];
+  state.pendingChecks = [];
   state.pendingMessages = [];
+  if (!hidden) state.calChain = 0;
+  const calTurn = !hidden || text.startsWith("[calendar"); // the agent may book after the app's calendar note
   const turn = { t0: t0 ?? performance.now(), hidden, emergency, bubble: null, firstText: null, firstVoice: null, total: null };
   state.turns.push(turn);
   const controller = new AbortController();
@@ -1323,10 +1330,14 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
 
   // Pull <intent:..><mood:..><lang:..> out of the stream as soon as each is complete.
   const readMeta = () => {
-    pending = pending.replace(/<(intent|mood|lang|user|hangup|calendar|message):([^>]*)>/gi, (_, k, v) => {
+    pending = pending.replace(/<(intent|mood|lang|user|hangup|calendar-check|calendar|message):([^>]*)>/gi, (_, k, v) => {
       k = k.toLowerCase() === "user" ? "mood" : k.toLowerCase();
+      if (k === "calendar-check") {
+        if (calTurn && SETTINGS.calendar?.enabled) state.pendingChecks.push(v);
+        return "";
+      }
       if (k === "calendar") {
-        if (!hidden && SETTINGS.calendar?.enabled) state.pendingCalendar.push(v);
+        if (calTurn && SETTINGS.calendar?.enabled) state.pendingCalendar.push(v);
         return "";
       }
       if (k === "message") {
@@ -1412,7 +1423,9 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
     flushSentence(pending);
     turn.total = Math.round(performance.now() - turn.t0);
     renderTiming(turn);
-    for (const v of state.pendingCalendar.splice(0)) addCalendarEvent(v, turn);
+    for (const v of state.pendingCalendar.splice(0, 1)) addCalendarEvent(v, turn);
+    if (!state.pendingCalendar.length) for (const v of state.pendingChecks.splice(0, 1)) checkCalendarSlot(v, turn);
+    state.pendingCalendar = []; state.pendingChecks = [];
     for (const v of state.pendingMessages.splice(0)) saveCallerMessage(v, turn);
     if (raw.trim()) state.history.push({ role: "assistant", content: raw.trim() });
   } catch (err) {
@@ -2300,28 +2313,131 @@ async function loadModels() {
   $("modelsHint").textContent = m.source === "account" ? "The LLM list shows the models your OpenAI account can use." : "Couldn't reach OpenAI; showing common models.";
 }
 ["llmSel", "sttSel", "ttsSel"].forEach((id) => $(id).addEventListener("change", () => { $(id).title = $(id).value; markDirty(); }));
-$("calToggle").addEventListener("change", () => { renderNotes(); renderCalApp(); markDirty(); if ($("calToggle").checked) openCalDialog(); });
 const CAL_APPS = { google: "Google Calendar", outlook: "Outlook", yahoo: "Yahoo Calendar", apple: "Apple Calendar", other: "Other (.ics)" };
+// 📅 Connect a calendar: Google / Microsoft sign in (OAuth); Yahoo, iCloud, Zoho, other = CalDAV with an app password.
+// The connection belongs to the active agent (GET/POST/DELETE /api/calendar-accounts…); calendar.app keeps the one-click add links.
+const CAL_PROVIDERS = {
+  google: { name: "Google Calendar", kind: "oauth", app: "google", logo: ["g", "G"] },
+  microsoft: { name: "Outlook / Microsoft 365", kind: "oauth", app: "outlook", logo: ["o", "O"] },
+  yahoo: { name: "Yahoo Calendar", kind: "dav", app: "yahoo", logo: ["y", "Y!"], url: "https://caldav.calendar.yahoo.com",
+    help: "In Yahoo: Account info → Account security → Generate app password (choose “Other app”). Use your Yahoo email as the user name.", link: "https://login.yahoo.com/account/security" },
+  icloud: { name: "iCloud Calendar", kind: "dav", app: "apple", logo: ["a", "🍎"], url: "https://caldav.icloud.com",
+    help: "At account.apple.com: Sign-In and Security → App-Specific Passwords → create one. Use your Apple Account email as the user name.", link: "https://account.apple.com/account/manage" },
+  zoho: { name: "Zoho Calendar", kind: "dav", app: "other", logo: ["z", "Z"], url: "https://calendar.zoho.com/caldav/",
+    help: "In Zoho Calendar: Settings → Calendars → your calendar → CalDAV shows its address. Make an app password at accounts.zoho.com → Security → App Passwords.", link: "https://accounts.zoho.com/home#security/app_password" },
+  other: { name: "CalDAV calendar", kind: "dav", app: "other", logo: ["x", "⋯"], url: "",
+    help: "Any CalDAV calendar (Fastmail, Nextcloud, Synology…): paste its CalDAV address, your user name and an app password." },
+};
+const calKey = (acc) => (acc?.provider === "caldav" ? acc.label : acc?.provider) || "";
+async function loadCalAccount() {
+  if (!state.agentId || !allowed("tool.calendar")) { state.calAccount = null; renderCalApp(); return; }
+  try { const r = await fetch("/api/calendar-accounts"); state.calAccount = r.ok ? await r.json() : null; } catch { state.calAccount = null; }
+  renderCalApp();
+}
+function calMsg(text, err = false) { const m = $("cdMsg"); m.hidden = !text; m.textContent = text || ""; m.classList.toggle("err", err); }
 function renderCalApp() {
-  $("calAppBtn").hidden = !$("calToggle").checked;
-  $("calAppBtn").textContent = state.calApp ? `${CAL_APPS[state.calApp]} · meetings ›` : "Choose your calendar ›";
-  document.querySelectorAll("#cdApps .cd-app").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.app === state.calApp)));
+  const acc = state.calAccount, on = $("calToggle").checked;
+  $("calAppBtn").hidden = !on;
+  $("calAppBtn").textContent = acc?.connected ? `${acc.status === "error" ? "⚠" : "✅"} ${acc.name} · meetings ›` : "Connect a calendar ›";
+  // connected card
+  $("cdStatus").hidden = !acc?.connected;
+  if (acc?.connected) {
+    const pv = CAL_PROVIDERS[calKey(acc)] || CAL_PROVIDERS.other;
+    $("cdStatusLogo").className = "cd-logo " + pv.logo[0]; $("cdStatusLogo").textContent = pv.logo[1];
+    $("cdStatusName").textContent = `${acc.status === "error" ? "⚠ " : "✅ Connected · "}${acc.name}`;
+    $("cdStatusAcc").textContent = acc.status === "error" ? acc.lastError || "Connect it again." : `${acc.account || ""} · checks free time and books into it`;
+    $("cdStatus").classList.toggle("err", acc.status === "error");
+  }
+  const pick = state.calPick || calKey(acc);
+  document.querySelectorAll("#cdApps .cd-app").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.app === pick)));
+  const pv = CAL_PROVIDERS[state.calPick];
+  const fresh = state.calPick && (!acc?.connected || state.calPick !== calKey(acc) || acc.status === "error");
+  $("cdOauth").hidden = !(fresh && pv?.kind === "oauth");
+  $("cdDav").hidden = !(fresh && pv?.kind === "dav");
+  if (fresh && pv?.kind === "oauth") {
+    const ready = acc?.providers?.[state.calPick];
+    const who = state.calPick === "google" ? "Google" : "Microsoft";
+    $("cdOauthText").textContent = ready
+      ? `You'll go to ${who} to sign in and allow calendar access, then come straight back here.${acc?.connected ? " This replaces the calendar connected now." : ""}`
+      : `${who} sign-in isn't set up on this server yet. Ask your SuperAdmin to add the ${who} keys (calendar setup guide).`;
+    $("cdOauthBtn").textContent = `Sign in with ${who}`;
+    $("cdOauthBtn").disabled = !ready;
+  }
+  if (fresh && pv?.kind === "dav") {
+    $("cdDavHelp").innerHTML = "";
+    $("cdDavHelp").append(pv.help + " ");
+    if (pv.link) { const a = document.createElement("a"); a.href = pv.link; a.target = "_blank"; a.rel = "noopener"; a.textContent = "Open it ↗"; $("cdDavHelp").append(a); }
+    if (!$("cdDavUrl").dataset.for || $("cdDavUrl").dataset.for !== state.calPick) { $("cdDavUrl").value = pv.url; $("cdDavUrl").dataset.for = state.calPick; }
+    $("cdDavUrl").closest(".field").hidden = !!pv.url && state.calPick !== "zoho";
+  }
+  const im = SETTINGS.calendar?.immediateMinutes;
+  if (document.activeElement !== $("calNowMin")) $("calNowMin").value = state.calNowMin ?? (im ?? "");
+  $("calNowMin").placeholder = String(acc?.immediateMinutes ?? 5);
 }
 function openCalDialog() {
+  state.calPick = "";
+  calMsg("");
   renderCalApp();
   $("calDialog").classList.add("open");
   loadCalendar();
+  loadCalAccount();
 }
 const closeCalDialog = () => $("calDialog").classList.remove("open");
+$("calToggle").addEventListener("change", () => { renderNotes(); renderCalApp(); markDirty(); if ($("calToggle").checked) openCalDialog(); });
 $("calAppBtn").addEventListener("click", openCalDialog);
 $("cdApps").addEventListener("click", (e) => {
   const b = e.target.closest(".cd-app");
   if (!b) return;
-  state.calApp = b.dataset.app;
-  renderCalApp(); markDirty(); loadCalendar();
+  state.calPick = b.dataset.app;
+  const app = CAL_PROVIDERS[state.calPick]?.app;
+  if (app && app !== state.calApp) { state.calApp = app; markDirty(); } // the one-click "add" links follow the provider
+  $("cdDavErr").textContent = ""; calMsg("");
+  renderCalApp(); loadCalendar();
+  (state.calPick && CAL_PROVIDERS[state.calPick].kind === "dav" ? $("cdDavUser") : $("cdOauthBtn")).focus({ preventScroll: true });
 });
+$("cdOauthBtn").addEventListener("click", async () => {
+  $("cdOauthBtn").disabled = true;
+  try {
+    clearTimeout(state.saveTimer); if (formSnapshot() !== state.savedSnapshot) await autoSave(); // keep "calendar on" before leaving the page
+    const r = await fetch(`/api/calendar-accounts/oauth/${state.calPick}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ origin: location.origin }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    location.href = d.url; // Google / Microsoft sign-in, then back to /?cal=…#agents/calendar
+  } catch (err) { calMsg("⚠ " + err.message, true); $("cdOauthBtn").disabled = false; }
+});
+$("cdDav").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  $("cdDavErr").textContent = ""; $("cdDavBtn").disabled = true; $("cdDavBtn").textContent = "Connecting…";
+  try {
+    const r = await fetch("/api/calendar-accounts/caldav", { method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ label: state.calPick, url: $("cdDavUrl").value.trim(), username: $("cdDavUser").value.trim(), password: $("cdDavPass").value }) });
+    const d = await r.json();
+    if (!r.ok) throw new Error(d.error);
+    $("cdDavPass").value = ""; state.calAccount = d; state.calPick = "";
+    calMsg(`✅ ${d.name} connected. The agent now checks it before booking.`);
+    renderCalApp(); renderSummary();
+  } catch (err) { $("cdDavErr").textContent = err.message; }
+  finally { $("cdDavBtn").disabled = false; $("cdDavBtn").textContent = "Connect"; }
+});
+$("cdDisconnect").addEventListener("click", async () => {
+  const acc = state.calAccount;
+  const r = await fetch("/api/calendar-accounts", { method: "DELETE" });
+  if (r.ok) { state.calAccount = await r.json(); calMsg(`${acc?.name || "The calendar"} is disconnected. Meetings are kept in the app's own calendar.`); renderCalApp(); }
+});
+$("calNowMin").addEventListener("input", () => { state.calNowMin = $("calNowMin").value === "" ? null : Math.max(0, Math.min(240, Number($("calNowMin").value) || 0)); markDirty(); });
 ["cdClose", "cdDone"].forEach((id) => $(id).addEventListener("click", closeCalDialog));
 $("calDialog").addEventListener("click", (e) => { if (e.target === $("calDialog")) closeCalDialog(); });
+// back from Google / Microsoft: /?cal=connected|error&msg&agent#agents/calendar
+async function calendarReturn() {
+  const q = new URLSearchParams(location.search);
+  if (!q.get("cal")) return;
+  history.replaceState(null, "", location.pathname + location.hash);
+  if (q.get("agent") && q.get("agent") !== state.agentId && state.agents.some((a) => a.id === q.get("agent"))) await switchAgent(q.get("agent"));
+  location.hash = "agents/calendar";
+  openCalDialog();
+  if (q.get("cal") === "connected") calMsg(`✅ ${CAL_PROVIDERS[q.get("provider")]?.name || "Calendar"} connected. The agent now checks it for free time and books into it.`);
+  else calMsg("⚠ " + (q.get("msg") || "The calendar couldn't be connected."), true);
+}
 // one-click "add to" link for a booked meeting in the chosen calendar app (no account link needed)
 function calAddLink(app, e) {
   const st = new Date(e.start), en = new Date(st.getTime() + (e.durationMin || 30) * 60000);
@@ -2521,7 +2637,7 @@ function formPayload() {
   return {
     agent: { defaultName: agentName(), defaultLanguage: lang(), defaultVoice: $("voice").value, defaultPlaybookId: state.playbookId, speechSpeed: speed() },
     models: { chat: $("llmSel").value, stt: $("sttSel").value, tts: $("ttsSel").value, ttsProvider: ttsProv(), sttProvider: sttProv() },
-    calendar: { enabled: $("calToggle").checked, app: state.calApp || "" },
+    calendar: { enabled: $("calToggle").checked, app: state.calApp || "", immediateMin: state.calNowMin ?? "" },
     emergency: { enabled: $("emgToggle").checked, rules: state.rules },
     persona: personaPayload(),
     notify: notifyPayload(),
@@ -2654,23 +2770,69 @@ function showEmergency(rule) {
   }
 }
 
-// ---------- calendar ----------
+// ---------- calendar: check the slot, then book (the agent's <calendar-check:…> and <calendar:…> tags) ----------
+// The result goes back to the agent as a hidden note ([calendar check: …]) once it has finished saying "let me check".
+function sendCalendarNote(note) {
+  if (++state.calChain > 6) { state.calWaiting = false; return; } // never loop
+  if (state.playing || state.speakQueue.length) { state.calNote = note; return; } // sent by speakNext when the speech ends
+  sendUserText(note, { hidden: true });
+}
+const calSay = (d) => `${d.say} (${d.local})`;
+function calOptions(d) {
+  return d.suggestions?.length ? d.suggestions.map(calSay).join("; ") : "none in the next two weeks; offer to take a message instead";
+}
+async function checkCalendarSlot(raw, turn) {
+  const [when, minutes] = raw.split("|").map((x) => x.trim());
+  if (!when) return;
+  state.calWaiting = true;
+  addChip(turn.bubble, "🔎 checking the calendar…", "calchk");
+  let note;
+  try {
+    const res = await fetch("/api/calendar/check", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ when, minutes: Number(minutes) || undefined }) });
+    const d = await res.json();
+    if (!res.ok) throw new Error(d.error);
+    turn.calCheck = d;
+    if (d.free) {
+      addChip(turn.bubble, `✅ free · ${d.say}`, "calres");
+      note = `[calendar check: FREE. ${calSay(d)} for ${d.minutes} minutes is free in ${d.calendar}${d.immediate ? " (that is the soonest time for a right-now booking)" : ""}. Book it now with exactly ${d.local}|${d.minutes}.]`;
+    } else {
+      addChip(turn.bubble, `⛔ ${d.reason} · ${d.suggestions?.length || 0} free option${d.suggestions?.length === 1 ? "" : "s"}`, "calres");
+      note = `[calendar check: BUSY. ${calSay(d)} doesn't work: ${d.reason}. Free options: ${calOptions(d)}.]`;
+    }
+    if (d.calendarError) addChip(turn.bubble, `⚠ couldn't read ${d.calendar}: checked the app's own calendar`, "calerr");
+  } catch (e) {
+    note = `[calendar check: couldn't check the calendar (${e.message}). Take the preferred day and time as a message instead.]`;
+  }
+  state.calWaiting = false;
+  sendCalendarNote(note);
+}
 async function addCalendarEvent(raw, turn) {
   const [title, start, minutes] = raw.split("|").map((x) => x.trim());
   if (!title || !start) return;
+  state.calWaiting = true;
   try {
     const res = await fetch("/api/calendar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, start: new Date(start).toISOString(), durationMin: Number(minutes) || undefined, source: activePlaybook()?.name || "Default agent" }),
+      body: JSON.stringify({ title, when: start, durationMin: Number(minutes) || undefined, source: activePlaybook()?.name || "Default agent" }),
     });
     const ev = await res.json();
+    state.calWaiting = false;
+    if (res.status === 409) { // taken after all (or outside hours): the agent offers the free times
+      addChip(turn.bubble, `⛔ not booked: ${ev.reason}`, "calres");
+      sendCalendarNote(`[calendar booking failed: ${calSay(ev)} ${ev.reason}. Free options: ${calOptions(ev)}.]`);
+      return;
+    }
     if (!res.ok) throw new Error(ev.error);
     turn.calendar = ev;
-    addChip(turn.bubble, `📅 added: ${ev.title}, ${new Date(ev.start).toLocaleString([], { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`, "cal-" + ev.id);
+    addChip(turn.bubble, `📅 booked${ev.inCalendar ? " in " + ev.calendar : ""}: ${ev.title}, ${ev.say}`, "cal-" + ev.id);
+    if (ev.calendarError) addChip(turn.bubble, `⚠ saved in the app only: ${ev.calendarError}`, "calerr");
     loadCalendar();
+    if (state.inCall && !state.playing && !state.speakQueue.length && state.streamDone) afterAgentTurn();
   } catch (e) {
+    state.calWaiting = false;
     console.warn("Couldn't add calendar event:", e);
+    if (state.inCall && !state.playing && state.streamDone) afterAgentTurn();
   }
 }
 
@@ -2693,7 +2855,10 @@ async function loadCalendar() {
     el.querySelector(".cal-when").textContent = `${d.toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })} · ${e.durationMin} min · ${e.source}`;
     const a = el.querySelector("a:not(.cal-add)");
     a.href = `/api/calendar/${e.id}.ics`; a.download = `event-${e.id}.ics`;
-    const link = calAddLink(state.calApp, e);
+    const IN = { google: "Google Calendar", microsoft: "Outlook", caldav: state.calAccount?.name || "your calendar" };
+    const link = e.externalProvider ? "" : calAddLink(state.calApp, e);
+    if (e.externalProvider) Object.assign(el.querySelector(".cal-add"), { hidden: false, textContent: `✓ in ${IN[e.externalProvider] || "your calendar"}`, title: "Already in the connected calendar" });
+    if (e.externalProvider) { const a = el.querySelector(".cal-add"); a.removeAttribute("href"); a.classList.add("in-cal"); }
     if (link) Object.assign(el.querySelector(".cal-add"), { href: link, hidden: false, textContent: `＋ ${CAL_APPS[state.calApp].split(" ")[0]}`, title: `Add to ${CAL_APPS[state.calApp]}` });
     el.querySelector("button").onclick = async () => {
       if (!confirm(`Delete "${e.title}" from the calendar?`)) return;
@@ -2947,9 +3112,9 @@ const TOURS = [
     ] },
   { id: "calendar", icon: "📅", needs: ["tab.tools", "tool.calendar"], title: "Calendar", needsAgent: true, desc: "Let the agent book meetings, and add them to Google, Outlook, Yahoo or Apple.",
     steps: [
-      { target: "label[for=calToggle]", before: goTab("calendar"), title: "Switch it on", text: "👉 Switch on **📅 Calendar**. A window asks where you keep your meetings.", ready: () => $("calToggle").checked, auto: true },
-      { target: "#calAppBtn", before: goTab("calendar"), title: "Your calendar app", text: "👉 Click it to pick **Google, Outlook, Yahoo, Apple or Other** and to see the booked meetings.", done: () => isOpen("calDialog"), next: true, nextLabel: "Skip" },
-      { target: () => (isOpen("calDialog") ? "#cdApps" : "#calAppBtn"), title: "One-click add", text: "Every meeting the agent books gets a **＋ Add** button for that calendar; **⬇ Export all (.ics)** works with any app.", next: true },
+      { target: "label[for=calToggle]", before: goTab("calendar"), title: "Switch it on", text: "👉 Switch on **📅 Calendar**. A window opens to connect your calendar.", ready: () => $("calToggle").checked, auto: true },
+      { target: "#calAppBtn", before: goTab("calendar"), title: "Connect your calendar", text: "👉 Click it to connect **Google, Outlook / Microsoft 365, Yahoo, iCloud, Zoho or any CalDAV** calendar.", done: () => isOpen("calDialog"), next: true, nextLabel: "Skip" },
+      { target: () => (isOpen("calDialog") ? "#cdApps" : "#calAppBtn"), title: "How the agent books", text: "Google and Outlook: **Sign in with…**. Yahoo, iCloud, Zoho, other: an **app password**. Then the agent asks the caller for a day and time, **checks it is free**, books it into this calendar, and offers other times when it's taken. \"Right now\" means in the minutes you set here.", next: true },
     ] },
   { id: "emergency", icon: "🚨", needs: ["tab.tools", "tool.emergency"], title: "Emergency contacts", needsAgent: true, desc: "Give callers the right number, WhatsApp or email in an emergency.",
     steps: [
@@ -3729,6 +3894,7 @@ document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeAgent
     // The model list comes from OpenAI and can take a few seconds; fill the dropdowns when it arrives.
     loadModels().then(() => { state.savedSnapshot = formSnapshot(); renderSummary(); }).catch(() => {});
     loadCalendar().catch(() => {});
+    calendarReturn().catch(() => {});
     // No agents yet (new account): show how to create one instead of making one for them.
     if (!state.agents.length && !location.hash.replace("#", "") && allowed("agents.create")) startTour("first-agent");
     } catch (e) {

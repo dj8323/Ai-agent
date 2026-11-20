@@ -386,6 +386,10 @@ The **📊 Insights** is the first page after you sign in (users with at least o
 
 An admin can switch the Dashboard off for a user in ✏️ Edit → access (📊 Insights); the user then starts on 💬 Conversations. The tutorial "Your dashboard" walks through the page.
 
+## 📅 Connected calendar
+
+Switch on **📅 Calendar** (Agent studio → Tools) and the **Connect a calendar** window opens. Pick **Google Calendar** or **Outlook / Microsoft 365** and sign in, or pick **Yahoo, iCloud, Zoho or Other (CalDAV)** and enter your user name and an app password. Once connected, the agent asks the caller for a day and time, checks it is free in that calendar (and inside the owner's working hours), books it straight in, and offers up to three free times when it is taken. If the caller wants it **right now**, it is booked in the minutes you set in the same window (5 by default). Setup steps for the SuperAdmin and every provider: `docs/TelemuneSmartAi-Calendar-Setup.md`.
+
 ## Site theme
 
 An admin with **⚙️ Settings** picks one look for the whole site in **Settings → 🎨 Theme**. It applies to the login page, the call page and the admin dashboard, for every user, straight away. Each theme has its own colours for light and dark mode, its own moving background and its own way cards come in:
