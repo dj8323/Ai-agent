@@ -376,6 +376,7 @@ async function main() {
   });
   await test("ADM-09", "Activity log: user activity, sign-ins, admin changes", async () => {
     for (const k of ["user", "auth", "admin"]) eq((await S.admin.get(`/api/admin/logs?kind=${k}`)).status, 200, k);
+    eq((await S.admin.get("/api/admin/logs?page=1")).status, 200, "no filter (was a 500 before 23 Nov)");
     const u = await S.admin.get(`/api/admin/logs?kind=user&user=${D.userId}`); ok(u.json.items.some((i) => i.action === "call.save"), "call.save missing");
     eq((await S.admin.get("/api/admin/logins")).status, 200, "logins");
   });

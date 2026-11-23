@@ -133,7 +133,7 @@ public class AdminController {
   @GetMapping("/logs")
   Map<String, Object> activity(@RequestParam(defaultValue = "1") int page, @RequestParam(required = false) String user,
                                @RequestParam(required = false) String kind, @RequestAttribute("ctx") Ctx ctx) {
-    return logs.listActivity(page, 15, J.blank(user) ? null : user, List.of("user", "auth", "admin").contains(kind) ? kind : null,
+    return logs.listActivity(page, 15, J.blank(user) ? null : user, kind != null && List.of("user", "auth", "admin").contains(kind) ? kind : null, // List.of(…).contains(null) throws
         ctx.isSuper() ? null : auth.superIds());
   }
 
