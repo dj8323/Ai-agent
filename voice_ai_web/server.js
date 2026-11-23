@@ -186,3 +186,30 @@ if (HTTPS_ON) {
     logLine("INFO", msg); console.log(msg);
   });
 }
+
+// ---------- calendar sign-in bridge (this computer only) ----------
+// Google/Microsoft send the person back only to addresses registered in their console. When the registered one is a
+// localhost address of another app (e.g. https://localhost:8080/voiceAi/voiceApi/calendar/oauth2/callback), this small
+// https listener receives it and passes the browser on, with the same code and state, to our own
+// http://localhost:<port>/api/calendar-oauth/<provider>/callback. The backend must use the same address
+// (calendar.google.redirect-uri in voice_ai_backend/keys.env). config.json "oauthBridge": {port, routes:{path: provider}};
+// OAUTH_BRIDGE=off or no routes turns it off. Live, use the live address instead (docs/TelemuneSmartAi-Calendar-Setup.md).
+const BRIDGE = CONFIG.oauthBridge || {};
+const BRIDGE_PORT = Number(process.env.OAUTH_BRIDGE_PORT) || Number(BRIDGE.port) || 0;
+const BRIDGE_ROUTES = BRIDGE.routes || {};
+if (process.env.OAUTH_BRIDGE !== "off" && BRIDGE_PORT && Object.keys(BRIDGE_ROUTES).length) {
+  const bridge = (req, res) => {
+    const u = new URL(req.url, "https://localhost");
+    const provider = BRIDGE_ROUTES[u.pathname.replace(/\/+$/, "")];
+    if (!provider || !/^(google|microsoft)$/.test(provider)) { res.writeHead(404, { "Content-Type": "text/plain" }); return res.end("Not found"); }
+    const to = `http://localhost:${PORT}/api/calendar-oauth/${provider}/callback${u.search}`;
+    logLine("INFO", `bridge ${provider} sign-in → /api/calendar-oauth/${provider}/callback`); // never the code
+    redirect(res, to);
+  };
+  const server = HTTPS_ON ? https.createServer({ cert: fsSync.readFileSync(CERT), key: fsSync.readFileSync(KEY) }, bridge) : http.createServer(bridge);
+  server.on("error", (e) => logLine("WARN", `calendar sign-in bridge couldn't use port ${BRIDGE_PORT}: ${e.code || e.message} (is another app on it?)`));
+  server.listen(BRIDGE_PORT, "127.0.0.1", () => {
+    const msg = `calendar sign-in bridge at ${HTTPS_ON ? "https" : "http"}://localhost:${BRIDGE_PORT} (${Object.keys(BRIDGE_ROUTES).join(", ")})`;
+    logLine("INFO", msg); console.log(msg);
+  });
+}

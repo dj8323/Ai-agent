@@ -78,7 +78,7 @@ public class CalendarSyncService {
   /** OAuth sign-ins in progress: state → who started it (10 minutes). */
   private final Map<String, Pending> pending = new ConcurrentHashMap<>();
 
-  private record Pending(String userId, String agentId, String provider, String redirectUri, String verifier, Instant at) {}
+  private record Pending(String userId, String agentId, String provider, String redirectUri, String verifier, String origin, Instant at) {}
   public record Busy(Instant start, Instant end) {}
 
   public CalendarSyncService(Db db, Environment env, SecretBox box, AppConfigService config) {
@@ -99,7 +99,8 @@ public class CalendarSyncService {
   private static final Map<String, String> ALIASES = Map.of(
       "calendar.google.client-id", "google.oauth.client-id", "calendar.google.client-secret", "google.oauth.client-secret",
       "calendar.microsoft.client-id", "outlook.oauth.client-id", "calendar.microsoft.client-secret", "outlook.oauth.client-secret",
-      "calendar.microsoft.tenant", "outlook.oauth.tenant");
+      "calendar.microsoft.tenant", "outlook.oauth.tenant",
+      "calendar.google.redirect-uri", "google.oauth.redirect-uri", "calendar.microsoft.redirect-uri", "outlook.oauth.redirect-uri");
 
   private String prop(String k, String def) {
     String v = env.getProperty(k);
@@ -182,8 +183,16 @@ public class CalendarSyncService {
   private String googleScopes() { return prop("calendar.google.scopes", "openid email https://www.googleapis.com/auth/calendar.events"); }
   private static final String MS_SCOPES = "offline_access openid email User.Read Calendars.ReadWrite";
 
-  /** The address Google/Microsoft send the person back to; must be registered in their console exactly like this. */
+  /**
+   * The address Google/Microsoft send the person back to; it must be registered in their console exactly like this.
+   * 1. calendar.<provider>.redirect-uri (or the older google.oauth.redirect-uri / outlook.oauth.redirect-uri): used as it is,
+   *    e.g. https://localhost:8080/voiceAi/voiceApi/calendar/oauth2/callback (the web app's sign-in bridge, this computer only)
+   *    or https://tryai.telemune.com/televoiceAi/voiceApi/calendar/oauth2/callback (live; the server sends "tsa-" sign-ins to us).
+   * 2. else calendar.oauth.redirect-base (or the page's own address) + /api/calendar-oauth/<provider>/callback.
+   */
   public String redirectUri(String provider, String origin) {
+    String exact = prop("calendar." + provider + ".redirect-uri", "");
+    if (!exact.isEmpty()) return exact;
     String base = prop("calendar.oauth.redirect-base", "");
     if (base.isEmpty()) {
       if (origin == null || !origin.matches("^https?://[A-Za-z0-9.\\-]+(:\\d{1,5})?$")) throw ApiException.bad("Can't tell this site's address; set calendar.oauth.redirect-base in keys.env.");
@@ -199,18 +208,31 @@ public class CalendarSyncService {
     pending.values().removeIf(p -> p.at().isBefore(Instant.now().minus(Duration.ofMinutes(10))));
     byte[] s = new byte[24], v = new byte[32];
     RNG.nextBytes(s); RNG.nextBytes(v);
-    String state = b64url(s), verifier = b64url(v), redirect = redirectUri(provider, origin);
+    // every sign-in starts with the same marker, so a shared live address can send ours to this app and the rest elsewhere
+    String state = prop("calendar.oauth.state-prefix", "tsa-") + b64url(s), verifier = b64url(v), redirect = redirectUri(provider, origin);
+    String back = origin != null && origin.matches("^https?://[A-Za-z0-9.\\-]+(:\\d{1,5})?$") ? origin : "";
     String challenge;
     try { challenge = b64url(MessageDigest.getInstance("SHA-256").digest(verifier.getBytes(StandardCharsets.US_ASCII))); }
     catch (Exception e) { throw new IllegalStateException(e); }
-    pending.put(state, new Pending(userId, J.str(agent.get("id")), provider, redirect, verifier, Instant.now()));
+    pending.put(state, new Pending(userId, J.str(agent.get("id")), provider, redirect, verifier, back, Instant.now()));
     String q = "google".equals(provider)
         ? "client_id=" + enc(prop("calendar.google.client-id", "")) + "&redirect_uri=" + enc(redirect) + "&response_type=code&scope=" + enc(googleScopes())
           + "&access_type=offline&prompt=consent&include_granted_scopes=true"
         : "client_id=" + enc(prop("calendar.microsoft.client-id", "")) + "&redirect_uri=" + enc(redirect) + "&response_type=code&response_mode=query&scope="
           + enc(MS_SCOPES) + "&prompt=select_account";
-    log.info("Calendar sign-in started: {} for agent {}", provider, agent.get("id"));
+    log.info("Calendar sign-in started: {} for agent {} (returns to {})", provider, agent.get("id"), redirect);
     return authUrl(provider) + "?" + q + "&state=" + enc(state) + "&code_challenge=" + enc(challenge) + "&code_challenge_method=S256";
+  }
+
+  /**
+   * Where to send the browser when the sign-in is finished: calendar.oauth.return-url if set, else the address of the page
+   * that started it (so it also works when the sign-in comes back through the bridge on another port or the live server).
+   */
+  public String returnBase(String state) {
+    String fixed = prop("calendar.oauth.return-url", "");
+    if (!fixed.isEmpty()) return fixed.replaceAll("/+$", "");
+    Pending p = state == null ? null : pending.get(state);
+    return p == null ? "" : p.origin();
   }
 
   /** Back from Google/Microsoft: swap the code for tokens, read the account's email, store it (encrypted). */

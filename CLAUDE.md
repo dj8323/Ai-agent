@@ -285,7 +285,9 @@ voice_ai_web/          ── frontend team ──
   `calendar.google.*`, `calendar.microsoft.*` (tenant consumers; old names `google.oauth.*`/`outlook.oauth.*` also read), `calendar.oauth.redirect-base`. Agent flow: `<calendar-check:LOCAL|MIN>` (or `NOW` =
   `calendar.immediateMinutes`, per agent `agents.calendar_immediate_min`) → app `checkCalendarSlot` → hidden `[calendar check: FREE|BUSY …]`
   sent after the speech (`sendCalendarNote`, `state.calNote`) → `<calendar:…>` → POST /api/calendar {when} (201 / 409 + options →
-  `[calendar booking failed: …]`). Setup guide: `docs/TelemuneSmartAi-Calendar-Setup.md`.
+  `[calendar booking failed: …]`). Return address: `calendar.google.redirect-uri` (exact; local = `https://localhost:8080/voiceAi/voiceApi/calendar/oauth2/callback` via the web
+  app's sign-in bridge `config.json oauthBridge` → `/api/calendar-oauth/<p>/callback`; live = the tryai address + a server rule for state
+  prefix `tsa-`), `calendar.oauth.return-url` (empty = the page that started it). Setup guide: `docs/TelemuneSmartAi-Calendar-Setup.md`.
 - **🧰 Tools tab** = Calendar + Emergency + Playbook + Call summaries (`TOOL_SECTIONS`; old `#agents/calendar|emergency|playbooks`
   links open Tools at that section). Emergency contacts: phone | whatsapp (banner opens wa.me) | email; WhatsApp/email
   contacts also get a server alert once per call (POST `/api/emergency/alert` → `NotifyService.emergency`). Call summaries:

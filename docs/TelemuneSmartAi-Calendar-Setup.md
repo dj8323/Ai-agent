@@ -69,6 +69,41 @@ which means both apps and the keys are accepted and only the addresses are missi
 changed to "any organizational directory and personal accounts" and the tenant set to `common`. When this app runs under a path on the
 public server (like the old `/televoiceAi/`), set `calendar.oauth.redirect-base=https://tryai.telemune.com/<path>` and register that.
 
+### Return address: this computer now, the live server later
+
+Google only sends people back to addresses registered for the client. The shared Telemune client already has two, so this
+app borrows them through settings in `voice_ai_backend/keys.env` (no console change needed):
+
+| Where | Setting | How the sign-in comes back |
+|---|---|---|
+| **This computer (now)** | `calendar.google.redirect-uri=https://localhost:8080/voiceAi/voiceApi/calendar/oauth2/callback` | Google → `https://localhost:8080/…` → the web app's **sign-in bridge** (`voice_ai_web/config.json` → `oauthBridge`, port 8080) → `http://localhost:8323/api/calendar-oauth/google/callback` → the backend saves the connection → back to the calendar window |
+| **Live server (later)** | `calendar.google.redirect-uri=https://tryai.telemune.com/televoiceAi/voiceApi/calendar/oauth2/callback` | Google → the live address → one routing rule on the live server sends sign-ins whose `state` starts with `tsa-` to this app; all others still go to the old project |
+
+Exact working (this computer):
+1. You click **Sign in with Google**. The backend makes a one-time `state` starting with `tsa-` and a PKCE key, and opens Google with the return address above.
+2. You sign in and allow calendar access. Google sends your browser to `https://localhost:8080/voiceAi/voiceApi/calendar/oauth2/callback?code=…&state=tsa-…`.
+3. The bridge (only listening on this computer) answers with a redirect to `http://localhost:8323/api/calendar-oauth/google/callback?code=…&state=…`.
+4. The backend checks the `state` (yours, under 10 minutes, used once), swaps the code for tokens with the same return address and the PKCE key, reads your email, stores the tokens encrypted, and sends you back to `http://localhost:8323/?cal=connected#agents/calendar`.
+5. The window shows **✅ Connected · Google Calendar**. From then on the agent checks and books in that calendar.
+
+Limits: works only in a browser on the computer that runs the app (localhost); the first visit shows a certificate warning for
+`https://localhost:8080` (Advanced → Proceed); port 8080 must be free (`OAUTH_BRIDGE=off` in `voice_ai_web/.env` turns the bridge off);
+the Google account must be a test user while the Google app is in Testing.
+
+Going live: switch the two `calendar.google.redirect-uri` lines in keys.env (the live one is already there, commented out), remove
+`oauthBridge` from the live web config, restart, and add this rule on the live server (nginx; ask for other servers):
+
+```nginx
+location = /televoiceAi/voiceApi/calendar/oauth2/callback {
+    if ($arg_state ~ "^tsa-") { return 302 https://<new app address>/api/calendar-oauth/google/callback?$args; }
+    proxy_pass http://<old app, as today>;
+}
+```
+
+Settings: `calendar.oauth.state-prefix` (default `tsa-`), `calendar.oauth.return-url` (where to land after sign-in; empty = the page
+that started it), `calendar.microsoft.redirect-uri` (same idea for Outlook). Old names `google.oauth.redirect-uri` and
+`outlook.oauth.redirect-uri` also work.
+
 ## 3. Outlook / Microsoft 365 (SuperAdmin, once per server)
 
 1. Open **https://entra.microsoft.com** → **Identity → Applications → App registrations → New registration**.

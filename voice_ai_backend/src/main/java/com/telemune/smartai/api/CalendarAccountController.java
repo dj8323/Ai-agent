@@ -60,7 +60,7 @@ public class CalendarAccountController {
   @GetMapping("/api/calendar-oauth/{provider}/callback")
   ResponseEntity<Void> callback(@PathVariable String provider, @RequestParam(required = false) String code, @RequestParam(required = false) String state,
                                 @RequestParam(required = false) String error, @RequestAttribute("ctx") Ctx ctx) {
-    String to;
+    String to, base = sync.returnBase(state); // the app's own address (the sign-in may come back through a bridge or the live server)
     try {
       if (error != null) throw ApiException.bad("access_denied".equals(error) ? "You cancelled the sign-in." : "The sign-in failed (" + J.str(error, 60) + ").");
       Map<String, Object> r = sync.finishOAuth(provider, code, state, ctx.userId());
@@ -69,7 +69,7 @@ public class CalendarAccountController {
     } catch (ApiException e) {
       to = "/?cal=error&msg=" + enc(e.getMessage());
     }
-    return ResponseEntity.status(302).header("Location", to + "#agents/calendar").header("Cache-Control", "no-store").build();
+    return ResponseEntity.status(302).header("Location", base + to + "#agents/calendar").header("Cache-Control", "no-store").build();
   }
 
   /** Body {label: yahoo|icloud|zoho|other, url?, username, password (an app password)}. */

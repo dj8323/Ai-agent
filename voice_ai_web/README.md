@@ -105,3 +105,9 @@ certs/  logs/  (not in git)
 `public/themes.js` (loaded in the `<head>` of every page) holds the 8 site themes and applies the one the admin picked
 (`GET /api/auth-options` → `theme {name, motion}`, saved in Admin → Settings → 🎨 Theme as `branding.theme`). `public/motion.js`
 draws the theme's moving background and `public/motion.css` the way cards come in. To add a theme, add an entry to `THEMES` in themes.js.
+
+## Calendar sign-in bridge
+
+`config.json` → `oauthBridge` {port, routes: {path: google|microsoft}} starts a small listener on `https://localhost:<port>` (8080)
+that sends Google/Microsoft sign-ins arriving at another app's registered localhost address on to `/api/calendar-oauth/<provider>/callback`.
+Local testing only; `OAUTH_BRIDGE=off` in `.env` turns it off. Details: `../docs/TelemuneSmartAi-Calendar-Setup.md`.
