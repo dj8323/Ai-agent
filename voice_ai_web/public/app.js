@@ -812,7 +812,9 @@ function tickTimer() {
 }
 
 // Strip <intent:..><mood:..><lang:..> and [emotion] tags (also half-streamed ones) for display and speech.
-const stripTags = (t) => t.replace(/<[a-z-]+:[^>]*>/gi, "").replace(/<[^>]*$/, "").replace(/\[[a-z]*\]?/gi, "").replace(/\s{2,}/g, " ").trimStart();
+// the model's hidden markers: <intent:…> and, when it slips, the same in square brackets [intent:…]; never shown or spoken
+const META_BRACKET = /\[(?:intent|mood|lang|user|hangup|calendar-check|calendar|message):[^\]]*(?:\]|$)/gi;
+const stripTags = (t) => t.replace(META_BRACKET, "").replace(/<[a-z-]+:[^>]*>/gi, "").replace(/<[^>]*$/, "").replace(/\[[a-z]*\]?/gi, "").replace(/\s{2,}/g, " ").trimStart();
 
 // ---------- speech output (OpenAI TTS, one request per sentence, fetched ahead) ----------
 async function fetchSpeech(text, emotion, { voice = $("voice").value, language = lang(), provider = ttsProv(), model = $("ttsSel").value } = {}) {
@@ -1330,7 +1332,7 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
 
   // Pull <intent:..><mood:..><lang:..> out of the stream as soon as each is complete.
   const readMeta = () => {
-    pending = pending.replace(/<(intent|mood|lang|user|hangup|calendar-check|calendar|message):([^>]*)>/gi, (_, k, v) => {
+    const meta = (_, k, v) => {
       k = k.toLowerCase() === "user" ? "mood" : k.toLowerCase();
       if (k === "calendar-check") {
         if (calTurn && SETTINGS.calendar?.enabled) state.pendingChecks.push(v);
@@ -1358,7 +1360,9 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
       }
       updateInsights();
       return "";
-    });
+    };
+    pending = pending.replace(/<(intent|mood|lang|user|hangup|calendar-check|calendar|message):([^>]*)>/gi, meta)
+      .replace(/\[(intent|mood|lang|user|hangup|calendar-check|calendar|message):([^\]]*)\]/gi, meta);
   };
 
   // Speak one finished sentence in the emotion tagged in front of it.
@@ -1410,7 +1414,7 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
             updateInsights();
           } else setMsgText(turn.bubble, shown);
         }
-        if (/<[^>]*$/.test(pending)) continue; // wait until a tag is complete before splitting sentences
+        if (/<[^>]*$/.test(pending) || /\[(intent|mood|lang|user|hangup|calendar-check|calendar|message):[^\]]*$/i.test(pending)) continue; // wait until a tag is complete before splitting sentences
         let m;
         while ((m = SENTENCE_END.exec(pending)) || (!turn.firstChunk && (m = firstClause(pending)))) {
           const cut = m.index + m[0].length;
@@ -1423,9 +1427,16 @@ async function sendUserText(text, { hidden = false, bubble = null, t0 = null } =
     flushSentence(pending);
     turn.total = Math.round(performance.now() - turn.t0);
     renderTiming(turn);
-    for (const v of state.pendingCalendar.splice(0, 1)) addCalendarEvent(v, turn);
-    if (!state.pendingCalendar.length) for (const v of state.pendingChecks.splice(0, 1)) checkCalendarSlot(v, turn);
+    const booking = state.pendingCalendar[0], check = state.pendingChecks[0];
     state.pendingCalendar = []; state.pendingChecks = [];
+    if (booking) addCalendarEvent(booking, turn);
+    else if (check) checkCalendarSlot(check, turn);
+    else if (state.calOffer && !state.calOffer.nudged && /\b(booked|all set|scheduled|confirmed|done)\b/i.test(stripTags(raw))) {
+      // safety net: the agent said it's booked but wrote no booking tag, so nothing was booked; ask it to add the tag now
+      state.calOffer.nudged = true;
+      sendCalendarNote(`[calendar: nothing is booked yet: your last reply had no booking tag. If the caller said yes, reply with only a very short line like "Done." `
+        + `and the tag <calendar:TITLE|${state.calOffer.local}|${state.calOffer.minutes}|EMAIL>.]`);
+    }
     for (const v of state.pendingMessages.splice(0)) saveCallerMessage(v, turn);
     if (raw.trim()) state.history.push({ role: "assistant", content: raw.trim() });
   } catch (err) {
@@ -2792,10 +2803,11 @@ async function checkCalendarSlot(raw, turn) {
     const d = await res.json();
     if (!res.ok) throw new Error(d.error);
     turn.calCheck = d;
+    state.calOffer = d.free ? { local: d.local, minutes: d.minutes } : null; // the slot the caller is being offered (safety net above)
     if (d.free) {
       addChip(turn.bubble, `✅ free · ${d.say}`, "calres");
       note = `[calendar check: FREE. ${calSay(d)} for ${d.minutes} minutes is free in ${d.calendar}${d.immediate ? " (the soonest time for a right-now booking)" : ""}. `
-        + `Tell the caller this exact time, get their email for the invitation if you don't have it, confirm, and only after a clear yes book it with exactly ${d.local}|${d.minutes}.]`;
+        + `Tell the caller this exact time, get their email for the invitation if you don't have it, confirm, and when they say yes your reply must contain <calendar:TITLE|${d.local}|${d.minutes}|EMAIL>.]`;
     } else {
       addChip(turn.bubble, `⛔ ${d.reason} · ${d.suggestions?.length || 0} free option${d.suggestions?.length === 1 ? "" : "s"}`, "calres");
       note = `[calendar check: BUSY. ${calSay(d)} doesn't work: ${d.reason}. Free options: ${calOptions(d)}.]`;
@@ -2826,6 +2838,7 @@ async function addCalendarEvent(raw, turn) {
     }
     if (!res.ok) throw new Error(ev.error);
     turn.calendar = ev;
+    state.calOffer = null;
     addChip(turn.bubble, `📅 booked${ev.inCalendar ? " in " + ev.calendar : ""}: ${ev.title}, ${ev.say}`, "cal-" + ev.id);
     if (ev.calendarError) addChip(turn.bubble, `⚠ saved in the app only: ${ev.calendarError}`, "calerr");
     if (ev.attendee) addChip(turn.bubble, ev.invite === "none" ? `⚠ no invitation sent to ${ev.attendee} (email isn't set up)` : `✉ invitation sent to ${ev.attendee}`, "calinv");

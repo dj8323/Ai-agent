@@ -15,6 +15,7 @@ and time, checks that the time is free, books it, and offers other free times wh
    - the connected calendar's busy times (Google free/busy, Outlook calendar, CalDAV events);
    - meetings the app already booked for this agent;
    - the owner's working days and hours, days off and time zone (Agent studio → Availability).
+4. Before checking, the agent asks **how long** the meeting should be (15 minutes, half an hour, an hour…) and uses the caller's answer; the default length is used only when the caller has no preference.
 4. **Free**: the agent tells the caller the exact time (for "right now", the real time, e.g. 2:51 PM), asks for their **email** for the invitation (and reads it back), confirms day, time, length and email in one sentence, and books **only after a clear yes**. The meeting goes into the connected calendar and the app's own list (📅 chip "booked in Google Calendar", ✉ chip "invitation sent to …"). The title is the caller's name and topic.
 5. **Busy or outside hours**: the agent says so and offers up to 3 free times (the next free slots, at least 90 minutes apart, within 14 days). When the caller picks one, it is booked.
 6. **"Right now" / "as soon as possible"**: the meeting is booked a set number of minutes from now. That number is set in the Connect a calendar window ("When a caller wants it right now, book it in … minutes"); the default is 5 (app setting `calendar.immediateMinutes`).

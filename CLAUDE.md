@@ -222,7 +222,7 @@ voice_ai_web/          ── frontend team ──
 
 - `app.js` `readMeta()` pulls `<intent|mood|lang|hangup|calendar|message:…>` out of the stream; `flushSentence()` reads
   `[emotion]` and sends each sentence to TTS. `stripTags()` removes all tags before display/speech.
-- `<calendar:TITLE|YYYY-MM-DDTHH:MM|MINUTES|EMAIL>` (calendar on; EMAIL optional) → POST `/api/calendar` {title, when, durationMin, attendee} → 📅 chip (+ ✉ invitation chip). The agent asks name + topic, day/time, checks (`<calendar-check:…>`), tells the exact time, asks the email (reads it back), confirms in one sentence and books only after a clear yes.
+- `<calendar:TITLE|YYYY-MM-DDTHH:MM|MINUTES|EMAIL>` (calendar on; EMAIL optional) → POST `/api/calendar` {title, when, durationMin, attendee} → 📅 chip (+ ✉ invitation chip). The agent asks name + topic, day/time, **the length** (default only when the caller has none), checks (`<calendar-check:…>`), tells the exact time, asks the email (reads it back), confirms in one sentence and books only after a clear yes.
 - `<message:CALLER NAME|CALLBACK NUMBER|normal or urgent|MESSAGE>` → `saveCallerMessage()` → POST `/api/messages` →
   📨 chip; also stored in the call transcript and `stats.messages`. There is no Messages screen for users (removed on
   request); the admin dashboard still counts new messages, and `/api/messages` still lists them.

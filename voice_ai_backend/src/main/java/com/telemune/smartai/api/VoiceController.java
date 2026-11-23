@@ -225,7 +225,7 @@ public class VoiceController {
       String content = (String) m.get("content");
       if (content.matches("^\\[(call connected|no response[^\\]]*)\\]$")) continue; // app markers, not the caller's words
       if (content.startsWith("[calendar")) continue; // the app's calendar notes ([calendar check: …], [calendar booking failed: …])
-      String clean = content.replaceAll("(?i)<[a-z-]+:[^>]*>|\\[[a-z]+]", "").trim();
+      String clean = content.replaceAll("(?i)<[a-z-]+:[^>]*>|\\[(intent|mood|lang|user|hangup|calendar-check|calendar|message):[^\\]]*]|\\[[a-z]+]", "").trim();
       transcript.append("user".equals(m.get("role")) ? "Caller: " : "Agent: ").append(clean).append("\n");
     }
     Map<String, Object> pb = playbooks.get(body.get("playbookId"), ctx.dataUserId);
