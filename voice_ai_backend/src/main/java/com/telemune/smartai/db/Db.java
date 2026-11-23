@@ -57,6 +57,7 @@ public class Db {
     addColumn("agents", "calendar_immediate_min", "INT NULL AFTER calendar_app");          // "book it now" = this many minutes from now
     addColumn("calendar_events", "external_provider", "VARCHAR(20) NULL AFTER source");    // google | microsoft | caldav when also in a real calendar
     addColumn("calendar_events", "external_id", "VARCHAR(300) NULL AFTER external_provider");
+    addColumn("calendar_events", "attendee_email", "VARCHAR(190) NULL AFTER external_id");             // the caller, invited
     addColumn("activity_logs", "request_id", "VARCHAR(16) NULL AFTER id");
     addIndex("api_logs", "idx_api_request", "request_id");
     addIndex("activity_logs", "idx_activity_request", "request_id");

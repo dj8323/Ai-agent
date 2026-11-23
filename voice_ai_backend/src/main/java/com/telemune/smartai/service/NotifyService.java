@@ -254,6 +254,28 @@ public class NotifyService {
     }
   }
 
+  /** A calendar invitation by email (text + invite.ics, METHOD:REQUEST), for calendars that don't send invitations themselves. */
+  public boolean sendInvite(String to, String subject, String text, String ics) {
+    JavaMailSender sender = mail.getIfAvailable();
+    if (sender == null || !emailReady()) { log.info("Invitation not emailed: spring.mail.* is not set up"); return false; }
+    pool.submit(() -> {
+      try {
+        jakarta.mail.internet.MimeMessage m = sender.createMimeMessage();
+        org.springframework.mail.javamail.MimeMessageHelper h = new org.springframework.mail.javamail.MimeMessageHelper(m, true, "UTF-8");
+        h.setFrom(prop("mail.from", prop("spring.mail.username", "")));
+        h.setTo(to);
+        h.setSubject(subject);
+        h.setText(text + "\n\n—\nSent by TelemuneSmartAi");
+        h.addAttachment("invite.ics", new org.springframework.core.io.ByteArrayResource(ics.getBytes(StandardCharsets.UTF_8)), "text/calendar; method=REQUEST; charset=UTF-8");
+        sender.send(m);
+        log.info("Invitation emailed to {}", to);
+      } catch (Exception e) {
+        log.warn("Invitation to {} failed: {}", to, e.getMessage());
+      }
+    });
+    return true;
+  }
+
   private void email(String to, String subject, String body, String what) {
     JavaMailSender sender = mail.getIfAvailable();
     if (sender == null) { log.warn("Email {} not sent: spring.mail.* is not set up", what); return; }

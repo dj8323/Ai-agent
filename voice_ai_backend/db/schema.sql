@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS calendar_events (
   source       VARCHAR(40)  NOT NULL DEFAULT 'agent',
   external_provider VARCHAR(20) NULL,
   external_id  VARCHAR(300) NULL,
+  attendee_email VARCHAR(190) NULL,                     -- the caller's email; they get a calendar invitation
   created_at   DATETIME(3)  NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   INDEX idx_events_user_start (user_id, start_at),
   CONSTRAINT fk_events_user  FOREIGN KEY (user_id)  REFERENCES users (id)  ON DELETE CASCADE,

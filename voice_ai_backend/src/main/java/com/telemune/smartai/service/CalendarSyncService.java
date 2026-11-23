@@ -73,6 +73,7 @@ public class CalendarSyncService {
   private final Environment env;
   private final SecretBox box;
   private final AppConfigService config;
+  private final NotifyService notify;
   private final HttpClient http = HttpClient.newBuilder().version(HttpClient.Version.HTTP_1_1).connectTimeout(Duration.ofSeconds(10))
       .followRedirects(HttpClient.Redirect.NORMAL).build();
   /** OAuth sign-ins in progress: state → who started it (10 minutes). */
@@ -81,7 +82,8 @@ public class CalendarSyncService {
   private record Pending(String userId, String agentId, String provider, String redirectUri, String verifier, String origin, Instant at) {}
   public record Busy(Instant start, Instant end) {}
 
-  public CalendarSyncService(Db db, Environment env, SecretBox box, AppConfigService config) {
+  public CalendarSyncService(Db db, Environment env, SecretBox box, AppConfigService config, NotifyService notify) {
+    this.notify = notify;
     this.db = db;
     this.env = env;
     this.box = box;
@@ -501,22 +503,29 @@ public class CalendarSyncService {
     return LocalDateTime.parse(v).toInstant(ZoneOffset.UTC);
   }
 
-  /** Adds the event to the linked calendar; returns its id there. */
-  private String providerCreate(Map<String, Object> row, String title, Instant start, Instant end, String notes, ZoneId zone) {
+  private static String icsEsc(String v) {
+    return J.str(v).replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", " ");
+  }
+
+  /** Adds the event to the linked calendar; returns its id there. attendee (may be null) gets the provider's invitation. */
+  private String providerCreate(Map<String, Object> row, String title, Instant start, Instant end, String notes, ZoneId zone, String attendee) {
     String p = J.str(row.get("provider"));
     String desc = "Booked by your TelemuneSmartAi agent" + (J.blank(notes) ? "." : ": " + notes);
     if ("google".equals(p)) {
-      Map<String, Object> res = postJson(googleApi() + "/calendars/" + enc(J.str(row.get("calendar_ref"), 300).isEmpty() ? "primary" : J.str(row.get("calendar_ref"))) + "/events",
-          accessToken(row), J.map("summary", title, "description", desc,
-              "start", J.map("dateTime", start.toString(), "timeZone", zone.getId()), "end", J.map("dateTime", end.toString(), "timeZone", zone.getId())));
+      Map<String, Object> body = J.map("summary", title, "description", desc,
+          "start", J.map("dateTime", start.toString(), "timeZone", zone.getId()), "end", J.map("dateTime", end.toString(), "timeZone", zone.getId()));
+      if (attendee != null) body.put("attendees", List.of(J.map("email", attendee))); // Google emails the invitation (sendUpdates=all)
+      Map<String, Object> res = postJson(googleApi() + "/calendars/" + enc(J.str(row.get("calendar_ref"), 300).isEmpty() ? "primary" : J.str(row.get("calendar_ref"))) + "/events"
+          + (attendee != null ? "?sendUpdates=all" : ""), accessToken(row), body);
       if (J.blank(res.get("id"))) throw ApiException.bad("Google Calendar didn't accept the event.");
       return J.str(res.get("id"));
     }
     if ("microsoft".equals(p)) {
       DateTimeFormatter f = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss").withZone(ZoneOffset.UTC);
-      Map<String, Object> res = postJson(graph() + "/me/events", accessToken(row), J.map("subject", title,
-          "body", J.map("contentType", "text", "content", desc),
-          "start", J.map("dateTime", f.format(start), "timeZone", "UTC"), "end", J.map("dateTime", f.format(end), "timeZone", "UTC")));
+      Map<String, Object> body = J.map("subject", title, "body", J.map("contentType", "text", "content", desc),
+          "start", J.map("dateTime", f.format(start), "timeZone", "UTC"), "end", J.map("dateTime", f.format(end), "timeZone", "UTC"));
+      if (attendee != null) body.put("attendees", List.of(J.map("emailAddress", J.map("address", attendee), "type", "required"))); // Outlook sends the invitation
+      Map<String, Object> res = postJson(graph() + "/me/events", accessToken(row), body);
       if (J.blank(res.get("id"))) throw ApiException.bad("Outlook didn't accept the event.");
       return J.str(res.get("id"), 300);
     }
@@ -524,7 +533,10 @@ public class CalendarSyncService {
     String ics = String.join("\r\n", "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//TelemuneSmartAi//Calendar//EN", "BEGIN:VEVENT", "UID:" + uid,
         "DTSTAMP:" + DAV.format(Instant.now()), "DTSTART:" + DAV.format(start), "DTEND:" + DAV.format(end),
         "SUMMARY:" + title.replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", " "),
-        "DESCRIPTION:" + desc.replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", " "), "END:VEVENT", "END:VCALENDAR") + "\r\n";
+        "DESCRIPTION:" + desc.replace("\\", "\\\\").replace(",", "\\,").replace(";", "\\;").replace("\n", " "),
+        attendee == null ? "X-TSA:1" : "ORGANIZER:mailto:" + (J.str(row.get("account")).contains("@") ? J.str(row.get("account")) : "noreply@telemunesmartai"),
+        attendee == null ? "X-TSA:2" : "ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:" + attendee,
+        "END:VEVENT", "END:VCALENDAR") + "\r\n";
     String coll = J.str(row.get("calendar_ref"));
     String url = (coll.endsWith("/") ? coll : coll + "/") + uid.replace("@", "-") + ".ics";
     try {
@@ -695,8 +707,22 @@ public class CalendarSyncService {
   }
 
   /** Books it: checks the slot again, writes it into the linked calendar (if any) and the app's own list. */
+  private static final Pattern EMAIL = Pattern.compile("^[A-Za-z0-9._%+'-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$");
+
+  /** An email address the caller gave (spoken, so lightly cleaned), or null when it isn't one. */
+  static String cleanEmail(String raw) {
+    String e = J.str(raw).trim().toLowerCase(Locale.ROOT).replace(" ", "").replace("mailto:", "");
+    return e.length() <= 190 && EMAIL.matcher(e).matches() ? e : null;
+  }
+
   public Map<String, Object> book(Map<String, Object> agent, String userId, String title, String when, long minutes, String notes, String source) {
+    return book(agent, userId, title, when, minutes, notes, source, null);
+  }
+
+  /** attendeeRaw: the caller's email; they get a calendar invitation (from Google/Outlook/iCloud, else emailed by the app). */
+  public Map<String, Object> book(Map<String, Object> agent, String userId, String title, String when, long minutes, String notes, String source, String attendeeRaw) {
     if (J.blank(title)) throw ApiException.bad("An event needs a title.");
+    String attendee = cleanEmail(attendeeRaw);
     Map<String, Object> chk = check(agent, userId, when, minutes);
     if (!J.bool(chk.get("free"))) {
       Map<String, Object> busy = new LinkedHashMap<>(chk);
@@ -707,15 +733,34 @@ public class CalendarSyncService {
     Map<String, Object> row = row(J.str(agent.get("id")));
     String extId = null, extError = null;
     if (row != null) {
-      try { extId = providerCreate(row, J.str(title, 120), start, end, notes, zone(agent)); markOk(row); }
+      try { extId = providerCreate(row, J.str(title, 120), start, end, notes, zone(agent), attendee); markOk(row); }
       catch (ApiException e) { extError = e.getMessage(); log.warn("Couldn't add the event to {} for agent {}: {}", row.get("provider"), agent.get("id"), e.getMessage()); }
     }
     String id = J.newId();
-    db.exec("INSERT INTO calendar_events (id, user_id, agent_id, title, start_at, duration_min, notes, source, external_provider, external_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    db.exec("INSERT INTO calendar_events (id, user_id, agent_id, title, start_at, duration_min, notes, source, external_provider, external_id, attendee_email) "
+        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
         id, userId, agent.get("id"), J.str(title, 120), J.utc(start), J.num(chk.get("minutes")), J.str(notes, 500),
-        J.blank(source) ? "agent" : J.str(source, 40), extId == null ? null : row.get("provider"), extId);
+        J.blank(source) ? "agent" : J.str(source, 40), extId == null ? null : row.get("provider"), extId, attendee);
+    // the invitation: Google, Outlook and iCloud send it themselves; otherwise the app emails one (.ics)
+    String invite = "none";
+    if (attendee != null) {
+      boolean providerSends = extId != null && (List.of("google", "microsoft").contains(J.str(row.get("provider"))) || "icloud".equals(J.str(row.get("label"))));
+      if (providerSends) invite = "calendar";
+      else {
+        String who = J.str(agent.get("owner_name")).isEmpty() ? J.str(agent.get("name")) : J.str(agent.get("owner_name"));
+        ZonedDateTime zs = start.atZone(zone(agent));
+        String ics = String.join("\r\n", "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//TelemuneSmartAi//Calendar//EN", "METHOD:REQUEST", "BEGIN:VEVENT",
+            "UID:" + id + "@telemunesmartai", "DTSTAMP:" + DAV.format(Instant.now()), "DTSTART:" + DAV.format(start), "DTEND:" + DAV.format(end),
+            "SUMMARY:" + icsEsc(J.str(title, 120)), "DESCRIPTION:" + icsEsc("Booked by " + who + "'s assistant" + (J.blank(notes) ? "." : ": " + notes)),
+            "ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:" + attendee, "STATUS:CONFIRMED", "END:VEVENT", "END:VCALENDAR") + "\r\n";
+        if (notify.sendInvite(attendee, "Invitation: " + J.str(title, 120) + " · " + SAY.format(zs),
+            "You're booked: " + J.str(title, 120) + "\nWhen: " + SAY.format(zs) + " (" + zs.getZone().getId() + "), " + chk.get("minutes") + " minutes\nWith: " + who
+                + "\n\nThe attached invitation adds it to your calendar.", ics)) invite = "email";
+      }
+    }
     Map<String, Object> out = new LinkedHashMap<>(chk);
-    out.putAll(J.map("booked", true, "id", id, "title", J.str(title, 120), "durationMin", chk.get("minutes"),
+    out.putAll(J.map("booked", true, "id", id, "title", J.str(title, 120), "durationMin", chk.get("minutes"), "attendee", attendee, "invite", invite,
+        "attendeeInvalid", attendee == null && !J.blank(attendeeRaw),
         "inCalendar", extId != null, "calendar", extId != null ? nameOf(row) : "the app's calendar"));
     if (extError != null) out.put("calendarError", extError);
     log.info("Meeting booked for agent {} ({} min){}", agent.get("id"), chk.get("minutes"), extId != null ? " in " + row.get("provider") : "");

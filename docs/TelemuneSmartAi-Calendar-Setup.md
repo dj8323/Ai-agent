@@ -15,7 +15,7 @@ and time, checks that the time is free, books it, and offers other free times wh
    - the connected calendar's busy times (Google free/busy, Outlook calendar, CalDAV events);
    - meetings the app already booked for this agent;
    - the owner's working days and hours, days off and time zone (Agent studio → Availability).
-4. **Free**: the agent books it at once. The meeting goes into the connected calendar and the app's own list (📅 chip "booked in Google Calendar").
+4. **Free**: the agent tells the caller the exact time (for "right now", the real time, e.g. 2:51 PM), asks for their **email** for the invitation (and reads it back), confirms day, time, length and email in one sentence, and books **only after a clear yes**. The meeting goes into the connected calendar and the app's own list (📅 chip "booked in Google Calendar", ✉ chip "invitation sent to …"). The title is the caller's name and topic.
 5. **Busy or outside hours**: the agent says so and offers up to 3 free times (the next free slots, at least 90 minutes apart, within 14 days). When the caller picks one, it is booked.
 6. **"Right now" / "as soon as possible"**: the meeting is booked a set number of minutes from now. That number is set in the Connect a calendar window ("When a caller wants it right now, book it in … minutes"); the default is 5 (app setting `calendar.immediateMinutes`).
 
@@ -134,6 +134,17 @@ These use CalDAV with an **app password**, a separate password made for one app.
 | Other (Fastmail, Nextcloud, Synology…) | in that service's security settings | as the service says | its CalDAV address |
 
 The app finds the first calendar for events at that address and books into it.
+
+## 5. The caller's invitation
+
+| Calendar | Who sends the invitation |
+|---|---|
+| Google Calendar | Google (the caller is added as a guest, `sendUpdates=all`) |
+| Outlook / Microsoft 365 | Outlook (the caller is an attendee) |
+| iCloud | Apple's calendar server |
+| Yahoo, Zoho, other CalDAV, or no linked calendar | The app emails an invitation file (invite.ics) from the email account in keys.env (`spring.mail.*`) |
+
+If the caller doesn't want to give an email, the meeting is booked without an invitation. An email that doesn't look valid is ignored and the chip says so.
 
 ## 5. Security
 

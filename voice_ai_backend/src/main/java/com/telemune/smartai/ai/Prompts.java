@@ -91,19 +91,26 @@ public final class Prompts {
     long now = J.num(J.get(cfg, "calendar.immediateMinutes"));
     String account = J.str(J.get(cfg, "calendar.account"));
     String nowText = ZonedDateTime.now(zone).format(DateTimeFormatter.ofPattern("EEEE, MMMM d, yyyy 'at' h:mm a", Locale.US));
+    long len = mins > 0 ? mins : 30;
     return "\nCalendar (switched on" + (account.isEmpty() ? "" : ", linked to " + account) + "): you can book meetings. All times are in "
         + zone.getId() + "; it is now " + nowText + ".\n"
-        + "1. Ask for the day and time (one question at a time). Meetings are " + (mins > 0 ? mins : 30) + " minutes unless the caller asks for another length.\n"
-        + "2. As soon as you have a day and time, say one short line like \"One moment, let me check the calendar.\" and add ONE tag after the other tags: "
-        + "<calendar-check:YYYY-MM-DDTHH:MM|MINUTES>  e.g. <calendar-check:2026-11-21T15:00|30>. If the caller wants it right away, now or as soon as possible, "
-        + "write NOW instead of the date (<calendar-check:NOW|30>); that means in about " + (now > 0 ? now : 5) + " minutes. Do NOT say it is booked yet.\n"
-        + "3. You then get a note like [calendar check: …]. If it says FREE, book it straight away with ONE tag using exactly the time in the note: "
-        + "<calendar:TITLE|YYYY-MM-DDTHH:MM|MINUTES> (the caller's name and the topic in the title) and tell them in a few words it's booked, with the day and time.\n"
-        + "4. If it says BUSY, say that time is taken (or outside hours) and offer one or two of the free times from the note, one question. "
-        + "If they pick one of those free times, book it straight away with the <calendar:…> tag and that exact time (it was just checked). "
-        + "If they ask for a different time, do step 2 again for it.\n"
-        + "5. If you get [calendar booking failed: …], say so briefly and offer the free times from that note.\n"
-        + "Never guess whether " + "the owner is free before the note comes back, and never invent free times: only offer times from a note. Book each meeting only once.\n";
+        + "Booking a meeting, one short question at a time, never two at once:\n"
+        + "1. Get the caller's name and what the meeting is about, if you don't have them yet.\n"
+        + "2. Get the day and time. Meetings are " + len + " minutes unless the caller asks for another length. If they want it right away, now or as soon as possible, use NOW as the time.\n"
+        + "3. Check it: say one short line like \"One moment, let me check the calendar.\" and add ONE tag after the other tags: "
+        + "<calendar-check:YYYY-MM-DDTHH:MM|MINUTES>  e.g. <calendar-check:2026-11-21T15:00|30>, or <calendar-check:NOW|30> "
+        + "(NOW means in about " + (now > 0 ? now : 5) + " minutes). Never say it is booked at this point.\n"
+        + "4. A note comes back: [calendar check: …].\n"
+        + "   FREE: tell the caller the exact day and time from the note (for NOW say the real time, e.g. \"the earliest is 2:51 this afternoon\").\n"
+        + "   BUSY: say that time is taken (or outside hours) and offer one or two free times from the note. A time they pick from the note needs no new check; any other time does (step 3).\n"
+        + "5. Ask for their email address so you can send them the calendar invitation, if you don't have it. Read it back simply, spelling the unclear part "
+        + "(e.g. \"d j 8 3 2 3 at gmail dot com, right?\"). If they'd rather not share one, carry on without it.\n"
+        + "6. Confirm everything in ONE short sentence and ask, e.g. \"So that's today at 2:51 PM for " + len + " minutes, invite to dj@gmail.com. Shall I book it?\"\n"
+        + "7. ONLY after a clear yes, add ONE tag: <calendar:TITLE|YYYY-MM-DDTHH:MM|MINUTES|EMAIL> with exactly the checked time "
+        + "(TITLE = the caller's name and the topic; leave EMAIL empty if none), and say it's booked and, with an email, that the invitation is on its way. "
+        + "If they say no or change something, adjust it (a new time needs a new check).\n"
+        + "8. If you get [calendar booking failed: …], say so briefly and offer the free times from that note.\n"
+        + "Never guess whether the owner is free before a note comes back, never invent free times, never say it's booked before the yes and the tag, and book each meeting only once.\n";
   }
 
   static String messagePrompt(String owner) {

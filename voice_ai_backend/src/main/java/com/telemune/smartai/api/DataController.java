@@ -200,7 +200,7 @@ public class DataController {
       // booked by the agent: {title, when: "2026-11-21T15:00" (agent's zone) | "NOW", durationMin, notes}. Checked again first:
       // 201 = booked (also in the linked calendar), 409 = taken or outside hours, with free options.
       Map<String, Object> r = calSync.book(ctx.agent, ctx.dataUserId, J.str(body.get("title"), 120), J.str(body.get("when")), J.num(body.get("durationMin")),
-          J.str(body.get("notes"), 500), J.str(body.get("source"), 40));
+          J.str(body.get("notes"), 500), J.str(body.get("source"), 40), J.str(body.get("attendee"), 190));
       if (!J.bool(r.get("booked"))) return ResponseEntity.status(409).body(r);
       logs.activity(ctx, "calendar.add", (String) r.get("title"), J.map("id", r.get("id"), "start", r.get("start"), "agentId", ctx.agentId(), "calendar", r.get("calendar")));
       return ResponseEntity.status(201).body(r);

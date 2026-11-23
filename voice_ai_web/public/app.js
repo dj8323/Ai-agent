@@ -2794,7 +2794,8 @@ async function checkCalendarSlot(raw, turn) {
     turn.calCheck = d;
     if (d.free) {
       addChip(turn.bubble, `✅ free · ${d.say}`, "calres");
-      note = `[calendar check: FREE. ${calSay(d)} for ${d.minutes} minutes is free in ${d.calendar}${d.immediate ? " (that is the soonest time for a right-now booking)" : ""}. Book it now with exactly ${d.local}|${d.minutes}.]`;
+      note = `[calendar check: FREE. ${calSay(d)} for ${d.minutes} minutes is free in ${d.calendar}${d.immediate ? " (the soonest time for a right-now booking)" : ""}. `
+        + `Tell the caller this exact time, get their email for the invitation if you don't have it, confirm, and only after a clear yes book it with exactly ${d.local}|${d.minutes}.]`;
     } else {
       addChip(turn.bubble, `⛔ ${d.reason} · ${d.suggestions?.length || 0} free option${d.suggestions?.length === 1 ? "" : "s"}`, "calres");
       note = `[calendar check: BUSY. ${calSay(d)} doesn't work: ${d.reason}. Free options: ${calOptions(d)}.]`;
@@ -2807,14 +2808,14 @@ async function checkCalendarSlot(raw, turn) {
   sendCalendarNote(note);
 }
 async function addCalendarEvent(raw, turn) {
-  const [title, start, minutes] = raw.split("|").map((x) => x.trim());
+  const [title, start, minutes, attendee] = raw.split("|").map((x) => x.trim());
   if (!title || !start) return;
   state.calWaiting = true;
   try {
     const res = await fetch("/api/calendar", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title, when: start, durationMin: Number(minutes) || undefined, source: activePlaybook()?.name || "Default agent" }),
+      body: JSON.stringify({ title, when: start, durationMin: Number(minutes) || undefined, attendee: attendee || undefined, source: activePlaybook()?.name || "Default agent" }),
     });
     const ev = await res.json();
     state.calWaiting = false;
@@ -2827,6 +2828,8 @@ async function addCalendarEvent(raw, turn) {
     turn.calendar = ev;
     addChip(turn.bubble, `📅 booked${ev.inCalendar ? " in " + ev.calendar : ""}: ${ev.title}, ${ev.say}`, "cal-" + ev.id);
     if (ev.calendarError) addChip(turn.bubble, `⚠ saved in the app only: ${ev.calendarError}`, "calerr");
+    if (ev.attendee) addChip(turn.bubble, ev.invite === "none" ? `⚠ no invitation sent to ${ev.attendee} (email isn't set up)` : `✉ invitation sent to ${ev.attendee}`, "calinv");
+    else if (ev.attendeeInvalid) addChip(turn.bubble, "⚠ the email didn't look right, so no invitation was sent", "calinv");
     loadCalendar();
     if (state.inCall && !state.playing && !state.speakQueue.length && state.streamDone) afterAgentTurn();
   } catch (e) {

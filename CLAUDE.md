@@ -222,7 +222,7 @@ voice_ai_web/          ── frontend team ──
 
 - `app.js` `readMeta()` pulls `<intent|mood|lang|hangup|calendar|message:…>` out of the stream; `flushSentence()` reads
   `[emotion]` and sends each sentence to TTS. `stripTags()` removes all tags before display/speech.
-- `<calendar:TITLE|YYYY-MM-DDTHH:MM|MINUTES>` (calendar on) → POST `/api/calendar` → 📅 chip.
+- `<calendar:TITLE|YYYY-MM-DDTHH:MM|MINUTES|EMAIL>` (calendar on; EMAIL optional) → POST `/api/calendar` {title, when, durationMin, attendee} → 📅 chip (+ ✉ invitation chip). The agent asks name + topic, day/time, checks (`<calendar-check:…>`), tells the exact time, asks the email (reads it back), confirms in one sentence and books only after a clear yes.
 - `<message:CALLER NAME|CALLBACK NUMBER|normal or urgent|MESSAGE>` → `saveCallerMessage()` → POST `/api/messages` →
   📨 chip; also stored in the call transcript and `stats.messages`. There is no Messages screen for users (removed on
   request); the admin dashboard still counts new messages, and `/api/messages` still lists them.
@@ -284,7 +284,7 @@ voice_ai_web/          ── frontend team ──
   availability plan → free or busy + 3 suggestions, `book()` re-checks), `api/CalendarAccountController`. Keys in keys.env
   `calendar.google.*`, `calendar.microsoft.*` (tenant consumers; old names `google.oauth.*`/`outlook.oauth.*` also read), `calendar.oauth.redirect-base`. Agent flow: `<calendar-check:LOCAL|MIN>` (or `NOW` =
   `calendar.immediateMinutes`, per agent `agents.calendar_immediate_min`) → app `checkCalendarSlot` → hidden `[calendar check: FREE|BUSY …]`
-  sent after the speech (`sendCalendarNote`, `state.calNote`) → `<calendar:…>` → POST /api/calendar {when} (201 / 409 + options →
+  sent after the speech (`sendCalendarNote`, `state.calNote`) → confirm with the caller → `<calendar:…|EMAIL>`; invitation: Google `attendees` + `sendUpdates=all`, Outlook `attendees`, iCloud ATTENDEE (server sends), Yahoo/other/no calendar → app emails an .ics (`NotifyService.sendInvite`); `calendar_events.attendee_email` → POST /api/calendar {when} (201 / 409 + options →
   `[calendar booking failed: …]`). Return address: `calendar.google.redirect-uri` (exact; local = `https://localhost:8080/voiceAi/voiceApi/calendar/oauth2/callback` via the web
   app's sign-in bridge `config.json oauthBridge` → `/api/calendar-oauth/<p>/callback`; live = the tryai address + a server rule for state
   prefix `tsa-`), `calendar.oauth.return-url` (empty = the page that started it). Setup guide: `docs/TelemuneSmartAi-Calendar-Setup.md`.
