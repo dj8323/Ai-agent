@@ -398,6 +398,15 @@ public class VoiceController {
   }
 
   /** Speech-to-text for one caller utterance. Body: { audio: base64, mime, lang, context, provider? }. AWS gets 16 kHz WAV. */
+  /** Words that often come up in this agent's calls, so the transcriber spells them right (names, booking words, emails). */
+  static String vocabulary(Map<String, Object> agent) {
+    java.util.List<String> names = new java.util.ArrayList<>();
+    if (agent != null) for (String k : java.util.List.of("name", "owner_name", "organization")) if (!J.blank(agent.get(k))) names.add(J.str(agent.get(k), 60));
+    return (names.isEmpty() ? "" : " Names that may come up: " + String.join(", ", names) + ".")
+        + " Common words in these calls: book, booking, meeting, appointment, schedule, reschedule, cancel, today, tomorrow, minutes, hour, email, message, callback."
+        + " Email addresses are often spelled out (\"rahul dot mehta at gmail dot com\"): write them as spoken words.";
+  }
+
   @PostMapping("/api/transcribe")
   ResponseEntity<Map<String, Object>> transcribe(@RequestBody Map<String, Object> body, @RequestAttribute("ctx") Ctx ctx) {
     Map<String, Object> cfg = config.forAgent(ctx.agent);
@@ -419,7 +428,8 @@ public class VoiceController {
         + ("en-JM".equals(lang) ? " (write it in natural Patois spelling as spoken)" : "")
         + ", and may mix in English or other languages; transcribe exactly what they say, in the language they say it."
         + " The recording can start with a faint echo of the assistant's own voice: leave that out and write only the caller's words."
-        + (J.blank(body.get("context")) ? "" : " The assistant just said: \"" + J.str(body.get("context"), 300) + "\"");
+        + (J.blank(body.get("context")) ? "" : " The assistant just said: \"" + J.str(body.get("context"), 300) + "\"")
+        + vocabulary(ctx.agent);
     String provider = speech.sttProvider(J.blank(body.get("provider")) ? J.get(cfg, "speechToText.provider") : body.get("provider"));
     String model = J.str(J.get(cfg, "speechToText.model"));
     if (!"openai".equals(provider) && speech.ready(provider)) {

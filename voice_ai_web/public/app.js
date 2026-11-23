@@ -1089,12 +1089,15 @@ function vadTick() {
   const t = now();
   const stt = SETTINGS.speechToText || {};
   const lvl = micLevel();
-  if (lvl > (stt.vadThreshold ?? 0.015)) { u.speechMs += 50; u.lastVoiceAt = t; }
+  if (lvl > (stt.vadThreshold ?? 0.015)) {
+    u.speechMs += 50; u.lastVoiceAt = t;
+    if (u.spec) u.spec.after += 50; // speech after the early transcription started
+  }
   const spoke = u.speechMs >= (stt.minSpeechMs ?? 250) || !!u.srText;
   if (spoke) liveBubble(u).style.setProperty("--lv", Math.min(1, lvl * 12).toFixed(2)); // 🎙 grows with the voice
   // After a short pause, start transcribing what was said so far; if the caller stays quiet, the text is ready when
   // the reply wait ends. Speaking again throws it away.
-  if (u.spec && u.spec.voiceAt !== u.lastVoiceAt) u.spec = null;
+  if (u.spec && u.spec.after >= 150) u.spec = null; // they really spoke again (a short noise doesn't count): transcribe again later
   if (spoke && u.lastVoiceAt && !u.spec && u.recorder && sttOn() && t - u.lastVoiceAt >= 400) startEarlyTranscribe(u);
   // Nobody has said anything for conversation.silenceRetrySeconds: the agent checks in (or hangs up after the re-asks).
   const retryS = Number(CONFIG.silenceRetrySeconds) || 0;
@@ -1108,7 +1111,7 @@ function vadTick() {
 
 function startEarlyTranscribe(u) {
   const r = u.recorder;
-  const spec = { voiceAt: u.lastVoiceAt };
+  const spec = { voiceAt: u.lastVoiceAt, after: 0 };
   spec.promise = new Promise((resolve) => {
     const go = () => resolve(u.chunks.length ? transcribe(new Blob(u.chunks, { type: r.mimeType })).catch(() => null) : null);
     if (r.state !== "recording") return go();
@@ -1260,17 +1263,19 @@ async function commitUtterance() {
   $("interim").textContent = "";
   const t0 = now();
 
-  let text = u.srText, sttMs = null;
-  const early = u.spec && u.spec.voiceAt === u.lastVoiceAt ? u.spec.promise : null; // started during the silence
+  let text = u.srText, sttMs = null, unchecked = false;
+  const early = u.spec ? u.spec.promise : null; // started during the silence, still covers everything that was said
   const blob = await stopRecorder(u);
   if (blob && sttOn()) {
-    try {
-      const heard = (early && (await early)) ?? (await transcribe(blob));
-      sttMs = Math.round(now() - t0);
-      if (heard) text = heard;
-    } catch (e) {
-      console.warn("OpenAI transcription failed, using browser text:", e);
+    // the early result if it has words; else the whole recording; one retry if the service fails
+    let heard = early ? await early : null;
+    for (let attempt = 0; !(heard && heard.trim()) && attempt < 2; attempt++) {
+      try { heard = await transcribe(blob); }
+      catch (e) { console.warn(`Transcription failed (try ${attempt + 1}):`, e); heard = null; if (!attempt) await new Promise((r) => setTimeout(r, 400)); }
     }
+    sttMs = Math.round(now() - t0);
+    if (heard && heard.trim()) text = heard;
+    else unchecked = !!(text && text.trim()); // only the browser's live captions: shown, but marked
   }
   text = (text || "").trim();
   if (!state.inCall) { u.bubble?.remove(); return; }
@@ -1278,6 +1283,7 @@ async function commitUtterance() {
   if (u.bubble) finalizeBubble(u.bubble, u.srText, text);
   else u.bubble = addMsg("user", text);
   if (sttMs != null) u.bubble.querySelector(".timing").textContent = `🎙 transcribed in ${fmtS(sttMs)}`;
+  if (unchecked) addChip(u.bubble, "⚠ not double-checked (live captions only)", "unchecked");
   sendUserText(text, { bubble: u.bubble, t0 });
 }
 
@@ -2251,7 +2257,7 @@ function fillModelSel(sel, list, keep, extra = []) {
 }
 function fillSttModels(keep = $("sttSel").value) {
   if (sttProv() === "openai") fillModelSel($("sttSel"), state.openaiModels?.stt || ["gpt-4o-transcribe", "gpt-4o-mini-transcribe", "whisper-1"], keep,
-    [["browser", "Browser captions only (free, less accurate)"]]);
+    [["browser", "Browser captions only (less accurate, never corrected)"]]);
   else fillModelSel($("sttSel"), provInfo("stt", sttProv()).models, keep);
 }
 function fillTtsModels(keep = $("ttsSel").value) {

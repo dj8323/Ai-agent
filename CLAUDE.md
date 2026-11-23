@@ -319,7 +319,11 @@ voice_ai_web/          ── frontend team ──
 - Listening: per-utterance MediaRecorder + VAD → `/api/transcribe`; browser recognition only for live captions
   (`showLive()`) / fallback. Caller's live bubble: `liveBubble()` (made when speech starts: 🎙 `.live-mic` ripples scaled
   by `--lv` from `vadTick`, "Listening…"), `setLiveWords()` writes captions word by word, `finalizeBubble()` in
-  `commitUtterance()` puts the accurate text in place, `.fix` flashes changed words. No "corrected" chip. The agent replies after `conversation.responseDelayMs` of silence.
+  `commitUtterance()` puts the accurate text in place, `.fix` flashes changed words. No "corrected" chip. (2026-11-23) The early
+  transcription (`startEarlyTranscribe`, after 0.4 s of silence) is kept unless ≥150 ms of new speech follows (`spec.after`); an empty early result
+  → the full recording is transcribed; a failure → one retry; still nothing → live captions with a "⚠ not double-checked" chip. `/api/transcribe`
+  hint adds `VoiceController.vocabulary()` (agent/owner/org names, booking words, spoken emails). Tested: OpenAI + English (India) is the most
+  accurate for Indian callers; "Browser captions only" is never corrected. The agent replies after `conversation.responseDelayMs` of silence.
 - **🧭 Guides = guided tours** (`#learn` opens the launcher pop-up `#learnModal` / `#tourGrid`): the `TOURS` array in
   app.js; each step has `target` (selector/array/fn), `title`, `text`, and `done()` (auto-advance when the user did it) or
   Next; also `ready`, `clickIn`, `before` (goTab/goCall), `warn`. Engine: `startTour` → `tourGo` → `tourTick` (200 ms:
