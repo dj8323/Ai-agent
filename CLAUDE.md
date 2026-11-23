@@ -276,6 +276,8 @@ voice_ai_web/          ── frontend team ──
   (Transcribe streaming over a pre-signed WebSocket, event-stream frames; the browser sends 16 kHz WAV: `toWav16k()`).
   `/api/tts`, `/api/tts/stream` take optional `provider`/`model`; any provider error falls back to OpenAI (header
   `X-Speech-Fallback`, WARN log). `/api/transcribe` takes `provider`; failures fall back to OpenAI. Web: `#sttProv`/`#ttsProv`,
+  AWS voice list (`pollyVoices`): for any English language all English Polly voices (own variant first, e.g. Kajal for en-IN, Gregory still listed);
+  `IncludeAdditionalLanguageCodes=true` so bilingual voices (Kajal) appear under Hindi. Agents default to English (India) since 2026-11-23 for Indian callers.
   `fillSttModels/fillTtsModels`, `renderLangs()` (LANGS has 39 languages with speaker counts; only those both providers
   support, most spoken first), `renderVoices()`. Only OpenAI voices take emotion instructions.
 - **Connected calendar (2026-11-20):** `calendar_accounts` (one per agent; provider google | microsoft | caldav + label yahoo|icloud|zoho|other;

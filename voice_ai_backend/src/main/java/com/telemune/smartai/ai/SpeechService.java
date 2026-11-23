@@ -326,10 +326,30 @@ public class SpeechService {
     return out;
   }
 
+  /** English: every English Polly voice can read any English text, so all of them are offered (the agent's own variant first). */
+  private static final List<String> ENGLISH = List.of("en-US", "en-IN", "en-GB", "en-AU", "en-IE", "en-NZ", "en-ZA");
+
   private List<Map<String, Object>> pollyVoices(String lang) {
+    String own = pollyLang(lang);
+    List<String> codes = new ArrayList<>(List.of(own));
+    if (own.startsWith("en-")) for (String e : ENGLISH) if (!codes.contains(e)) codes.add(e);
+    List<Map<String, Object>> out = new ArrayList<>();
+    java.util.Set<Object> seen = new java.util.HashSet<>();
+    for (String code : codes) {
+      try {
+        for (Map<String, Object> v : pollyVoicesFor(code)) if (seen.add(v.get("id"))) out.add(v);
+      } catch (RuntimeException e) {
+        if (code.equals(own)) throw e; // the other English lists are extras
+      }
+    }
+    return out;
+  }
+
+  private List<Map<String, Object>> pollyVoicesFor(String code) {
     Aws.Creds c = aws();
     String host = "polly." + c.region() + ".amazonaws.com";
-    String q = "Engine=neural&LanguageCode=" + Aws.enc(pollyLang(lang));
+    // bilingual voices (e.g. Kajal: Indian English + Hindi) are listed under their second language too; keys in sorted order for SigV4
+    String q = "Engine=neural&IncludeAdditionalLanguageCodes=true&LanguageCode=" + Aws.enc(code);
     Map<String, String> h = Aws.signHeaders(c, "polly", "GET", host, "/v1/voices", q, null, null);
     HttpRequest.Builder rb = HttpRequest.newBuilder(URI.create("https://" + host + "/v1/voices?" + q)).timeout(Duration.ofSeconds(20));
     h.forEach(rb::header);
